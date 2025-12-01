@@ -101,7 +101,7 @@
 								:status="getPacketLossStatus(metrics.ping.packet_loss_percent)"
 							/>
 						</div>
-						<div v-if="metrics.ping.jitter_ms !== undefined" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+						<div v-if="metrics.ping.jitter_ms != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
 							<div class="flex items-center justify-between">
 								<span class="text-xs text-slate-500 dark:text-slate-400">Jitter</span>
 								<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ metrics.ping.jitter_ms.toFixed(2) }} ms</span>
@@ -111,10 +111,10 @@
 				</section>
 
 				<!-- 24h Statistics -->
-				<section v-if="metrics?.uptime_percent_24h !== undefined || metrics?.avg_latency_24h_ms !== undefined">
+				<section v-if="metrics?.uptime_percent_24h != null || metrics?.avg_latency_24h_ms != null">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">24h Statistics</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
-						<div v-if="metrics.uptime_percent_24h !== undefined" class="space-y-1">
+						<div v-if="metrics.uptime_percent_24h != null" class="space-y-1">
 							<div class="flex items-center justify-between">
 								<span class="text-xs text-slate-500 dark:text-slate-400">Uptime</span>
 								<span class="text-sm font-medium" :class="getUptimeColor(metrics.uptime_percent_24h)">
@@ -129,7 +129,7 @@
 								></div>
 							</div>
 						</div>
-						<div v-if="metrics.avg_latency_24h_ms !== undefined" class="flex items-center justify-between">
+						<div v-if="metrics.avg_latency_24h_ms != null" class="flex items-center justify-between">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Avg Latency (24h)</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ metrics.avg_latency_24h_ms.toFixed(1) }} ms</span>
 						</div>

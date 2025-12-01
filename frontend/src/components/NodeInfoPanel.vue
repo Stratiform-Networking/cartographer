@@ -247,7 +247,6 @@ import MetricCard from './MetricCard.vue';
 
 const props = defineProps<{
 	node?: TreeNode;
-	healthServiceUrl?: string;
 }>();
 
 const emit = defineEmits<{
@@ -258,11 +257,6 @@ const metrics = ref<DeviceMetrics | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const scanningPorts = ref(false);
-
-// Health service URL - can be overridden via prop or env
-const serviceUrl = computed(() => {
-	return props.healthServiceUrl || import.meta.env.VITE_HEALTH_SERVICE_URL || 'http://localhost:8001';
-});
 
 const statusLabel = computed(() => {
 	if (!metrics.value) return 'Unknown';
@@ -371,14 +365,15 @@ async function fetchHealth(includePorts = false) {
 	error.value = null;
 	
 	try {
+		// Call the backend proxy which forwards to health service
 		const response = await axios.get<DeviceMetrics>(
-			`${serviceUrl.value}/api/health/check/${ip}`,
+			`/api/health/check/${ip}`,
 			{ 
 				params: { 
 					include_ports: includePorts,
 					include_dns: true
 				},
-				timeout: 15000 
+				timeout: 30000 
 			}
 		);
 		metrics.value = response.data;

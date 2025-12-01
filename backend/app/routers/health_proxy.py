@@ -106,3 +106,61 @@ async def check_dns(ip: str):
     """Proxy DNS check"""
     return await proxy_request("GET", f"/dns/{ip}")
 
+
+# ==================== Monitoring Endpoints ====================
+
+@router.post("/monitoring/devices")
+async def register_devices(request: Request):
+    """Proxy register devices for monitoring"""
+    body = await request.json()
+    return await proxy_request("POST", "/monitoring/devices", json_body=body)
+
+
+@router.get("/monitoring/devices")
+async def get_monitored_devices():
+    """Proxy get monitored devices"""
+    return await proxy_request("GET", "/monitoring/devices")
+
+
+@router.delete("/monitoring/devices")
+async def clear_monitored_devices():
+    """Proxy clear monitored devices"""
+    return await proxy_request("DELETE", "/monitoring/devices")
+
+
+@router.get("/monitoring/config")
+async def get_monitoring_config():
+    """Proxy get monitoring config"""
+    return await proxy_request("GET", "/monitoring/config")
+
+
+@router.post("/monitoring/config")
+async def set_monitoring_config(request: Request):
+    """Proxy set monitoring config"""
+    body = await request.json()
+    return await proxy_request("POST", "/monitoring/config", json_body=body)
+
+
+@router.get("/monitoring/status")
+async def get_monitoring_status():
+    """Proxy get monitoring status"""
+    return await proxy_request("GET", "/monitoring/status")
+
+
+@router.post("/monitoring/start")
+async def start_monitoring():
+    """Proxy start monitoring"""
+    return await proxy_request("POST", "/monitoring/start")
+
+
+@router.post("/monitoring/stop")
+async def stop_monitoring():
+    """Proxy stop monitoring"""
+    return await proxy_request("POST", "/monitoring/stop")
+
+
+@router.post("/monitoring/check-now")
+async def trigger_check():
+    """Proxy trigger immediate check"""
+    return await proxy_request("POST", "/monitoring/check-now")
+

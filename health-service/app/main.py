@@ -1,15 +1,37 @@
 import os
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routers.health import router as health_router
+from .services.health_checker import health_checker
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage app startup and shutdown events"""
+    # Startup: Start the background monitoring loop
+    logger.info("Starting background health monitoring...")
+    health_checker.start_monitoring()
+    
+    yield
+    
+    # Shutdown: Stop the background monitoring loop
+    logger.info("Stopping background health monitoring...")
+    health_checker.stop_monitoring()
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Cartographer Health Service",
         description="Health monitoring microservice for network devices",
-        version="0.1.0"
+        version="0.1.0",
+        lifespan=lifespan
     )
 
     # Allow CORS for development and integration with main app

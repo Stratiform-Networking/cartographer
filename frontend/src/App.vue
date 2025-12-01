@@ -292,6 +292,7 @@
 			<NodeInfoPanel
 				v-if="showNodeInfoPanel && selectedNode"
 				:node="selectedNode"
+				:cachedMetrics="cachedMetrics"
 				@close="closeNodeInfoPanel"
 			/>
 		</div>
@@ -339,6 +340,7 @@ import NodeInfoPanel from "./components/NodeInfoPanel.vue";
 import type { ParsedNetworkMap, TreeNode, NodeVersion } from "./types/network";
 import { useMapLayout } from "./composables/useMapLayout";
 import { useNetworkData } from "./composables/useNetworkData";
+import { useHealthMonitoring } from "./composables/useHealthMonitoring";
 
 // Version management helpers
 function initializeNodeVersion(node: TreeNode, source: 'manual' | 'mapper' = 'manual'): void {
@@ -458,6 +460,32 @@ function stopResize() {
 
 const { applySavedPositions, clearPositions, exportLayout } = useMapLayout();
 const { parseNetworkMap } = useNetworkData();
+const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
+
+// Register devices for health monitoring whenever parsed changes
+watch(() => parsed.value?.root, async (root) => {
+	if (root) {
+		// Extract all IPs from the device tree
+		const devices = flattenDevices(root);
+		const ips = devices.map(d => d.ip).filter((ip): ip is string => !!ip);
+		
+		if (ips.length > 0) {
+			await registerDevices(ips);
+			console.log(`[Health] Registered ${ips.length} device IPs for monitoring`);
+		}
+	}
+}, { immediate: true });
+
+// Start polling for health updates when app mounts
+onMounted(() => {
+	// Poll for cached health metrics every 10 seconds
+	startPolling(10000);
+});
+
+// Stop polling when app unmounts
+onBeforeUnmount(() => {
+	stopPolling();
+});
 
 // Auto-save debounce timer
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;

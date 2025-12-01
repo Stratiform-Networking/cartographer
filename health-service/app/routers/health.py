@@ -7,6 +7,9 @@ from ..models import (
     HealthCheckRequest,
     BatchHealthResponse,
     DeviceToMonitor,
+    MonitoringConfig,
+    MonitoringStatus,
+    RegisterDevicesRequest,
 )
 from ..services.health_checker import health_checker
 
@@ -126,4 +129,91 @@ async def check_dns(ip: str):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Monitoring Endpoints ====================
+
+@router.post("/monitoring/devices")
+async def register_devices(request: RegisterDevicesRequest):
+    """
+    Register devices for passive monitoring.
+    These devices will be checked periodically in the background.
+    """
+    health_checker.set_monitored_devices(request.ips)
+    return {
+        "message": f"Registered {len(request.ips)} devices for monitoring",
+        "devices": request.ips
+    }
+
+
+@router.get("/monitoring/devices")
+async def get_monitored_devices():
+    """Get list of devices currently being monitored"""
+    return {"devices": health_checker.get_monitored_devices()}
+
+
+@router.delete("/monitoring/devices")
+async def clear_monitored_devices():
+    """Clear all devices from monitoring"""
+    health_checker.set_monitored_devices([])
+    return {"message": "Cleared all monitored devices"}
+
+
+@router.get("/monitoring/config", response_model=MonitoringConfig)
+async def get_monitoring_config():
+    """Get current monitoring configuration"""
+    return health_checker.get_monitoring_config()
+
+
+@router.post("/monitoring/config", response_model=MonitoringConfig)
+async def set_monitoring_config(config: MonitoringConfig):
+    """
+    Update monitoring configuration.
+    Changes take effect immediately.
+    """
+    health_checker.set_monitoring_config(config)
+    return health_checker.get_monitoring_config()
+
+
+@router.get("/monitoring/status", response_model=MonitoringStatus)
+async def get_monitoring_status():
+    """
+    Get current monitoring status including:
+    - Whether monitoring is enabled
+    - Current check interval
+    - List of monitored devices
+    - Last and next check timestamps
+    """
+    return health_checker.get_monitoring_status()
+
+
+@router.post("/monitoring/start")
+async def start_monitoring():
+    """Manually start the monitoring loop (usually auto-started)"""
+    health_checker.start_monitoring()
+    return {"message": "Monitoring started"}
+
+
+@router.post("/monitoring/stop")
+async def stop_monitoring():
+    """Stop the background monitoring loop"""
+    health_checker.stop_monitoring()
+    return {"message": "Monitoring stopped"}
+
+
+@router.post("/monitoring/check-now")
+async def trigger_immediate_check():
+    """
+    Trigger an immediate health check of all monitored devices.
+    Useful for forcing a refresh outside the normal interval.
+    """
+    if not health_checker.get_monitored_devices():
+        raise HTTPException(status_code=400, detail="No devices registered for monitoring")
+    
+    await health_checker._perform_monitoring_check()
+    return {
+        "message": "Check completed",
+        "checked_devices": len(health_checker.get_monitored_devices()),
+        "timestamp": datetime.utcnow()
+    }
 

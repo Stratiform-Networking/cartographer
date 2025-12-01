@@ -82,5 +82,26 @@ class DeviceToMonitor(BaseModel):
     """Device registered for monitoring"""
     ip: str
     hostname: Optional[str] = None
-    check_interval_seconds: int = 60
+
+
+class MonitoringConfig(BaseModel):
+    """Configuration for passive monitoring"""
+    enabled: bool = True
+    check_interval_seconds: int = 30
+    include_dns: bool = True
+
+
+class MonitoringStatus(BaseModel):
+    """Current status of the monitoring system"""
+    enabled: bool
+    check_interval_seconds: int
+    include_dns: bool
+    monitored_devices: List[str]
+    last_check: Optional[datetime] = None
+    next_check: Optional[datetime] = None
+
+
+class RegisterDevicesRequest(BaseModel):
+    """Request to register devices for monitoring"""
+    ips: List[str]
 

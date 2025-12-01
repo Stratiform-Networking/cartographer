@@ -2,7 +2,7 @@ import asyncio
 import socket
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Set
 from collections import deque
 import logging
 
@@ -11,7 +11,9 @@ from ..models import (
     HealthStatus, 
     PingResult, 
     DnsResult, 
-    PortCheckResult
+    PortCheckResult,
+    MonitoringConfig,
+    MonitoringStatus
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,14 @@ class HealthChecker:
         self._metrics_cache: Dict[str, DeviceMetrics] = {}
         self._history: Dict[str, deque] = {}  # IP -> deque of (timestamp, success, latency)
         self._history_max_size = 1440  # 24 hours at 1-minute intervals
+        
+        # Background monitoring state
+        self._monitored_devices: Set[str] = set()
+        self._monitoring_config = MonitoringConfig()
+        self._monitoring_task: Optional[asyncio.Task] = None
+        self._last_check_time: Optional[datetime] = None
+        self._next_check_time: Optional[datetime] = None
+        self._is_checking: bool = False
     
     def _record_check(self, ip: str, success: bool, latency_ms: Optional[float]):
         """Record a health check result for historical tracking"""
@@ -336,6 +346,122 @@ class HealthChecker:
         """Clear the metrics cache"""
         self._metrics_cache.clear()
         self._history.clear()
+    
+    # ==================== Background Monitoring ====================
+    
+    def register_devices(self, ips: List[str]) -> None:
+        """Register devices to be monitored passively"""
+        self._monitored_devices.update(ips)
+        logger.info(f"Registered {len(ips)} devices for monitoring. Total: {len(self._monitored_devices)}")
+    
+    def unregister_devices(self, ips: List[str]) -> None:
+        """Unregister devices from passive monitoring"""
+        for ip in ips:
+            self._monitored_devices.discard(ip)
+        logger.info(f"Unregistered {len(ips)} devices. Remaining: {len(self._monitored_devices)}")
+    
+    def set_monitored_devices(self, ips: List[str]) -> None:
+        """Set the full list of devices to monitor (replaces existing)"""
+        self._monitored_devices = set(ips)
+        logger.info(f"Set {len(self._monitored_devices)} devices for monitoring")
+    
+    def get_monitored_devices(self) -> List[str]:
+        """Get list of currently monitored devices"""
+        return list(self._monitored_devices)
+    
+    def get_monitoring_config(self) -> MonitoringConfig:
+        """Get current monitoring configuration"""
+        return self._monitoring_config
+    
+    def set_monitoring_config(self, config: MonitoringConfig) -> None:
+        """Update monitoring configuration"""
+        self._monitoring_config = config
+        logger.info(f"Updated monitoring config: interval={config.check_interval_seconds}s, enabled={config.enabled}")
+        
+        # Restart monitoring task if running to apply new interval
+        if self._monitoring_task and not self._monitoring_task.done():
+            self._monitoring_task.cancel()
+            if config.enabled:
+                self._monitoring_task = asyncio.create_task(self._monitoring_loop())
+    
+    def get_monitoring_status(self) -> MonitoringStatus:
+        """Get current monitoring status"""
+        return MonitoringStatus(
+            enabled=self._monitoring_config.enabled,
+            check_interval_seconds=self._monitoring_config.check_interval_seconds,
+            include_dns=self._monitoring_config.include_dns,
+            monitored_devices=list(self._monitored_devices),
+            last_check=self._last_check_time,
+            next_check=self._next_check_time
+        )
+    
+    async def _perform_monitoring_check(self) -> None:
+        """Perform a single monitoring check of all registered devices"""
+        if not self._monitored_devices:
+            return
+        
+        if self._is_checking:
+            logger.warning("Previous check still in progress, skipping this cycle")
+            return
+        
+        self._is_checking = True
+        try:
+            logger.debug(f"Starting passive health check for {len(self._monitored_devices)} devices")
+            self._last_check_time = datetime.utcnow()
+            
+            # Check all devices in parallel
+            await self.check_multiple_devices(
+                ips=list(self._monitored_devices),
+                include_ports=False,  # Don't scan ports during passive checks (too slow)
+                include_dns=self._monitoring_config.include_dns
+            )
+            
+            logger.debug(f"Completed passive health check")
+        except Exception as e:
+            logger.error(f"Error during monitoring check: {e}")
+        finally:
+            self._is_checking = False
+    
+    async def _monitoring_loop(self) -> None:
+        """Background loop that periodically checks all monitored devices"""
+        logger.info("Starting background monitoring loop")
+        
+        while True:
+            try:
+                if self._monitoring_config.enabled and self._monitored_devices:
+                    # Perform the check
+                    await self._perform_monitoring_check()
+                
+                # Calculate next check time
+                interval = self._monitoring_config.check_interval_seconds
+                self._next_check_time = datetime.utcnow() + timedelta(seconds=interval)
+                
+                # Wait for next interval
+                await asyncio.sleep(interval)
+                
+            except asyncio.CancelledError:
+                logger.info("Monitoring loop cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in monitoring loop: {e}")
+                await asyncio.sleep(5)  # Wait a bit before retrying
+    
+    def start_monitoring(self) -> None:
+        """Start the background monitoring task"""
+        if self._monitoring_task and not self._monitoring_task.done():
+            logger.warning("Monitoring already running")
+            return
+        
+        self._monitoring_task = asyncio.create_task(self._monitoring_loop())
+        logger.info("Background monitoring started")
+    
+    def stop_monitoring(self) -> None:
+        """Stop the background monitoring task"""
+        if self._monitoring_task:
+            self._monitoring_task.cancel()
+            self._monitoring_task = None
+            self._next_check_time = None
+            logger.info("Background monitoring stopped")
 
 
 # Singleton instance

@@ -245,19 +245,38 @@ import MetricCard from './MetricCard.vue';
 
 const props = defineProps<{
 	node?: TreeNode;
+	cachedMetrics?: Record<string, DeviceMetrics>;
 }>();
 
 const emit = defineEmits<{
 	(e: 'close'): void;
 }>();
 
-const metrics = ref<DeviceMetrics | null>(null);
+const localMetrics = ref<DeviceMetrics | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const scanningPorts = ref(false);
 
-// True when we couldn't reach the node (connection error)
-const isOffline = computed(() => !!error.value && !!props.node?.ip);
+// Use cached metrics from parent, falling back to local metrics (from manual refresh/port scan)
+const metrics = computed(() => {
+	const ip = props.node?.ip;
+	if (!ip) return null;
+	
+	// Prefer local metrics if we have them (from manual refresh or port scan)
+	if (localMetrics.value?.ip === ip) {
+		return localMetrics.value;
+	}
+	
+	// Otherwise use cached metrics from parent
+	return props.cachedMetrics?.[ip] || null;
+});
+
+// True when we couldn't reach the node (connection error or unhealthy status with no data)
+const isOffline = computed(() => {
+	if (error.value && props.node?.ip) return true;
+	if (metrics.value?.status === 'unhealthy' && !metrics.value.ping?.success) return true;
+	return false;
+});
 
 const statusLabel = computed(() => {
 	if (isOffline.value) return 'Offline (Unreachable)';
@@ -380,7 +399,7 @@ async function fetchHealth(includePorts = false) {
 				timeout: 30000 
 			}
 		);
-		metrics.value = response.data;
+		localMetrics.value = response.data;
 	} catch (err: any) {
 		console.error('Health check failed:', err);
 		error.value = err.response?.data?.detail || err.message || 'Failed to connect to health service';
@@ -390,24 +409,26 @@ async function fetchHealth(includePorts = false) {
 }
 
 async function refreshHealth() {
+	// Force a live health check
 	await fetchHealth(false);
 }
 
 async function scanPorts() {
 	scanningPorts.value = true;
 	try {
+		// Port scanning always requires a live check
 		await fetchHealth(true);
 	} finally {
 		scanningPorts.value = false;
 	}
 }
 
-// Fetch health when node changes
+// Clear local metrics when node changes (will use cached from parent)
 watch(() => props.node?.ip, (newIp, oldIp) => {
-	if (newIp && newIp !== oldIp) {
-		metrics.value = null;
-		fetchHealth();
+	if (newIp !== oldIp) {
+		localMetrics.value = null;
+		error.value = null;
 	}
-}, { immediate: true });
+});
 </script>
 

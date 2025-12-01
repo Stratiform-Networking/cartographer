@@ -33,6 +33,83 @@
 				Clean Up
 			</button>
 			<div class="border-l border-slate-300 dark:border-slate-600 h-8 mx-1"></div>
+			<!-- Health Monitoring Settings -->
+			<div class="relative">
+				<button 
+					@click="showHealthSettings = !showHealthSettings" 
+					class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1"
+					:class="{ 'bg-slate-100 dark:bg-slate-700': showHealthSettings }"
+					title="Health monitoring settings"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+					</svg>
+				</button>
+				<!-- Dropdown -->
+				<div 
+					v-if="showHealthSettings" 
+					class="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 p-4"
+				>
+					<h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-3">Health Monitoring</h3>
+					
+					<!-- Enable/Disable -->
+					<div class="flex items-center justify-between mb-3">
+						<span class="text-xs text-slate-600 dark:text-slate-400">Passive Monitoring</span>
+						<button 
+							@click="toggleMonitoring"
+							class="relative w-10 h-5 rounded-full transition-colors"
+							:class="healthConfig.enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+						>
+							<span 
+								class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+								:class="healthConfig.enabled ? 'translate-x-5' : 'translate-x-0.5'"
+							></span>
+						</button>
+					</div>
+					
+					<!-- Check Interval -->
+					<div class="mb-3">
+						<label class="text-xs text-slate-600 dark:text-slate-400 block mb-1">Check Interval</label>
+						<select 
+							v-model="healthConfig.check_interval_seconds"
+							@change="updateHealthConfig"
+							class="w-full text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded px-2 py-1"
+						>
+							<option :value="10">10 seconds</option>
+							<option :value="30">30 seconds</option>
+							<option :value="60">1 minute</option>
+							<option :value="120">2 minutes</option>
+							<option :value="300">5 minutes</option>
+							<option :value="600">10 minutes</option>
+						</select>
+					</div>
+					
+					<!-- Include DNS -->
+					<div class="flex items-center justify-between mb-3">
+						<span class="text-xs text-slate-600 dark:text-slate-400">Include DNS Lookups</span>
+						<button 
+							@click="toggleDns"
+							class="relative w-10 h-5 rounded-full transition-colors"
+							:class="healthConfig.include_dns ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+						>
+							<span 
+								class="absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
+								:class="healthConfig.include_dns ? 'translate-x-5' : 'translate-x-0.5'"
+							></span>
+						</button>
+					</div>
+					
+					<!-- Status Info -->
+					<div class="text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
+						<p v-if="healthStatus?.monitored_devices?.length">
+							Monitoring {{ healthStatus.monitored_devices.length }} devices
+						</p>
+						<p v-if="healthStatus?.last_check" class="mt-1">
+							Last check: {{ formatTimestamp(healthStatus.last_check) }}
+						</p>
+					</div>
+				</div>
+			</div>
 			<button @click="toggleDarkMode" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Toggle dark mode">
 				<svg v-if="!isDark" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
@@ -47,10 +124,11 @@
 
 <script lang="ts" setup>
 import axios from "axios";
-import { onBeforeUnmount, ref, onMounted } from "vue";
+import { onBeforeUnmount, ref, onMounted, reactive } from "vue";
 import type { ParsedNetworkMap, TreeNode } from "../types/network";
 import { useNetworkData } from "../composables/useNetworkData";
 import { useMapLayout } from "../composables/useMapLayout";
+import { useHealthMonitoring, type MonitoringConfig, type MonitoringStatus } from "../composables/useHealthMonitoring";
 
 const props = defineProps<{
 	root: TreeNode;
@@ -74,9 +152,19 @@ const message = ref("");
 const isDark = ref(false);
 const { parseNetworkMap } = useNetworkData();
 const { exportLayout, importLayout } = useMapLayout();
+const { fetchConfig, updateConfig, fetchStatus } = useHealthMonitoring();
 let es: EventSource | null = null;
 // Prefer relative URLs to avoid mixed-content; use APPLICATION_URL only if safe (https or same protocol)
 const baseUrl = ref<string>("");
+
+// Health monitoring settings
+const showHealthSettings = ref(false);
+const healthConfig = reactive<MonitoringConfig>({
+	enabled: true,
+	check_interval_seconds: 30,
+	include_dns: true
+});
+const healthStatus = ref<MonitoringStatus | null>(null);
 
 onMounted(async () => {
 	// Initialize dark mode from localStorage
@@ -128,7 +216,67 @@ onMounted(async () => {
 	} catch (error) {
 		console.error("Failed to load saved layout:", error);
 	}
+
+	// Load health monitoring config
+	await loadHealthConfig();
+
+	// Add click outside listener for dropdowns
+	document.addEventListener('click', handleClickOutside);
 });
+
+// Health monitoring functions
+async function loadHealthConfig() {
+	try {
+		const config = await fetchConfig();
+		if (config) {
+			healthConfig.enabled = config.enabled;
+			healthConfig.check_interval_seconds = config.check_interval_seconds;
+			healthConfig.include_dns = config.include_dns;
+		}
+		healthStatus.value = await fetchStatus();
+	} catch (error) {
+		console.error("Failed to load health config:", error);
+	}
+}
+
+async function updateHealthConfig() {
+	try {
+		await updateConfig(healthConfig);
+		healthStatus.value = await fetchStatus();
+	} catch (error) {
+		console.error("Failed to update health config:", error);
+	}
+}
+
+async function toggleMonitoring() {
+	healthConfig.enabled = !healthConfig.enabled;
+	await updateHealthConfig();
+}
+
+async function toggleDns() {
+	healthConfig.include_dns = !healthConfig.include_dns;
+	await updateHealthConfig();
+}
+
+function formatTimestamp(isoString: string): string {
+	const date = new Date(isoString);
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffMins = Math.floor(diffMs / 60000);
+	
+	if (diffMins < 1) return 'Just now';
+	if (diffMins < 60) return `${diffMins}m ago`;
+	
+	return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+// Close health settings dropdown when clicking outside
+function handleClickOutside(event: MouseEvent) {
+	const target = event.target as HTMLElement;
+	if (showHealthSettings.value && !target.closest('.relative')) {
+		showHealthSettings.value = false;
+	}
+}
 
 async function runMapper() {
 	message.value = "";
@@ -260,7 +408,10 @@ function endSSE() {
 	}
 }
 
-onBeforeUnmount(() => endSSE());
+onBeforeUnmount(() => {
+	endSSE();
+	document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 

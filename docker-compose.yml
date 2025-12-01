@@ -1,6 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Cartographer - Network Mapping Application
 # Docker Compose for running all services together
+# Uses host networking to scan actual LAN devices
 # ─────────────────────────────────────────────────────────────────────────────
 version: "3.8"
 
@@ -11,15 +12,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: cartographer-app
-    ports:
-      - "8000:8000"
+    # Use host network to access real LAN for scanning
+    network_mode: host
     volumes:
       - cartographer-data:/app/data
     environment:
       - FRONTEND_DIST=/app/frontend/dist
-      - HEALTH_SERVICE_URL=http://health:8001
-    networks:
-      - cartographer-network
+      # Health service is on localhost when using host network
+      - HEALTH_SERVICE_URL=http://localhost:8001
     # Network scanning requires elevated privileges
     cap_add:
       - NET_ADMIN
@@ -35,12 +35,10 @@ services:
       context: ./health-service
       dockerfile: Dockerfile
     container_name: cartographer-health
-    ports:
-      - "8001:8001"
+    # Use host network to ping actual LAN devices
+    network_mode: host
     environment:
-      - CORS_ORIGINS=http://localhost:8000,http://localhost:5173,http://app:8000
-    networks:
-      - cartographer-network
+      - CORS_ORIGINS=*
     # Health checks require ping capabilities
     cap_add:
       - NET_RAW
@@ -55,8 +53,3 @@ services:
 volumes:
   cartographer-data:
     driver: local
-
-networks:
-  cartographer-network:
-    driver: bridge
-

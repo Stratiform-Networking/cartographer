@@ -18,6 +18,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(e: "nodeSelected", id: string | undefined): void;
+	(e: "nodePositionChanged", id: string, x: number, y: number): void;
 }>();
 
 const svgRef = ref<SVGSVGElement | null>(null);
@@ -381,11 +382,20 @@ function roleIcon(role?: string): string {
 		.attr("font-size", "11px")
 		.text((d: any) => d.name);
 
-	// Drag behavior (persist fx/fy) - only when in 'move' mode
+	// Drag behavior (persist fx/fy) - only when in 'edit' mode
 	if (props.mode === 'edit') {
+		let dragStartX = 0;
+		let dragStartY = 0;
+		let hasDragged = false;
+		const dragThreshold = 5; // pixels - movement below this is considered a click
+		
 		const drag = d3.drag<SVGGElement, any>()
-			.on("start", function () {
+			.on("start", function (event, d: any) {
 				d3.select(this).raise();
+				// Record starting position to detect if actual dragging occurred
+				dragStartX = d.x;
+				dragStartY = d.y;
+				hasDragged = false;
 			})
 			.on("drag", function (event, d: any) {
 				// Convert pointer to content coordinates accounting for zoom/pan
@@ -393,21 +403,39 @@ function roleIcon(role?: string): string {
 				const t = d3.zoomTransform(svgEl);
 				const [sx, sy] = d3.pointer(event, svgEl);
 				const [cx, cy] = t.invert([sx, sy]);
-				d.x = cx; d.y = cy;
-				d3.select(this).attr("transform", `translate(${d.x},${d.y})`);
-				if (d.ref) { (d.ref as any).fx = d.x; (d.ref as any).fy = d.y; updatePosition(d.id, d.x, d.y); }
-				// Update connected links
-				g.selectAll("path.link").attr("d", (l: any) => linkPath(l.source, l.target));
-				// Update speed label positions and angles
-				g.selectAll("text.speed-label")
-					.attr("x", (l: any) => (l.source.x + l.target.x) / 2)
-					.attr("y", (l: any) => (l.source.y + l.target.y) / 2)
-					.attr("transform", (l: any) => {
-						const angle = getBezierAngle(l.source, l.target);
-						const centerX = (l.source.x + l.target.x) / 2;
-						const centerY = (l.source.y + l.target.y) / 2;
-						return `rotate(${angle}, ${centerX}, ${centerY})`;
-					});
+				
+				// Check if movement exceeds threshold
+				const dx = cx - dragStartX;
+				const dy = cy - dragStartY;
+				const distance = Math.sqrt(dx * dx + dy * dy);
+				
+				if (distance > dragThreshold) {
+					hasDragged = true;
+					d.x = cx; d.y = cy;
+					d3.select(this).attr("transform", `translate(${d.x},${d.y})`);
+					if (d.ref) { (d.ref as any).fx = d.x; (d.ref as any).fy = d.y; updatePosition(d.id, d.x, d.y); }
+					// Update connected links
+					g.selectAll("path.link").attr("d", (l: any) => linkPath(l.source, l.target));
+					// Update speed label positions and angles
+					g.selectAll("text.speed-label")
+						.attr("x", (l: any) => (l.source.x + l.target.x) / 2)
+						.attr("y", (l: any) => (l.source.y + l.target.y) / 2)
+						.attr("transform", (l: any) => {
+							const angle = getBezierAngle(l.source, l.target);
+							const centerX = (l.source.x + l.target.x) / 2;
+							const centerY = (l.source.y + l.target.y) / 2;
+							return `rotate(${angle}, ${centerX}, ${centerY})`;
+						});
+				}
+			})
+			.on("end", function (_, d: any) {
+				if (hasDragged) {
+					// Notify parent that position changed for auto-save
+					emit("nodePositionChanged", d.id, d.x, d.y);
+				} else {
+					// No significant drag movement - treat as a click to select
+					emit("nodeSelected", d.id);
+				}
 			});
 		node.call(drag as any);
 	}

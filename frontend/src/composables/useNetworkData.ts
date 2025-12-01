@@ -1,4 +1,4 @@
-import type { DeviceEntry, DeviceRole, GatewayInfo, ParsedNetworkMap, TreeNode } from "../types/network";
+import type { DeviceEntry, DeviceRole, GatewayInfo, ParsedNetworkMap, TreeNode, NodeVersion } from "../types/network";
 
 function parseGateway(section: string): GatewayInfo | undefined {
 	const ipHost = /Gateway:\s*([0-9.]+)\s*\(([^)]+)\)/i.exec(section);
@@ -51,7 +51,7 @@ function parseHeuristicTree(section: string): Record<string, { ip: string; hostn
 		return "unknown";
 	};
 	for (const line of section.split("\n")) {
-		const header = /^\s*([A-Za-z \/()0-9:]+):\s*$/.exec(line);
+		const header = /^\s*([A-Za-z \/()0-9:\-]+):\s*$/.exec(line);
 		if (header) {
 			currentKey = header[1].trim();
 			groups[currentKey] = [];
@@ -70,7 +70,20 @@ function parseHeuristicTree(section: string): Record<string, { ip: string; hostn
 	return groups;
 }
 
+function initializeNodeVersion(node: TreeNode): void {
+	const now = new Date().toISOString();
+	node.createdAt = now;
+	node.updatedAt = now;
+	node.version = 1;
+	node.history = [{
+		version: 1,
+		timestamp: now,
+		changes: ['Node discovered by network mapper']
+	}];
+}
+
 function buildTree(gateway: GatewayInfo | undefined, groups: Record<string, { ip: string; hostname: string; role: DeviceRole }[]>): TreeNode {
+	const now = new Date().toISOString();
 	const root: TreeNode = {
 		id: gateway ? gateway.ip : "root",
 		name: gateway ? `${gateway.ip} (${gateway.hostname})` : "Network",
@@ -78,6 +91,14 @@ function buildTree(gateway: GatewayInfo | undefined, groups: Record<string, { ip
 		ip: gateway?.ip,
 		hostname: gateway?.hostname,
 		children: [],
+		createdAt: now,
+		updatedAt: now,
+		version: 1,
+		history: [{
+			version: 1,
+			timestamp: now,
+			changes: ['Gateway discovered by network mapper']
+		}]
 	};
 	for (const [groupName, items] of Object.entries(groups)) {
 		if (!items.length) continue;
@@ -88,14 +109,16 @@ function buildTree(gateway: GatewayInfo | undefined, groups: Record<string, { ip
 			children: [],
 		};
 		for (const it of items) {
-			groupNode.children!.push({
+			const deviceNode: TreeNode = {
 				id: it.ip,
 				name: `${it.ip} (${it.hostname})`,
 				role: it.role,
 				ip: it.ip,
 				hostname: it.hostname,
 				children: [],
-			});
+			};
+			initializeNodeVersion(deviceNode);
+			groupNode.children!.push(deviceNode);
 		}
 		root.children!.push(groupNode);
 	}

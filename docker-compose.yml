@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cartographer - Network Mapping Application
+# Docker Compose for running all services together
+# ─────────────────────────────────────────────────────────────────────────────
+version: "3.8"
+
+services:
+  # Main application (Backend + Frontend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cartographer-app
+    ports:
+      - "8000:8000"
+    volumes:
+      - cartographer-data:/app/data
+    environment:
+      - FRONTEND_DIST=/app/frontend/dist
+      - HEALTH_SERVICE_URL=http://health:8001
+    networks:
+      - cartographer-network
+    # Network scanning requires elevated privileges
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+    depends_on:
+      health:
+        condition: service_healthy
+
+  # Health Monitoring Microservice
+  health:
+    build:
+      context: ./health-service
+      dockerfile: Dockerfile
+    container_name: cartographer-health
+    ports:
+      - "8001:8001"
+    environment:
+      - CORS_ORIGINS=http://localhost:8000,http://localhost:5173,http://app:8000
+    networks:
+      - cartographer-network
+    # Health checks require ping capabilities
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  cartographer-data:
+    driver: local
+
+networks:
+  cartographer-network:
+    driver: bridge
+

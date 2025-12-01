@@ -22,6 +22,12 @@ export interface GatewayInfo {
 	subnet?: string;
 }
 
+export interface NodeVersion {
+	version: number;
+	timestamp: string;
+	changes: string[]; // Description of what changed
+}
+
 export interface TreeNode {
 	id: string; // typically ip or synthetic group id
 	name: string;
@@ -32,6 +38,11 @@ export interface TreeNode {
 	// Freeform layout positions (persisted)
 	fx?: number;
 	fy?: number;
+	// Version management
+	createdAt?: string; // ISO timestamp when node was created
+	updatedAt?: string; // ISO timestamp when node was last modified
+	version?: number; // Increments on each change
+	history?: NodeVersion[]; // Previous versions for audit trail
 }
 
 export interface ParsedNetworkMap {
@@ -39,6 +50,59 @@ export interface ParsedNetworkMap {
 	gateway?: GatewayInfo;
 	devices: DeviceEntry[];
 	root: TreeNode;
+}
+
+// Health monitoring types
+export type HealthStatus = "healthy" | "degraded" | "unhealthy" | "unknown";
+
+export interface PingResult {
+	success: boolean;
+	latency_ms?: number;
+	packet_loss_percent: number;
+	min_latency_ms?: number;
+	max_latency_ms?: number;
+	avg_latency_ms?: number;
+	jitter_ms?: number;
+}
+
+export interface DnsResult {
+	success: boolean;
+	resolved_hostname?: string;
+	reverse_dns?: string;
+	resolution_time_ms?: number;
+}
+
+export interface PortCheckResult {
+	port: number;
+	open: boolean;
+	service?: string;
+	response_time_ms?: number;
+}
+
+export interface DeviceMetrics {
+	ip: string;
+	status: HealthStatus;
+	last_check: string; // ISO timestamp
+	
+	// Ping metrics
+	ping?: PingResult;
+	
+	// DNS metrics
+	dns?: DnsResult;
+	
+	// Open ports discovered
+	open_ports: PortCheckResult[];
+	
+	// Historical data
+	uptime_percent_24h?: number;
+	avg_latency_24h_ms?: number;
+	checks_passed_24h: number;
+	checks_failed_24h: number;
+	
+	// Additional info
+	last_seen_online?: string; // ISO timestamp
+	consecutive_failures: number;
+	error_message?: string;
 }
 
 

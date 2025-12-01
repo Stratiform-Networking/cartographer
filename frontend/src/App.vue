@@ -17,7 +17,7 @@
 					v-if="parsed"
 					:root="parsed.root"
 					:selectedId="selectedId"
-					@select="id => selectedId = id"
+					@select="onNodeSelected"
 				/>
 				<div v-else class="p-4 text-sm text-slate-600 dark:text-slate-400">
 					Run the mapper to generate a network map, or load a saved layout.
@@ -38,7 +38,7 @@
 					</button>
 				</div>
 				<!-- Interaction mode toggle (top-right) -->
-				<div class="absolute top-2 right-3 z-10">
+				<div class="absolute top-2 right-3 z-10 flex items-center gap-2">
 					<div class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex items-center">
 						<button
 							class="px-3 py-1 text-xs"
@@ -57,6 +57,19 @@
 							Edit
 						</button>
 					</div>
+					<button
+						@click="toggleHistoryPanel"
+						class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 shadow-sm flex items-center gap-1.5 transition-colors"
+						:class="showHistoryPanel 
+							? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600' 
+							: 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:border-amber-400 dark:hover:border-amber-600 hover:text-amber-700 dark:hover:text-amber-400'"
+						title="View node change history"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						History
+					</button>
 				</div>
 				<!-- Node configuration panel (bottom-right) -->
 				<div class="absolute bottom-2 right-3 z-10">
@@ -141,13 +154,146 @@
 						:data="parsed.root"
 						:mode="mode"
 						:selectedId="selectedId"
-						@nodeSelected="id => selectedId = id"
+						@nodeSelected="onNodeSelected"
+						@nodePositionChanged="onNodePositionChanged"
 					/>
 					<div v-else class="h-full rounded border border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center text-slate-500 dark:text-slate-400">
 						No map loaded yet.
 					</div>
 				</div>
 			</main>
+			<!-- History Panel (Right Side) -->
+			<aside 
+				v-if="showHistoryPanel"
+				class="w-96 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col overflow-hidden"
+			>
+				<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+					<div class="flex items-center gap-2">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						<h2 class="font-semibold text-slate-800 dark:text-slate-100">Change History</h2>
+					</div>
+					<button 
+						@click="showHistoryPanel = false"
+						class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+						title="Close history panel"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+				
+				<!-- Filter tabs -->
+				<div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+					<button
+						@click="historyFilter = 'selected'"
+						class="flex-1 px-3 py-2 text-xs font-medium transition-colors"
+						:class="historyFilter === 'selected' 
+							? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-500 bg-white dark:bg-slate-800' 
+							: 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
+					>
+						Selected Node
+					</button>
+					<button
+						@click="historyFilter = 'all'"
+						class="flex-1 px-3 py-2 text-xs font-medium transition-colors"
+						:class="historyFilter === 'all' 
+							? 'text-amber-600 dark:text-amber-400 border-b-2 border-amber-500 bg-white dark:bg-slate-800' 
+							: 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'"
+					>
+						All Nodes
+					</button>
+				</div>
+				
+				<!-- History content -->
+				<div class="flex-1 overflow-auto p-3">
+					<!-- Selected node history -->
+					<div v-if="historyFilter === 'selected'">
+						<div v-if="selectedNode && selectedNode.history?.length" class="space-y-3">
+							<div class="mb-3 p-2 rounded bg-slate-100 dark:bg-slate-700/50">
+								<div class="text-xs font-medium text-slate-700 dark:text-slate-300">{{ selectedNode.name }}</div>
+								<div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+									Version {{ selectedNode.version || 1 }} • {{ selectedNode.history?.length || 0 }} changes
+								</div>
+							</div>
+							<div 
+								v-for="(entry, idx) in [...(selectedNode.history || [])].reverse()" 
+								:key="idx"
+								class="relative pl-4 pb-3 border-l-2 border-slate-200 dark:border-slate-600 last:pb-0"
+							>
+								<div class="absolute -left-1.5 top-0 w-3 h-3 rounded-full bg-amber-400 dark:bg-amber-500 border-2 border-white dark:border-slate-800"></div>
+								<div class="text-xs text-slate-500 dark:text-slate-400 mb-1">
+									v{{ entry.version }} • {{ formatTimestamp(entry.timestamp) }}
+								</div>
+								<div 
+									v-for="(change, cIdx) in entry.changes" 
+									:key="cIdx"
+									class="text-sm text-slate-700 dark:text-slate-300"
+								>
+									{{ change }}
+								</div>
+							</div>
+						</div>
+						<div v-else-if="selectedNode && !selectedNode.history?.length" class="text-center py-8 text-slate-500 dark:text-slate-400">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							<p class="text-sm">No history for this node</p>
+						</div>
+						<div v-else class="text-center py-8 text-slate-500 dark:text-slate-400">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+							</svg>
+							<p class="text-sm">Select a node to view its history</p>
+						</div>
+					</div>
+					
+					<!-- All nodes history -->
+					<div v-else>
+						<div v-if="allNodesHistory.length" class="space-y-3">
+							<div 
+								v-for="(item, idx) in allNodesHistory" 
+								:key="idx"
+								class="relative pl-4 pb-3 border-l-2 border-slate-200 dark:border-slate-600 last:pb-0 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30 -ml-1 pl-5 py-1 rounded-r"
+								@click="selectNodeFromHistory(item.nodeId)"
+							>
+								<div class="absolute left-0 top-1.5 w-3 h-3 rounded-full border-2 border-white dark:border-slate-800"
+									:class="getNodeRoleColor(item.role)"
+								></div>
+								<div class="flex items-center gap-2 mb-0.5">
+									<span class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate max-w-48">{{ item.nodeName }}</span>
+									<span class="text-xs text-slate-400 dark:text-slate-500">v{{ item.version }}</span>
+								</div>
+								<div class="text-xs text-slate-500 dark:text-slate-400 mb-1">
+									{{ formatTimestamp(item.timestamp) }}
+								</div>
+								<div 
+									v-for="(change, cIdx) in item.changes" 
+									:key="cIdx"
+									class="text-xs text-slate-600 dark:text-slate-400"
+								>
+									{{ change }}
+								</div>
+							</div>
+						</div>
+						<div v-else class="text-center py-8 text-slate-500 dark:text-slate-400">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							<p class="text-sm">No changes recorded yet</p>
+							<p class="text-xs mt-1">Changes will appear here as you edit nodes</p>
+						</div>
+					</div>
+				</div>
+			</aside>
+			<!-- Node Info Panel (Right Side) -->
+			<NodeInfoPanel
+				v-if="showNodeInfoPanel && selectedNode"
+				:node="selectedNode"
+				@close="closeNodeInfoPanel"
+			/>
 		</div>
 		<!-- Terminal / Logs Panel -->
 		<div 
@@ -185,12 +331,65 @@
 
 <script lang="ts" setup>
 import { ref, watch, nextTick, onMounted, onBeforeUnmount, computed } from "vue";
+import axios from "axios";
 import MapControls from "./components/MapControls.vue";
 import DeviceList from "./components/DeviceList.vue";
 import NetworkMap from "./components/NetworkMap.vue";
-import type { ParsedNetworkMap, TreeNode } from "./types/network";
+import NodeInfoPanel from "./components/NodeInfoPanel.vue";
+import type { ParsedNetworkMap, TreeNode, NodeVersion } from "./types/network";
 import { useMapLayout } from "./composables/useMapLayout";
 import { useNetworkData } from "./composables/useNetworkData";
+
+// Version management helpers
+function initializeNodeVersion(node: TreeNode, source: 'manual' | 'mapper' = 'manual'): void {
+	const now = new Date().toISOString();
+	if (!node.createdAt) {
+		node.createdAt = now;
+		node.version = 1;
+		node.history = [{
+			version: 1,
+			timestamp: now,
+			changes: [`Node created (${source})`]
+		}];
+	}
+	node.updatedAt = now;
+}
+
+function updateNodeVersion(node: TreeNode, changes: string[]): void {
+	const now = new Date().toISOString();
+	const newVersion = (node.version || 1) + 1;
+	
+	// Initialize if not already done
+	if (!node.createdAt) {
+		node.createdAt = now;
+	}
+	
+	node.updatedAt = now;
+	node.version = newVersion;
+	
+	// Add to history (keep last 20 versions to avoid bloat)
+	if (!node.history) {
+		node.history = [];
+	}
+	node.history.push({
+		version: newVersion,
+		timestamp: now,
+		changes
+	});
+	if (node.history.length > 20) {
+		node.history = node.history.slice(-20);
+	}
+}
+
+function ensureAllNodesVersioned(root: TreeNode, source: 'manual' | 'mapper' = 'mapper'): void {
+	const walk = (n: TreeNode) => {
+		if (n.role !== 'group') {
+			initializeNodeVersion(n, source);
+		}
+		for (const c of (n.children || [])) walk(c);
+	};
+	walk(root);
+}
 
 const parsed = ref<ParsedNetworkMap | null>(null);
 const selectedId = ref<string | undefined>(undefined);
@@ -198,6 +397,9 @@ const emptyRoot: TreeNode = { id: "root", name: "Network", role: "group", childr
 const logs = ref<string[]>([]);
 const running = ref(false);
 const mode = ref<'pan' | 'edit'>('pan'); // interaction mode
+const showHistoryPanel = ref(false); // history panel visibility
+const showNodeInfoPanel = ref(false); // node info panel visibility
+const historyFilter = ref<'selected' | 'all'>('selected'); // history panel filter
 const networkMapRef = ref<InstanceType<typeof NetworkMap> | null>(null);
 const editRole = ref<string>('unknown');
 const connectParent = ref<string>('');
@@ -254,12 +456,37 @@ function stopResize() {
 	document.body.style.userSelect = '';
 }
 
-const { applySavedPositions, clearPositions } = useMapLayout();
+const { applySavedPositions, clearPositions, exportLayout } = useMapLayout();
 const { parseNetworkMap } = useNetworkData();
 
+// Auto-save debounce timer
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+const autoSaveDelay = 2000; // 2 seconds after last change
+
+function triggerAutoSave() {
+	if (autoSaveTimer) {
+		clearTimeout(autoSaveTimer);
+	}
+	autoSaveTimer = setTimeout(async () => {
+		if (parsed.value && hasUnsavedChanges.value) {
+			try {
+				const layout = exportLayout(parsed.value.root);
+				await axios.post('/api/save-layout', layout);
+				savedStateHash.value = currentStateHash.value;
+				console.log('[Auto-save] Network map saved');
+			} catch (error) {
+				console.error('[Auto-save] Failed to save:', error);
+			}
+		}
+	}, autoSaveDelay);
+}
+
 function onUpdateMap(p: ParsedNetworkMap) {
+	// Version all nodes from the mapper
+	ensureAllNodesVersioned(p.root, 'mapper');
 	parsed.value = p;
 	selectedId.value = undefined;
+	triggerAutoSave();
 }
 
 function findNodeById(n: TreeNode, id?: string): TreeNode | undefined {
@@ -418,7 +645,12 @@ function onChangeRole() {
 	const root = parsed.value.root;
 	const node = findNodeById(root, selectedId.value);
 	if (!node) return;
+	const oldRole = node.role;
 	node.role = editRole.value as any;
+	
+	// Track the version change
+	updateNodeVersion(node, [`Role changed from "${oldRole}" to "${node.role}"`]);
+	
 	// Move across tiers if needed
 	const role = node.role || 'unknown';
 	let targetPrefix = '';
@@ -434,14 +666,119 @@ function onChangeRole() {
 			targetGroup.children.push(existingParent);
 		}
 	}
-	// Refresh view
+	// Refresh view and trigger auto-save
 	parsed.value = { ...parsed.value };
+	triggerAutoSave();
 }
 
 const selectedNode = computed(() => {
 	if (!parsed.value) return undefined;
 	return findNodeById(parsed.value.root, selectedId.value);
 });
+
+// History panel helpers
+interface HistoryEntry {
+	nodeId: string;
+	nodeName: string;
+	role?: string;
+	version: number;
+	timestamp: string;
+	changes: string[];
+}
+
+const allNodesHistory = computed((): HistoryEntry[] => {
+	if (!parsed.value) return [];
+	
+	const entries: HistoryEntry[] = [];
+	const collectHistory = (node: TreeNode) => {
+		if (node.history && node.role !== 'group') {
+			for (const h of node.history) {
+				entries.push({
+					nodeId: node.id,
+					nodeName: node.name,
+					role: node.role,
+					version: h.version,
+					timestamp: h.timestamp,
+					changes: h.changes
+				});
+			}
+		}
+		for (const child of (node.children || [])) {
+			collectHistory(child);
+		}
+	};
+	collectHistory(parsed.value.root);
+	
+	// Sort by timestamp descending (most recent first)
+	entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+	
+	// Limit to most recent 100 entries
+	return entries.slice(0, 100);
+});
+
+function formatTimestamp(isoString: string): string {
+	const date = new Date(isoString);
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffMins = Math.floor(diffMs / 60000);
+	const diffHours = Math.floor(diffMs / 3600000);
+	const diffDays = Math.floor(diffMs / 86400000);
+	
+	if (diffMins < 1) return 'Just now';
+	if (diffMins < 60) return `${diffMins}m ago`;
+	if (diffHours < 24) return `${diffHours}h ago`;
+	if (diffDays < 7) return `${diffDays}d ago`;
+	
+	return date.toLocaleDateString(undefined, { 
+		month: 'short', 
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit'
+	});
+}
+
+function selectNodeFromHistory(nodeId: string) {
+	selectedId.value = nodeId;
+	historyFilter.value = 'selected';
+}
+
+function toggleHistoryPanel() {
+	showHistoryPanel.value = !showHistoryPanel.value;
+	// Close node info panel when opening history
+	if (showHistoryPanel.value) {
+		showNodeInfoPanel.value = false;
+	}
+}
+
+function onNodeSelected(id: string | undefined) {
+	selectedId.value = id;
+	if (id) {
+		// Open node info panel when selecting a node
+		showNodeInfoPanel.value = true;
+		// Close history panel when opening node info
+		showHistoryPanel.value = false;
+	} else {
+		// Close node info panel when deselecting
+		showNodeInfoPanel.value = false;
+	}
+}
+
+function closeNodeInfoPanel() {
+	showNodeInfoPanel.value = false;
+}
+
+function getNodeRoleColor(role?: string): string {
+	switch (role) {
+		case 'gateway/router': return 'bg-red-500';
+		case 'firewall': return 'bg-orange-500';
+		case 'switch/ap': return 'bg-blue-500';
+		case 'server': return 'bg-green-500';
+		case 'service': return 'bg-emerald-500';
+		case 'nas': return 'bg-purple-500';
+		case 'client': return 'bg-cyan-500';
+		default: return 'bg-gray-400';
+	}
+}
 
 const connectOptions = computed(() => {
 	if (!parsed.value) return [];
@@ -491,8 +828,14 @@ function onChangeParent() {
 	if (!parsed.value || !selectedId.value) return;
 	const node = findNodeById(parsed.value.root, selectedId.value);
 	if (!node) return;
+	const oldParent = (node as any).parentId;
 	(node as any).parentId = connectParent.value || undefined;
+	
+	// Track the version change
+	updateNodeVersion(node, [`Parent connection changed from "${oldParent || 'root'}" to "${connectParent.value || 'root'}"`]);
+	
 	parsed.value = { ...parsed.value };
+	triggerAutoSave();
 }
 
 function onSpeedSelectChange() {
@@ -516,9 +859,15 @@ function onChangeConnectionSpeed() {
 	if (!parsed.value || !selectedId.value) return;
 	const node = findNodeById(parsed.value.root, selectedId.value);
 	if (!node) return;
+	const oldSpeed = (node as any).connectionSpeed;
 	const speed = editConnectionSpeed.value.trim();
 	(node as any).connectionSpeed = speed || undefined;
+	
+	// Track the version change
+	updateNodeVersion(node, [`Connection speed changed from "${oldSpeed || 'none'}" to "${speed || 'none'}"`]);
+	
 	parsed.value = { ...parsed.value };
+	triggerAutoSave();
 }
 
 function refreshNodeLabel(n: TreeNode) {
@@ -533,6 +882,7 @@ function onChangeIp() {
 	const node = findNodeById(root, selectedId.value);
 	if (!node) return;
 	const oldId = node.id;
+	const oldIp = (node as any).ip;
 	(node as any).ip = editIp.value.trim();
 	if ((node as any).ip) node.id = (node as any).ip;
 	// Update any child referencing this as parent
@@ -540,17 +890,28 @@ function onChangeIp() {
 		if ((n as any).parentId === oldId) (n as any).parentId = node.id;
 	});
 	refreshNodeLabel(node);
+	
+	// Track the version change
+	updateNodeVersion(node, [`IP address changed from "${oldIp || 'none'}" to "${(node as any).ip || 'none'}"`]);
+	
 	selectedId.value = node.id;
 	parsed.value = { ...parsed.value };
+	triggerAutoSave();
 }
 
 function onChangeHostname() {
 	if (!parsed.value || !selectedId.value) return;
 	const node = findNodeById(parsed.value.root, selectedId.value);
 	if (!node) return;
+	const oldHostname = (node as any).hostname;
 	(node as any).hostname = editHostname.value.trim();
 	refreshNodeLabel(node);
+	
+	// Track the version change
+	updateNodeVersion(node, [`Hostname changed from "${oldHostname || 'none'}" to "${(node as any).hostname || 'none'}"`]);
+	
 	parsed.value = { ...parsed.value };
+	triggerAutoSave();
 }
 
 function onApplyLayout(layout: any) {
@@ -572,6 +933,9 @@ function onApplyLayout(layout: any) {
 		};
 		extractDevices(layout.root, 0);
 		
+		// Ensure all nodes have version info (for backwards compatibility with old saves)
+		ensureAllNodesVersioned(layout.root, 'mapper');
+		
 		parsed.value = {
 			raw: "", // Not available when loading from JSON, but we have the root
 			devices: devices,
@@ -586,6 +950,7 @@ function onApplyLayout(layout: any) {
 	// Trigger reactivity with shallow replacement (if we have raw source)
 	if (parsed.value.raw) {
 		parsed.value = parseNetworkMap(parsed.value.raw);
+		ensureAllNodesVersioned(parsed.value.root, 'mapper');
 		applySavedPositions(parsed.value.root, layout);
 	} else {
 		// Force refresh if we just loaded the tree
@@ -596,6 +961,18 @@ function onApplyLayout(layout: any) {
 function onMapSaved() {
 	// Update saved state hash to current state
 	savedStateHash.value = currentStateHash.value;
+}
+
+function onNodePositionChanged(id: string, x: number, y: number) {
+	if (!parsed.value) return;
+	const node = findNodeById(parsed.value.root, id);
+	if (node && node.role !== 'group') {
+		// Track position change in version history
+		updateNodeVersion(node, [`Position changed to (${Math.round(x)}, ${Math.round(y)})`]);
+		// Trigger auto-save
+		parsed.value = { ...parsed.value };
+		triggerAutoSave();
+	}
 }
 
 function onLog(line: string) {
@@ -632,11 +1009,14 @@ function onRemoveNode() {
 	if (!nodeToRemove) return;
 	
 	const nodeId = nodeToRemove.id;
+	const nodeName = nodeToRemove.name;
 	
 	// Reassign any child nodes that have this node as their parent to the root
 	walkAll(root, (n) => {
 		if ((n as any).parentId === nodeId && n.id !== nodeId) {
 			(n as any).parentId = root.id;
+			// Track the parent change for affected nodes
+			updateNodeVersion(n, [`Parent reassigned to root (previous parent "${nodeName}" was removed)`]);
 		}
 	});
 	
@@ -646,8 +1026,9 @@ function onRemoveNode() {
 	if (removed) {
 		// Clear selection
 		selectedId.value = undefined;
-		// Trigger re-render
+		// Trigger re-render and auto-save
 		parsed.value = { ...parsed.value };
+		triggerAutoSave();
 	}
 }
 
@@ -668,6 +1049,9 @@ function onAddNode() {
 		ip: '',
 		hostname: 'New Device',
 	};
+	
+	// Initialize version tracking for the new node
+	initializeNodeVersion(newNode, 'manual');
 	
 	// Set parent to root by default
 	(newNode as any).parentId = root.id;
@@ -693,9 +1077,18 @@ function onAddNode() {
 	// Select the new node so user can immediately configure it
 	selectedId.value = newId;
 	
-	// Trigger re-render
+	// Trigger re-render and auto-save
 	parsed.value = { ...parsed.value };
+	triggerAutoSave();
 }
+
+// Cleanup auto-save timer on unmount
+onBeforeUnmount(() => {
+	if (autoSaveTimer) {
+		clearTimeout(autoSaveTimer);
+		autoSaveTimer = null;
+	}
+});
 
 function onCleanUpLayout() {
 	if (!parsed.value) return;

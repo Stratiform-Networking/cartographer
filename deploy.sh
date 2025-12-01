@@ -14,6 +14,16 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Detect docker compose command (v2 uses 'docker compose', v1 uses 'docker-compose')
+if docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo -e "${RED}Error: Neither 'docker compose' nor 'docker-compose' found${NC}"
+    exit 1
+fi
+
 usage() {
     echo "Usage: $0 [command] [options]"
     echo ""
@@ -116,9 +126,9 @@ case $COMMAND in
     up)
         echo -e "${GREEN}Starting services with $COMPOSE_FILE...${NC}"
         if [ "$USE_PROD" = true ]; then
-            REGISTRY=$REGISTRY TAG=$TAG docker-compose -f $COMPOSE_FILE up -d
+            REGISTRY=$REGISTRY TAG=$TAG $DOCKER_COMPOSE -f $COMPOSE_FILE up -d
         else
-            docker-compose -f $COMPOSE_FILE up --build -d
+            $DOCKER_COMPOSE -f $COMPOSE_FILE up --build -d
         fi
         echo ""
         echo -e "${GREEN}✓ Services started${NC}"
@@ -130,23 +140,23 @@ case $COMMAND in
     
     down)
         echo -e "${YELLOW}Stopping services...${NC}"
-        docker-compose -f $COMPOSE_FILE down
+        $DOCKER_COMPOSE -f $COMPOSE_FILE down
         echo -e "${GREEN}✓ Services stopped${NC}"
         ;;
     
     logs)
-        docker-compose -f $COMPOSE_FILE logs -f
+        $DOCKER_COMPOSE -f $COMPOSE_FILE logs -f
         ;;
     
     restart)
         echo -e "${YELLOW}Restarting services...${NC}"
-        docker-compose -f $COMPOSE_FILE restart
+        $DOCKER_COMPOSE -f $COMPOSE_FILE restart
         echo -e "${GREEN}✓ Services restarted${NC}"
         ;;
     
     status)
         echo -e "${GREEN}Service Status:${NC}"
-        docker-compose -f $COMPOSE_FILE ps
+        $DOCKER_COMPOSE -f $COMPOSE_FILE ps
         ;;
     
     *)

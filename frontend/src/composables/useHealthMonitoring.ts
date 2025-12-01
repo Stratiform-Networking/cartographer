@@ -30,12 +30,18 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 export function useHealthMonitoring() {
 	/**
-	 * Register devices for passive monitoring
+	 * Register devices for passive monitoring and trigger immediate check
 	 */
-	async function registerDevices(ips: string[]): Promise<void> {
+	async function registerDevices(ips: string[], triggerCheck = true): Promise<void> {
 		try {
 			await axios.post('/api/health/monitoring/devices', { ips });
 			console.log(`[Health] Registered ${ips.length} devices for monitoring`);
+			
+			// Trigger an immediate check so we have data right away
+			if (triggerCheck && ips.length > 0) {
+				console.log('[Health] Triggering immediate health check...');
+				await triggerImmediateCheck();
+			}
 		} catch (error) {
 			console.error('[Health] Failed to register devices:', error);
 		}

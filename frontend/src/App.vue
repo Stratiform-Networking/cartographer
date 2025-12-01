@@ -24,6 +24,19 @@
 				</div>
 			</aside>
 			<main class="flex-1 p-3 relative bg-slate-50 dark:bg-slate-900">
+				<!-- Add Node button (top-left, edit mode only) -->
+				<div v-if="mode === 'edit'" class="absolute top-2 left-3 z-10">
+					<button
+						@click="onAddNode"
+						class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-400 dark:hover:border-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+						title="Add a new node to the network map"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+						</svg>
+						Add Node
+					</button>
+				</div>
 				<!-- Interaction mode toggle (top-right) -->
 				<div class="absolute top-2 right-3 z-10">
 					<div class="rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 shadow-sm overflow-hidden flex items-center">
@@ -155,7 +168,7 @@
 				ref="logContainer" 
 				class="flex-1 overflow-auto font-mono text-xs px-3 py-2 text-slate-700 dark:text-slate-300"
 			>
-				<div v-for="(line, idx) in logs" :key="idx" class="whitespace-pre-wrap text-slate-700">
+				<div v-for="(line, idx) in logs" :key="idx" class="whitespace-pre-wrap text-slate-700 dark:text-slate-300">
 					<template v-if="downloadHref(line)">
 						<a :href="downloadHref(line)!" class="text-blue-600 underline" target="_blank" rel="noopener">
 							Download network_map.txt
@@ -636,6 +649,52 @@ function onRemoveNode() {
 		// Trigger re-render
 		parsed.value = { ...parsed.value };
 	}
+}
+
+function onAddNode() {
+	if (!parsed.value) return;
+	const root = parsed.value.root;
+	
+	// Generate a unique ID for the new node
+	const timestamp = Date.now();
+	const randomSuffix = Math.random().toString(36).substring(2, 6);
+	const newId = `new-node-${timestamp}-${randomSuffix}`;
+	
+	// Create a new node with default values
+	const newNode: TreeNode = {
+		id: newId,
+		name: `New Device (${newId.slice(-8)})`,
+		role: 'unknown',
+		ip: '',
+		hostname: 'New Device',
+	};
+	
+	// Set parent to root by default
+	(newNode as any).parentId = root.id;
+	
+	// Find or create the clients group (default for unknown devices)
+	let clientsGroup = findGroupByPrefix(root, 'clients');
+	if (!clientsGroup) {
+		// Create clients group if it doesn't exist
+		clientsGroup = {
+			id: 'clients',
+			name: 'Clients',
+			role: 'group',
+			children: []
+		};
+		root.children = root.children || [];
+		root.children.push(clientsGroup);
+	}
+	
+	// Add the new node to the clients group
+	clientsGroup.children = clientsGroup.children || [];
+	clientsGroup.children.push(newNode);
+	
+	// Select the new node so user can immediately configure it
+	selectedId.value = newId;
+	
+	// Trigger re-render
+	parsed.value = { ...parsed.value };
 }
 
 function onCleanUpLayout() {

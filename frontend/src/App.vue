@@ -466,13 +466,25 @@ const { registerDevices, startPolling, stopPolling } = useHealthMonitoring();
 // Track if we've done initial registration
 let hasRegisteredDevices = false;
 
-// Helper to get IPs of devices that have monitoring enabled
+// Helper to get IPs of devices that have monitoring enabled, including test IPs from gateways
 function getMonitoredDeviceIPs(root: TreeNode): string[] {
 	const devices = flattenDevices(root);
-	return devices
-		.filter(d => d.ip && d.monitoringEnabled !== false) // Only include nodes with monitoring enabled (default: true)
-		.map(d => d.ip!)
-		.filter((ip): ip is string => !!ip);
+	const ips: string[] = [];
+	
+	for (const d of devices) {
+		// Add device IP if monitoring is enabled
+		if (d.ip && d.monitoringEnabled !== false) {
+			ips.push(d.ip);
+		}
+		
+		// Add test IPs from gateway devices (always monitored if they exist)
+		if (d.role === 'gateway/router' && d.testIps && d.testIps.length > 0) {
+			ips.push(...d.testIps);
+		}
+	}
+	
+	// Remove duplicates
+	return [...new Set(ips)];
 }
 
 // Register devices for health monitoring whenever parsed changes
@@ -844,7 +856,7 @@ async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
 	}
 }
 
-function onUpdateTestIps(nodeId: string, testIps: string[]) {
+async function onUpdateTestIps(nodeId: string, testIps: string[]) {
 	if (!parsed.value?.root) return;
 	
 	// Find the node and update its testIps property
@@ -861,6 +873,11 @@ function onUpdateTestIps(nodeId: string, testIps: string[]) {
 		
 		// Trigger auto-save
 		triggerAutoSave();
+		
+		// Re-register devices to include the new test IPs in monitoring
+		const allIps = getMonitoredDeviceIPs(parsed.value.root);
+		await registerDevices(allIps);
+		console.log(`[Health] Re-registered devices with test IPs:`, allIps);
 	}
 }
 

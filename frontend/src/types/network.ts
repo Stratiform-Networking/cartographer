@@ -89,6 +89,14 @@ export interface CheckHistoryEntry {
 	latency_ms?: number;
 }
 
+export interface SpeedTestResult {
+	download_mbps?: number;
+	upload_mbps?: number;
+	test_server?: string;
+	test_timestamp?: string; // ISO timestamp
+	error?: string;
+}
+
 export interface DeviceMetrics {
 	ip: string;
 	status: HealthStatus;
@@ -109,6 +117,9 @@ export interface DeviceMetrics {
 	checks_passed_24h: number;
 	checks_failed_24h: number;
 	check_history: CheckHistoryEntry[]; // Recent check history for timeline display
+	
+	// Speed test results (for external IPs / internet connectivity)
+	speed_test?: SpeedTestResult;
 	
 	// Additional info
 	last_seen_online?: string; // ISO timestamp

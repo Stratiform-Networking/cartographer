@@ -10,6 +10,7 @@ from ..models import (
     MonitoringConfig,
     MonitoringStatus,
     RegisterDevicesRequest,
+    SpeedTestResult,
 )
 from ..services.health_checker import health_checker
 
@@ -126,6 +127,20 @@ async def check_dns(ip: str):
     """
     try:
         result = await health_checker.check_dns(ip)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/speedtest", response_model=SpeedTestResult)
+async def run_speed_test():
+    """
+    Run an internet speed test to measure download and upload speeds.
+    Uses Cloudflare's speed test servers for reliable measurement.
+    Note: This test may take 10-30 seconds to complete.
+    """
+    try:
+        result = await health_checker.run_speed_test()
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

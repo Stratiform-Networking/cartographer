@@ -45,6 +45,15 @@ class CheckHistoryEntry(BaseModel):
     latency_ms: Optional[float] = None
 
 
+class SpeedTestResult(BaseModel):
+    """Result of a speed test"""
+    download_mbps: Optional[float] = None
+    upload_mbps: Optional[float] = None
+    test_server: Optional[str] = None
+    test_timestamp: Optional[datetime] = None
+    error: Optional[str] = None
+
+
 class DeviceMetrics(BaseModel):
     """Comprehensive metrics for a device"""
     ip: str
@@ -66,6 +75,9 @@ class DeviceMetrics(BaseModel):
     checks_passed_24h: int = 0
     checks_failed_24h: int = 0
     check_history: List[CheckHistoryEntry] = []  # Recent check history for timeline display
+    
+    # Speed test results (for external IPs / internet connectivity)
+    speed_test: Optional[SpeedTestResult] = None
     
     # Additional info
     last_seen_online: Optional[datetime] = None

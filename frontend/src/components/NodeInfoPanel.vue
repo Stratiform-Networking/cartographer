@@ -313,27 +313,54 @@
 										</button>
 									</div>
 								</div>
-								<!-- Test Results -->
-								<div v-if="testIpResults[ip]" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-xs space-y-1">
+								<!-- Test Results (from cached metrics or manual test) -->
+								<div v-if="getTestIpMetrics(ip)" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-xs space-y-2">
 									<div class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Status</span>
-										<span :class="testIpResults[ip].ping?.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
-											{{ testIpResults[ip].ping?.success ? 'Reachable' : 'Unreachable' }}
+										<span :class="getTestIpMetrics(ip)?.ping?.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+											{{ getTestIpMetrics(ip)?.ping?.success ? 'Reachable' : 'Unreachable' }}
 										</span>
 									</div>
-									<div v-if="testIpResults[ip].ping?.avg_latency_ms" class="flex justify-between">
+									<div v-if="getTestIpMetrics(ip)?.ping?.avg_latency_ms" class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Latency</span>
-										<span class="text-slate-700 dark:text-slate-300">{{ testIpResults[ip].ping.avg_latency_ms.toFixed(1) }} ms</span>
+										<span class="text-slate-700 dark:text-slate-300">{{ getTestIpMetrics(ip)!.ping!.avg_latency_ms!.toFixed(1) }} ms</span>
 									</div>
-									<div v-if="testIpResults[ip].ping?.packet_loss_percent != null" class="flex justify-between">
+									<div v-if="getTestIpMetrics(ip)?.ping?.packet_loss_percent != null" class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Packet Loss</span>
-										<span :class="testIpResults[ip].ping.packet_loss_percent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'">
-											{{ testIpResults[ip].ping.packet_loss_percent.toFixed(1) }}%
+										<span :class="getTestIpMetrics(ip)!.ping!.packet_loss_percent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'">
+											{{ getTestIpMetrics(ip)!.ping!.packet_loss_percent.toFixed(1) }}%
 										</span>
 									</div>
-									<div v-if="testIpResults[ip].ping?.jitter_ms != null" class="flex justify-between">
+									<div v-if="getTestIpMetrics(ip)?.ping?.jitter_ms != null" class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Jitter</span>
-										<span class="text-slate-700 dark:text-slate-300">{{ testIpResults[ip].ping.jitter_ms.toFixed(2) }} ms</span>
+										<span class="text-slate-700 dark:text-slate-300">{{ getTestIpMetrics(ip)!.ping!.jitter_ms!.toFixed(2) }} ms</span>
+									</div>
+									<!-- Uptime Timeline -->
+									<div v-if="getTestIpTimelineSegments(ip).length > 0 || getTestIpMetrics(ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+										<div class="flex justify-between items-center mb-1">
+											<span class="text-slate-500 dark:text-slate-400">Uptime (24h)</span>
+											<span :class="getUptimeColor(getTestIpMetrics(ip)?.uptime_percent_24h || 0)">
+												{{ getTestIpMetrics(ip)?.uptime_percent_24h?.toFixed(1) || '0' }}%
+											</span>
+										</div>
+										<div class="h-2 bg-slate-200 dark:bg-slate-700 rounded overflow-hidden flex">
+											<template v-if="getTestIpTimelineSegments(ip).length > 0">
+												<div
+													v-for="(entry, histIdx) in getTestIpTimelineSegments(ip)"
+													:key="histIdx"
+													class="h-full"
+													:class="entry.success ? 'bg-emerald-500' : 'bg-red-500'"
+													:style="{ width: entry.width + '%' }"
+													:title="formatTimelineTooltip(entry)"
+												></div>
+											</template>
+											<template v-else>
+												<div 
+													class="h-full bg-emerald-500"
+													:style="{ width: `${getTestIpMetrics(ip)?.uptime_percent_24h || 0}%` }"
+												></div>
+											</template>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -377,6 +404,60 @@
 							</svg>
 							{{ testingAll ? 'Testing...' : 'Test All' }}
 						</button>
+						
+						<!-- ISP Speed Test -->
+						<div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-xs font-medium text-slate-600 dark:text-slate-400">ISP Speed</span>
+								<button 
+									@click="runSpeedTest"
+									:disabled="runningSpeedTest"
+									class="px-2 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 flex items-center gap-1"
+								>
+									<svg 
+										xmlns="http://www.w3.org/2000/svg" 
+										class="h-3 w-3" 
+										:class="{ 'animate-spin': runningSpeedTest }"
+										fill="none" 
+										viewBox="0 0 24 24" 
+										stroke="currentColor" 
+										stroke-width="2"
+									>
+										<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+									</svg>
+									{{ runningSpeedTest ? 'Testing...' : 'Test Speed' }}
+								</button>
+							</div>
+							<!-- Speed Test Results -->
+							<div v-if="speedTestResult" class="bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 p-2 text-xs space-y-1">
+								<div class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Download</span>
+									<span class="text-emerald-600 dark:text-emerald-400 font-medium">
+										{{ speedTestResult.download_mbps ? speedTestResult.download_mbps.toFixed(1) + ' Mbps' : 'N/A' }}
+									</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Upload</span>
+									<span class="text-blue-600 dark:text-blue-400 font-medium">
+										{{ speedTestResult.upload_mbps ? speedTestResult.upload_mbps.toFixed(1) + ' Mbps' : 'N/A' }}
+									</span>
+								</div>
+								<div v-if="speedTestResult.test_server" class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Server</span>
+									<span class="text-slate-600 dark:text-slate-300">{{ speedTestResult.test_server }}</span>
+								</div>
+								<div v-if="speedTestResult.test_timestamp" class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Tested</span>
+									<span class="text-slate-600 dark:text-slate-300">{{ formatTimestamp(speedTestResult.test_timestamp) }}</span>
+								</div>
+								<div v-if="speedTestResult.error" class="text-red-500 dark:text-red-400">
+									{{ speedTestResult.error }}
+								</div>
+							</div>
+							<p v-else class="text-[10px] text-slate-400 dark:text-slate-500">
+								Click "Test Speed" to measure your ISP download/upload speeds.
+							</p>
+						</div>
 						
 						<!-- Help text -->
 						<p class="text-[10px] text-slate-400 dark:text-slate-500">
@@ -466,27 +547,54 @@
 										</button>
 									</div>
 								</div>
-								<!-- Test Results -->
-								<div v-if="testIpResults[ip]" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-xs space-y-1">
+								<!-- Test Results (from cached metrics or manual test) -->
+								<div v-if="getTestIpMetrics(ip)" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-xs space-y-2">
 									<div class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Status</span>
-										<span :class="testIpResults[ip].ping?.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
-											{{ testIpResults[ip].ping?.success ? 'Reachable' : 'Unreachable' }}
+										<span :class="getTestIpMetrics(ip)?.ping?.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+											{{ getTestIpMetrics(ip)?.ping?.success ? 'Reachable' : 'Unreachable' }}
 										</span>
 									</div>
-									<div v-if="testIpResults[ip].ping?.avg_latency_ms" class="flex justify-between">
+									<div v-if="getTestIpMetrics(ip)?.ping?.avg_latency_ms" class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Latency</span>
-										<span class="text-slate-700 dark:text-slate-300">{{ testIpResults[ip].ping.avg_latency_ms.toFixed(1) }} ms</span>
+										<span class="text-slate-700 dark:text-slate-300">{{ getTestIpMetrics(ip)!.ping!.avg_latency_ms!.toFixed(1) }} ms</span>
 									</div>
-									<div v-if="testIpResults[ip].ping?.packet_loss_percent != null" class="flex justify-between">
+									<div v-if="getTestIpMetrics(ip)?.ping?.packet_loss_percent != null" class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Packet Loss</span>
-										<span :class="testIpResults[ip].ping.packet_loss_percent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'">
-											{{ testIpResults[ip].ping.packet_loss_percent.toFixed(1) }}%
+										<span :class="getTestIpMetrics(ip)!.ping!.packet_loss_percent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'">
+											{{ getTestIpMetrics(ip)!.ping!.packet_loss_percent.toFixed(1) }}%
 										</span>
 									</div>
-									<div v-if="testIpResults[ip].ping?.jitter_ms != null" class="flex justify-between">
+									<div v-if="getTestIpMetrics(ip)?.ping?.jitter_ms != null" class="flex justify-between">
 										<span class="text-slate-500 dark:text-slate-400">Jitter</span>
-										<span class="text-slate-700 dark:text-slate-300">{{ testIpResults[ip].ping.jitter_ms.toFixed(2) }} ms</span>
+										<span class="text-slate-700 dark:text-slate-300">{{ getTestIpMetrics(ip)!.ping!.jitter_ms!.toFixed(2) }} ms</span>
+									</div>
+									<!-- Uptime Timeline -->
+									<div v-if="getTestIpTimelineSegments(ip).length > 0 || getTestIpMetrics(ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+										<div class="flex justify-between items-center mb-1">
+											<span class="text-slate-500 dark:text-slate-400">Uptime (24h)</span>
+											<span :class="getUptimeColor(getTestIpMetrics(ip)?.uptime_percent_24h || 0)">
+												{{ getTestIpMetrics(ip)?.uptime_percent_24h?.toFixed(1) || '0' }}%
+											</span>
+										</div>
+										<div class="h-2 bg-slate-200 dark:bg-slate-700 rounded overflow-hidden flex">
+											<template v-if="getTestIpTimelineSegments(ip).length > 0">
+												<div
+													v-for="(entry, histIdx) in getTestIpTimelineSegments(ip)"
+													:key="histIdx"
+													class="h-full"
+													:class="entry.success ? 'bg-emerald-500' : 'bg-red-500'"
+													:style="{ width: entry.width + '%' }"
+													:title="formatTimelineTooltip(entry)"
+												></div>
+											</template>
+											<template v-else>
+												<div 
+													class="h-full bg-emerald-500"
+													:style="{ width: `${getTestIpMetrics(ip)?.uptime_percent_24h || 0}%` }"
+												></div>
+											</template>
+										</div>
 									</div>
 								</div>
 							</div>
@@ -530,6 +638,60 @@
 							</svg>
 							{{ testingAll ? 'Testing...' : 'Test All' }}
 						</button>
+						
+						<!-- ISP Speed Test -->
+						<div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+							<div class="flex items-center justify-between mb-2">
+								<span class="text-xs font-medium text-slate-600 dark:text-slate-400">ISP Speed</span>
+								<button 
+									@click="runSpeedTest"
+									:disabled="runningSpeedTest"
+									class="px-2 py-1 text-xs rounded bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50 flex items-center gap-1"
+								>
+									<svg 
+										xmlns="http://www.w3.org/2000/svg" 
+										class="h-3 w-3" 
+										:class="{ 'animate-spin': runningSpeedTest }"
+										fill="none" 
+										viewBox="0 0 24 24" 
+										stroke="currentColor" 
+										stroke-width="2"
+									>
+										<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+									</svg>
+									{{ runningSpeedTest ? 'Testing...' : 'Test Speed' }}
+								</button>
+							</div>
+							<!-- Speed Test Results -->
+							<div v-if="speedTestResult" class="bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 p-2 text-xs space-y-1">
+								<div class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Download</span>
+									<span class="text-emerald-600 dark:text-emerald-400 font-medium">
+										{{ speedTestResult.download_mbps ? speedTestResult.download_mbps.toFixed(1) + ' Mbps' : 'N/A' }}
+									</span>
+								</div>
+								<div class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Upload</span>
+									<span class="text-blue-600 dark:text-blue-400 font-medium">
+										{{ speedTestResult.upload_mbps ? speedTestResult.upload_mbps.toFixed(1) + ' Mbps' : 'N/A' }}
+									</span>
+								</div>
+								<div v-if="speedTestResult.test_server" class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Server</span>
+									<span class="text-slate-600 dark:text-slate-300">{{ speedTestResult.test_server }}</span>
+								</div>
+								<div v-if="speedTestResult.test_timestamp" class="flex justify-between">
+									<span class="text-slate-500 dark:text-slate-400">Tested</span>
+									<span class="text-slate-600 dark:text-slate-300">{{ formatTimestamp(speedTestResult.test_timestamp) }}</span>
+								</div>
+								<div v-if="speedTestResult.error" class="text-red-500 dark:text-red-400">
+									{{ speedTestResult.error }}
+								</div>
+							</div>
+							<p v-else class="text-[10px] text-slate-400 dark:text-slate-500">
+								Click "Test Speed" to measure your ISP download/upload speeds.
+							</p>
+						</div>
 						
 						<!-- Help text -->
 						<p class="text-[10px] text-slate-400 dark:text-slate-500">
@@ -600,6 +762,16 @@ const newTestIp = ref('');
 const testIpResults = ref<Record<string, DeviceMetrics>>({});
 const testingIp = ref<string | null>(null);
 const testingAll = ref(false);
+
+// ISP Speed test state
+const runningSpeedTest = ref(false);
+const speedTestResult = ref<{ 
+	download_mbps?: number; 
+	upload_mbps?: number; 
+	test_server?: string; 
+	test_timestamp?: string;
+	error?: string;
+} | null>(null);
 
 function toggleMonitoring() {
 	if (props.node) {
@@ -678,11 +850,55 @@ async function testAllIps() {
 	testingAll.value = false;
 }
 
+async function runSpeedTest() {
+	runningSpeedTest.value = true;
+	try {
+		const response = await axios.get('/api/health/speedtest', { timeout: 60000 });
+		speedTestResult.value = response.data;
+	} catch (err: any) {
+		console.error('Speed test failed:', err);
+		speedTestResult.value = {
+			error: err.response?.data?.detail || err.message || 'Speed test failed'
+		};
+	} finally {
+		runningSpeedTest.value = false;
+	}
+}
+
 function getTestIpStatusColor(ip: string): string {
-	const result = testIpResults.value[ip];
+	// Check cached metrics first, then local test results
+	const cached = cachedMetrics.value?.[ip];
+	const local = testIpResults.value[ip];
+	const result = cached || local;
 	if (!result) return 'bg-slate-400';
 	if (result.ping?.success) return 'bg-emerald-500';
 	return 'bg-red-500';
+}
+
+// Get metrics for a test IP (prefer cached, fall back to local test results)
+function getTestIpMetrics(ip: string): DeviceMetrics | null {
+	return cachedMetrics.value?.[ip] || testIpResults.value[ip] || null;
+}
+
+// Get timeline segments for a test IP
+function getTestIpTimelineSegments(ip: string): TimelineSegment[] {
+	const metrics = getTestIpMetrics(ip);
+	if (!metrics?.check_history || metrics.check_history.length === 0) return [];
+	
+	// Sort by timestamp (oldest first)
+	const sorted = [...metrics.check_history].sort((a, b) => 
+		new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+	);
+	
+	// Each segment gets equal width
+	const segmentWidth = 100 / sorted.length;
+	
+	return sorted.map(entry => ({
+		success: entry.success,
+		width: segmentWidth,
+		timestamp: entry.timestamp,
+		latency_ms: entry.latency_ms
+	}));
 }
 
 const localMetrics = ref<DeviceMetrics | null>(null);

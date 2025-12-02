@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Set
 from collections import deque
 import logging
+import aiohttp
 
 from ..models import (
     DeviceMetrics, 
@@ -13,6 +14,7 @@ from ..models import (
     DnsResult, 
     PortCheckResult,
     CheckHistoryEntry,
+    SpeedTestResult,
     MonitoringConfig,
     MonitoringStatus
 )
@@ -255,6 +257,74 @@ class HealthChecker:
         
         # Only return open ports
         return [r for r in results if r.open]
+    
+    async def run_speed_test(self) -> SpeedTestResult:
+        """
+        Run a speed test to measure internet download/upload speeds.
+        Uses Cloudflare's speed test endpoints for reliable measurement.
+        """
+        result = SpeedTestResult(test_timestamp=datetime.utcnow())
+        
+        # Download test URLs (Cloudflare speed test endpoints)
+        download_urls = [
+            ("https://speed.cloudflare.com/__down?bytes=10000000", 10_000_000),  # 10MB
+            ("https://speed.cloudflare.com/__down?bytes=1000000", 1_000_000),    # 1MB fallback
+        ]
+        
+        # Upload test URL
+        upload_url = "https://speed.cloudflare.com/__up"
+        
+        try:
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                # Download speed test
+                for url, expected_bytes in download_urls:
+                    try:
+                        start_time = time.time()
+                        bytes_received = 0
+                        
+                        async with session.get(url) as response:
+                            if response.status == 200:
+                                async for chunk in response.content.iter_chunked(8192):
+                                    bytes_received += len(chunk)
+                                
+                                elapsed = time.time() - start_time
+                                if elapsed > 0 and bytes_received > 0:
+                                    # Calculate Mbps (megabits per second)
+                                    result.download_mbps = round((bytes_received * 8) / (elapsed * 1_000_000), 2)
+                                    result.test_server = "Cloudflare"
+                                    logger.info(f"Speed test download: {result.download_mbps} Mbps ({bytes_received} bytes in {elapsed:.2f}s)")
+                                    break
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Download test timed out for {url}")
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Download test failed for {url}: {e}")
+                        continue
+                
+                # Upload speed test (send 1MB of data)
+                try:
+                    upload_size = 1_000_000  # 1MB
+                    upload_data = b'0' * upload_size
+                    
+                    start_time = time.time()
+                    async with session.post(upload_url, data=upload_data) as response:
+                        if response.status in (200, 201):
+                            elapsed = time.time() - start_time
+                            if elapsed > 0:
+                                result.upload_mbps = round((upload_size * 8) / (elapsed * 1_000_000), 2)
+                                logger.info(f"Speed test upload: {result.upload_mbps} Mbps")
+                except asyncio.TimeoutError:
+                    logger.warning("Upload test timed out")
+                except Exception as e:
+                    logger.warning(f"Upload test failed: {e}")
+                    
+        except Exception as e:
+            error_msg = f"Speed test failed: {str(e)}"
+            logger.error(error_msg)
+            result.error = error_msg
+        
+        return result
     
     async def check_device_health(
         self, 

@@ -549,6 +549,260 @@
 						</div>
 					</div>
 				</section>
+
+				<!-- Gateway Test IPs Section (shown even when device monitoring disabled) -->
+				<section v-if="isGateway">
+					<div class="flex items-center justify-between mb-2">
+						<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							Internet Test IPs
+						</h3>
+						<button
+							@click="testIPsExpanded = !testIPsExpanded"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+						>
+							<svg 
+								xmlns="http://www.w3.org/2000/svg" 
+								class="h-4 w-4 transition-transform duration-200"
+								:class="{ 'rotate-180': !testIPsExpanded }"
+								fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+							</svg>
+						</button>
+					</div>
+					
+					<div v-show="testIPsExpanded" class="space-y-3">
+						<!-- Error message -->
+						<div v-if="testIPsError" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 text-xs text-red-700 dark:text-red-300">
+							{{ testIPsError }}
+							<button @click="testIPsError = null" class="ml-2 underline">Dismiss</button>
+						</div>
+
+						<!-- Test IPs list -->
+						<div v-if="testIPs.length > 0" class="space-y-2">
+							<div 
+								v-for="tip in testIPs" 
+								:key="tip.ip"
+								class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3"
+							>
+								<!-- Test IP header -->
+								<div class="flex items-center justify-between mb-2">
+									<div class="flex items-center gap-2">
+										<div 
+											class="w-2.5 h-2.5 rounded-full animate-pulse"
+											:class="getTestIPStatusColor(getTestIPMetrics(tip.ip)?.status)"
+										></div>
+										<div>
+											<span class="text-sm font-medium text-slate-700 dark:text-slate-300 font-mono">{{ tip.ip }}</span>
+											<span v-if="tip.label" class="text-xs text-slate-500 dark:text-slate-400 ml-2">({{ tip.label }})</span>
+										</div>
+									</div>
+									<button
+										@click="removeTestIP(tip.ip)"
+										class="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+										title="Remove this test IP"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+
+								<!-- Test IP metrics (if available) -->
+								<template v-if="getTestIPMetrics(tip.ip)">
+									<div class="space-y-2">
+										<!-- Status -->
+										<div class="flex items-center justify-between text-xs">
+											<span class="text-slate-500 dark:text-slate-400">Status</span>
+											<span 
+												class="font-medium"
+												:class="{
+													'text-emerald-600 dark:text-emerald-400': getTestIPMetrics(tip.ip)?.status === 'healthy',
+													'text-amber-600 dark:text-amber-400': getTestIPMetrics(tip.ip)?.status === 'degraded',
+													'text-red-600 dark:text-red-400': getTestIPMetrics(tip.ip)?.status === 'unhealthy',
+													'text-slate-500 dark:text-slate-400': !getTestIPMetrics(tip.ip)?.status || getTestIPMetrics(tip.ip)?.status === 'unknown'
+												}"
+											>
+												{{ getTestIPStatusLabel(getTestIPMetrics(tip.ip)?.status) }}
+											</span>
+										</div>
+
+										<!-- Latency -->
+										<div v-if="getTestIPMetrics(tip.ip)?.ping?.avg_latency_ms != null" class="flex items-center justify-between text-xs">
+											<span class="text-slate-500 dark:text-slate-400">Latency</span>
+											<span class="font-medium text-slate-700 dark:text-slate-300">
+												{{ getTestIPMetrics(tip.ip)?.ping?.avg_latency_ms?.toFixed(1) }} ms
+											</span>
+										</div>
+
+										<!-- Packet Loss -->
+										<div v-if="getTestIPMetrics(tip.ip)?.ping?.packet_loss_percent != null" class="flex items-center justify-between text-xs">
+											<span class="text-slate-500 dark:text-slate-400">Packet Loss</span>
+											<span 
+												class="font-medium"
+												:class="getTestIPMetrics(tip.ip)?.ping?.packet_loss_percent === 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
+											>
+												{{ getTestIPMetrics(tip.ip)?.ping?.packet_loss_percent?.toFixed(1) }}%
+											</span>
+										</div>
+
+										<!-- Jitter -->
+										<div v-if="getTestIPMetrics(tip.ip)?.ping?.jitter_ms != null" class="flex items-center justify-between text-xs">
+											<span class="text-slate-500 dark:text-slate-400">Jitter</span>
+											<span class="font-medium text-slate-700 dark:text-slate-300">
+												{{ getTestIPMetrics(tip.ip)?.ping?.jitter_ms?.toFixed(2) }} ms
+											</span>
+										</div>
+
+										<!-- 24h Uptime -->
+										<div v-if="getTestIPMetrics(tip.ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+											<div class="flex items-center justify-between text-xs mb-1">
+												<span class="text-slate-500 dark:text-slate-400">24h Uptime</span>
+												<span 
+													class="font-medium"
+													:class="getUptimeColor(getTestIPMetrics(tip.ip)?.uptime_percent_24h || 0)"
+												>
+													{{ getTestIPMetrics(tip.ip)?.uptime_percent_24h?.toFixed(1) }}%
+												</span>
+											</div>
+											<!-- Mini timeline -->
+											<div 
+												v-if="getTestIPMetrics(tip.ip)?.check_history?.length"
+												class="h-2 bg-slate-200 dark:bg-slate-700 rounded overflow-hidden flex"
+											>
+												<div
+													v-for="(entry, idx) in getTestIPMetrics(tip.ip)?.check_history?.slice(-50)"
+													:key="idx"
+													class="h-full"
+													:class="entry.success ? 'bg-emerald-500' : 'bg-red-500'"
+													:style="{ width: `${100 / Math.min(50, getTestIPMetrics(tip.ip)?.check_history?.length || 1)}%` }"
+												></div>
+											</div>
+										</div>
+
+										<!-- Checks count -->
+										<div v-if="getTestIPMetrics(tip.ip)?.checks_passed_24h || getTestIPMetrics(tip.ip)?.checks_failed_24h" class="flex items-center justify-between text-xs">
+											<span class="text-slate-500 dark:text-slate-400">24h Checks</span>
+											<span class="space-x-1">
+												<span class="text-emerald-600 dark:text-emerald-400">{{ getTestIPMetrics(tip.ip)?.checks_passed_24h || 0 }}✓</span>
+												<span class="text-slate-400">/</span>
+												<span class="text-red-600 dark:text-red-400">{{ getTestIPMetrics(tip.ip)?.checks_failed_24h || 0 }}✗</span>
+											</span>
+										</div>
+
+										<!-- Last check time -->
+										<div v-if="getTestIPMetrics(tip.ip)?.last_check" class="flex items-center justify-between text-xs">
+											<span class="text-slate-500 dark:text-slate-400">Last Check</span>
+											<span class="text-slate-500 dark:text-slate-400">
+												{{ formatTimestamp(getTestIPMetrics(tip.ip)?.last_check || '') }}
+											</span>
+										</div>
+									</div>
+								</template>
+
+								<!-- Loading state for this IP -->
+								<div v-else-if="testIPsLoading" class="text-xs text-slate-500 dark:text-slate-400 italic">
+									Checking...
+								</div>
+
+								<!-- No metrics yet -->
+								<div v-else class="text-xs text-slate-500 dark:text-slate-400 italic">
+									Awaiting first check...
+								</div>
+							</div>
+						</div>
+
+						<!-- Empty state -->
+						<div v-else-if="!testIPsLoading" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 text-center">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							<p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+								No test IPs configured
+							</p>
+							<p class="text-xs text-slate-400 dark:text-slate-500">
+								Add external IPs to monitor internet connectivity
+							</p>
+						</div>
+
+						<!-- Quick add presets -->
+						<div v-if="!showAddTestIP" class="flex flex-wrap gap-1.5">
+							<button
+								v-for="preset in presetTestIPs.filter(p => !testIPs.some(t => t.ip === p.ip))"
+								:key="preset.ip"
+								@click="addPresetTestIP(preset)"
+								class="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+								:title="`Add ${preset.label}`"
+							>
+								+ {{ preset.label }}
+							</button>
+							<button
+								@click="showAddTestIP = true"
+								class="px-2 py-1 text-xs rounded border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+							>
+								+ Custom IP
+							</button>
+						</div>
+
+						<!-- Add custom test IP form -->
+						<div v-if="showAddTestIP" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+							<div class="flex gap-2">
+								<input
+									v-model="newTestIP"
+									type="text"
+									placeholder="IP address (e.g., 8.8.8.8)"
+									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									@keyup.enter="addTestIP"
+								/>
+							</div>
+							<div class="flex gap-2">
+								<input
+									v-model="newTestIPLabel"
+									type="text"
+									placeholder="Label (optional, e.g., Google DNS)"
+									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									@keyup.enter="addTestIP"
+								/>
+							</div>
+							<div class="flex justify-end gap-2">
+								<button
+									@click="showAddTestIP = false; newTestIP = ''; newTestIPLabel = ''; testIPsError = null"
+									class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									@click="addTestIP"
+									:disabled="!newTestIP.trim()"
+									class="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									Add
+								</button>
+							</div>
+						</div>
+
+						<!-- Refresh button -->
+						<button
+							v-if="testIPs.length > 0"
+							@click="checkTestIPsNow"
+							:disabled="testIPsLoading"
+							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+						>
+							<svg 
+								xmlns="http://www.w3.org/2000/svg" 
+								class="h-3.5 w-3.5" 
+								:class="{ 'animate-spin': testIPsLoading }"
+								fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+							</svg>
+							{{ testIPsLoading ? 'Checking...' : 'Check Now' }}
+						</button>
+					</div>
+				</section>
 			</div>
 
 			<!-- No IP Warning -->

@@ -1,177 +1,291 @@
 <template>
-	<div class="flex items-center justify-between gap-4 p-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-		<!-- Left side: Branding -->
-		<div class="flex items-center gap-2">
-			<h1 class="text-lg font-semibold text-slate-800 dark:text-slate-100">🗺️ Cartographer</h1>
+	<header class="flex items-center h-14 px-4 border-b border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900">
+		<!-- Left: Branding -->
+		<div class="flex items-center gap-3 mr-6">
+			<div class="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-600 shadow-sm">
+				<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+				</svg>
+			</div>
+			<div class="flex flex-col">
+				<span class="text-sm font-semibold text-slate-800 dark:text-white tracking-tight">Cartographer</span>
+				<span class="text-[10px] text-slate-400 dark:text-slate-500 -mt-0.5">Network Mapper</span>
+			</div>
 		</div>
 
-		<!-- Right side: Buttons and message -->
-		<div class="flex items-center gap-2">
-			<div class="text-xs text-slate-500 dark:text-slate-400 min-w-28">
-				<span v-if="message">{{ message }}</span>
+		<!-- Center: Status Message -->
+		<div class="flex-1 flex items-center justify-center">
+			<Transition
+				enter-active-class="transition ease-out duration-200"
+				enter-from-class="opacity-0 translate-y-1"
+				enter-to-class="opacity-100 translate-y-0"
+				leave-active-class="transition ease-in duration-150"
+				leave-from-class="opacity-100 translate-y-0"
+				leave-to-class="opacity-0 -translate-y-1"
+			>
+				<div v-if="message" class="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+					<div v-if="loading" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+					<div v-else class="w-2 h-2 rounded-full bg-emerald-500"></div>
+					<span class="text-xs text-slate-600 dark:text-slate-300">{{ message }}</span>
+				</div>
+			</Transition>
+		</div>
+
+		<!-- Right: Actions -->
+		<div class="flex items-center gap-1">
+			<!-- Primary Actions Group -->
+			<div class="flex items-center gap-1 p-1 rounded-lg bg-slate-100/80 dark:bg-slate-800/80">
+				<button 
+					@click="runMapper" 
+					class="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+					:class="loading 
+						? 'bg-amber-500 text-white' 
+						: 'bg-blue-600 text-white hover:bg-blue-500 shadow-sm'"
+					:disabled="loading || !props.canEdit"
+					:title="props.canEdit ? 'Scan network and generate map' : 'Write permission required'"
+				>
+					<svg v-if="loading" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+					</svg>
+					<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+					</svg>
+					<span>{{ loading ? 'Scanning...' : 'Scan' }}</span>
+				</button>
+				
+				<button 
+					@click="saveLayout" 
+					class="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+					:class="props.hasUnsavedChanges && !saving
+						? 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm' 
+						: 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+					:disabled="!props.root.children?.length || !props.hasUnsavedChanges || saving || !props.canEdit"
+					:title="props.canEdit ? (props.hasUnsavedChanges ? 'Save changes' : 'No unsaved changes') : 'Write permission required'"
+				>
+					<svg v-if="saving" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+						<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+					</svg>
+					<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+					</svg>
+					<span>{{ saving ? 'Saving' : 'Save' }}</span>
+				</button>
 			</div>
-			<button 
-				@click="runMapper" 
-				class="px-3 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-500 disabled:opacity-50" 
-				:disabled="loading || !props.canEdit"
-				:title="props.canEdit ? 'Run network mapper' : 'Write permission required'"
-			>
-				<span v-if="!loading">Run Mapper</span>
-				<span v-else>Running…</span>
-			</button>
-			<button 
-				@click="saveLayout" 
-				class="px-3 py-2 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-500 disabled:opacity-50 flex items-center gap-2" 
-				:disabled="!props.root.children?.length || !props.hasUnsavedChanges || saving || !props.canEdit"
-				:title="props.canEdit ? 'Save network map' : 'Write permission required'"
-			>
-				<svg v-if="saving" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-					<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-				</svg>
-				<span v-if="!saving">Save Map</span>
-				<span v-else>Saving…</span>
-			</button>
-			<button @click="exportJSON" class="px-3 py-2 rounded bg-purple-600 text-white text-sm hover:bg-purple-500" :disabled="!props.root.children?.length">
-				Export JSON
-			</button>
-			<button 
-				@click="showEmbedGenerator = true" 
-				class="px-3 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-500 disabled:opacity-50 flex items-center gap-1.5"
-				:disabled="!props.root.children?.length"
-				title="Generate embeddable map link"
-			>
-				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-				</svg>
-				Embed
-			</button>
-			<label 
-				class="px-3 py-2 rounded text-white text-sm cursor-pointer"
-				:class="props.canEdit ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-500 opacity-50 cursor-not-allowed'"
-				:title="props.canEdit ? 'Import JSON file' : 'Write permission required'"
-			>
-				Import JSON
-				<input type="file" accept="application/json" class="hidden" @change="onLoadFile" :disabled="!props.canEdit" />
-			</label>
+
+			<!-- Divider -->
+			<div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+			<!-- File Operations Group -->
+			<div class="flex items-center gap-0.5">
+				<button 
+					@click="exportJSON" 
+					class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+					:disabled="!props.root.children?.length"
+					title="Export as JSON file"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+					</svg>
+					<span class="hidden lg:inline">Export</span>
+				</button>
+				
+				<label 
+					class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors"
+					:class="props.canEdit 
+						? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer' 
+						: 'text-slate-400 dark:text-slate-600 cursor-not-allowed'"
+					:title="props.canEdit ? 'Import JSON file' : 'Write permission required'"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L9 8m4-4v12" />
+					</svg>
+					<span class="hidden lg:inline">Import</span>
+					<input type="file" accept="application/json" class="hidden" @change="onLoadFile" :disabled="!props.canEdit" />
+				</label>
+				
+				<button 
+					@click="showEmbedGenerator = true" 
+					class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+					:disabled="!props.root.children?.length"
+					title="Generate embeddable map link"
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+					</svg>
+					<span class="hidden lg:inline">Embed</span>
+				</button>
+			</div>
+
+			<!-- Divider -->
+			<div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+			<!-- Layout Action -->
 			<button 
 				@click="cleanUpLayout" 
-				class="px-3 py-2 rounded bg-amber-600 text-white text-sm hover:bg-amber-500 disabled:opacity-50"
-				:disabled="!props.canEdit"
-				:title="props.canEdit ? 'Clean up layout' : 'Write permission required'"
+				class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+				:disabled="!props.canEdit || !props.root.children?.length"
+				:title="props.canEdit ? 'Auto-arrange nodes in clean layout' : 'Write permission required'"
 			>
-				Clean Up
+				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+				</svg>
+				<span class="hidden lg:inline">Tidy</span>
 			</button>
-			<div class="border-l border-slate-300 dark:border-slate-600 h-8 mx-1"></div>
-			<!-- Health Monitoring Settings -->
-			<div class="relative">
+
+			<!-- Divider -->
+			<div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+			<!-- Settings Group -->
+			<div class="flex items-center gap-0.5">
+				<!-- Health Monitoring Button -->
+				<div class="relative">
+					<button 
+						@click="showHealthSettings = !showHealthSettings" 
+						class="flex items-center justify-center w-8 h-8 rounded-md transition-colors"
+						:class="showHealthSettings 
+							? 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' 
+							: 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+						title="Health monitoring settings"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+						</svg>
+					</button>
+					
+					<!-- Health Settings Dropdown -->
+					<Transition
+						enter-active-class="transition ease-out duration-100"
+						enter-from-class="transform opacity-0 scale-95"
+						enter-to-class="transform opacity-100 scale-100"
+						leave-active-class="transition ease-in duration-75"
+						leave-from-class="transform opacity-100 scale-100"
+						leave-to-class="transform opacity-0 scale-95"
+					>
+						<div 
+							v-if="showHealthSettings" 
+							class="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden"
+						>
+							<div class="px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+								<h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+									</svg>
+									Health Monitoring
+								</h3>
+							</div>
+							
+							<div class="p-4 space-y-4">
+								<!-- Readonly notice -->
+								<div v-if="!props.canEdit" class="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700/50 text-xs text-amber-600 dark:text-amber-400 text-center">
+									View only mode — editing disabled
+								</div>
+
+								<!-- Enable/Disable -->
+								<div class="flex items-center justify-between">
+									<div>
+										<span class="text-sm text-slate-700 dark:text-slate-200">Passive Monitoring</span>
+										<p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Ping devices periodically</p>
+									</div>
+									<button 
+										@click="toggleMonitoring"
+										class="relative w-11 h-6 rounded-full transition-colors"
+										:class="[
+											healthConfig.enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+											!props.canEdit ? 'opacity-50 cursor-not-allowed' : ''
+										]"
+										:disabled="!props.canEdit"
+									>
+										<span 
+											class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+											:class="healthConfig.enabled ? 'translate-x-5' : 'translate-x-0'"
+										></span>
+									</button>
+								</div>
+								
+								<!-- Check Interval -->
+								<div>
+									<label class="text-sm text-slate-700 dark:text-slate-200 block mb-1.5">Check Interval</label>
+									<select 
+										v-model="healthConfig.check_interval_seconds"
+										@change="updateHealthConfig"
+										:disabled="!props.canEdit"
+										class="w-full text-sm border border-slate-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-cyan-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<option :value="10">10 seconds</option>
+										<option :value="30">30 seconds</option>
+										<option :value="60">1 minute</option>
+										<option :value="120">2 minutes</option>
+										<option :value="300">5 minutes</option>
+										<option :value="600">10 minutes</option>
+									</select>
+								</div>
+								
+								<!-- Include DNS -->
+								<div class="flex items-center justify-between">
+									<div>
+										<span class="text-sm text-slate-700 dark:text-slate-200">DNS Lookups</span>
+										<p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Resolve hostnames for IPs</p>
+									</div>
+									<button 
+										@click="toggleDns"
+										class="relative w-11 h-6 rounded-full transition-colors"
+										:class="[
+											healthConfig.include_dns ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+											!props.canEdit ? 'opacity-50 cursor-not-allowed' : ''
+										]"
+										:disabled="!props.canEdit"
+									>
+										<span 
+											class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+											:class="healthConfig.include_dns ? 'translate-x-5' : 'translate-x-0'"
+										></span>
+									</button>
+								</div>
+							</div>
+							
+							<!-- Status Footer -->
+							<div class="px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+								<div class="flex items-center justify-between">
+									<span v-if="healthStatus?.monitored_devices?.length">
+										{{ healthStatus.monitored_devices.length }} devices
+									</span>
+									<span v-else>No devices monitored</span>
+									<span v-if="healthStatus?.last_check">
+										Updated {{ formatTimestamp(healthStatus.last_check) }}
+									</span>
+								</div>
+							</div>
+						</div>
+					</Transition>
+				</div>
+
+				<!-- Dark Mode Toggle -->
 				<button 
-					@click="showHealthSettings = !showHealthSettings" 
-					class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center gap-1"
-					:class="{ 'bg-slate-100 dark:bg-slate-700': showHealthSettings }"
-					title="Health monitoring settings"
+					@click="toggleDarkMode" 
+					class="flex items-center justify-center w-8 h-8 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+					title="Toggle dark mode"
 				>
-					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+					<svg v-if="!isDark" xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+					</svg>
+					<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
 					</svg>
 				</button>
-				<!-- Dropdown -->
-				<div 
-					v-if="showHealthSettings" 
-					class="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-50 p-4"
-				>
-					<h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-3">Health Monitoring</h3>
-					
-					<!-- Readonly notice -->
-					<div v-if="!props.canEdit" class="mb-3 p-2 bg-slate-100 dark:bg-slate-900 rounded text-xs text-slate-500 dark:text-slate-400 text-center">
-						View only mode
-					</div>
-
-					<!-- Enable/Disable -->
-					<div class="flex items-center justify-between mb-3">
-						<span class="text-xs text-slate-600 dark:text-slate-400">Passive Monitoring</span>
-						<button 
-							@click="toggleMonitoring"
-							class="relative w-11 h-6 rounded-full transition-colors"
-							:class="[
-								healthConfig.enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
-								!props.canEdit ? 'opacity-50 cursor-not-allowed' : ''
-							]"
-							:disabled="!props.canEdit"
-							:title="!props.canEdit ? 'Write permission required' : ''"
-						>
-							<span 
-								class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
-								:class="healthConfig.enabled ? 'translate-x-5' : 'translate-x-0'"
-							></span>
-						</button>
-					</div>
-					
-					<!-- Check Interval -->
-					<div class="mb-3">
-						<label class="text-xs text-slate-600 dark:text-slate-400 block mb-1">Check Interval</label>
-						<select 
-							v-model="healthConfig.check_interval_seconds"
-							@change="updateHealthConfig"
-							:disabled="!props.canEdit"
-							class="w-full text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							<option :value="10">10 seconds</option>
-							<option :value="30">30 seconds</option>
-							<option :value="60">1 minute</option>
-							<option :value="120">2 minutes</option>
-							<option :value="300">5 minutes</option>
-							<option :value="600">10 minutes</option>
-						</select>
-					</div>
-					
-					<!-- Include DNS -->
-					<div class="flex items-center justify-between mb-3">
-						<span class="text-xs text-slate-600 dark:text-slate-400">Include DNS Lookups</span>
-						<button 
-							@click="toggleDns"
-							class="relative w-11 h-6 rounded-full transition-colors"
-							:class="[
-								healthConfig.include_dns ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
-								!props.canEdit ? 'opacity-50 cursor-not-allowed' : ''
-							]"
-							:disabled="!props.canEdit"
-							:title="!props.canEdit ? 'Write permission required' : ''"
-						>
-							<span 
-								class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
-								:class="healthConfig.include_dns ? 'translate-x-5' : 'translate-x-0'"
-							></span>
-						</button>
-					</div>
-					
-					<!-- Status Info -->
-					<div class="text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
-						<p v-if="healthStatus?.monitored_devices?.length">
-							Monitoring {{ healthStatus.monitored_devices.length }} devices
-						</p>
-						<p v-if="healthStatus?.last_check" class="mt-1">
-							Last check: {{ formatTimestamp(healthStatus.last_check) }}
-						</p>
-					</div>
-				</div>
 			</div>
-			<button @click="toggleDarkMode" class="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300" title="Toggle dark mode">
-				<svg v-if="!isDark" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-				</svg>
-				<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-				</svg>
-			</button>
-			<!-- User Menu Slot -->
-			<div class="border-l border-slate-300 dark:border-slate-600 h-8 mx-1"></div>
+
+			<!-- Divider -->
+			<div class="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+			<!-- User Menu -->
 			<slot name="user-menu"></slot>
 		</div>
 
 		<!-- Embed Generator Modal -->
 		<EmbedGenerator v-if="showEmbedGenerator" @close="showEmbedGenerator = false" />
-	</div>
+	</header>
 </template>
 
 <script lang="ts" setup>
@@ -267,7 +381,7 @@ onMounted(async () => {
 		if (response.data.exists && response.data.layout) {
 			emit("applyLayout", response.data.layout);
 			emit("saved"); // Mark as saved since we just loaded the saved state
-			message.value = "Loaded saved map from server";
+			message.value = "Loaded saved map";
 			setTimeout(() => { message.value = ""; }, 3000);
 		}
 	} catch (error) {
@@ -323,7 +437,7 @@ function formatTimestamp(isoString: string): string {
 	const diffMs = now.getTime() - date.getTime();
 	const diffMins = Math.floor(diffMs / 60000);
 	
-	if (diffMins < 1) return 'Just now';
+	if (diffMins < 1) return 'just now';
 	if (diffMins < 60) return `${diffMins}m ago`;
 	
 	return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -351,12 +465,12 @@ async function saveLayout() {
 		const layout = exportLayout(props.root);
 		const response = await axios.post('/api/save-layout', layout);
 		if (response.data.success) {
-			message.value = "Map saved to server";
+			message.value = "Map saved";
 			emit("saved");
 			setTimeout(() => { message.value = ""; }, 3000);
 		}
 	} catch (error: any) {
-		message.value = "Failed to save map";
+		message.value = "Failed to save";
 		console.error("Save error:", error);
 		setTimeout(() => { message.value = ""; }, 5000);
 	} finally {
@@ -393,9 +507,9 @@ function onLoadFile(e: Event) {
 			const text = String(reader.result || "");
 			const layout = importLayout(text);
 			emit("applyLayout", layout);
-			message.value = "Layout loaded";
+			message.value = "Layout imported";
 		} catch (err: any) {
-			message.value = err?.message || "Failed to load layout";
+			message.value = err?.message || "Import failed";
 		}
 	};
 	reader.readAsText(file);
@@ -403,7 +517,8 @@ function onLoadFile(e: Event) {
 
 function cleanUpLayout() {
 	emit("cleanUpLayout");
-	message.value = "Layout cleaned up";
+	message.value = "Layout tidied";
+	setTimeout(() => { message.value = ""; }, 2000);
 }
 
 function toggleDarkMode() {
@@ -420,7 +535,7 @@ function toggleDarkMode() {
 function startSSE() {
 	endSSE();
 	loading.value = true;
-	message.value = "Running mapper…";
+	message.value = "Scanning network...";
 	emit("running", true);
 	try {
 		// Build SSE URL with token as query parameter (EventSource doesn't support custom headers)
@@ -450,24 +565,25 @@ function startSSE() {
 			}
 		});
 		es.addEventListener("done", (e: MessageEvent) => {
-			message.value = "Mapper completed";
+			message.value = "Scan complete";
 			loading.value = false;
 			emit("running", false);
 			// Emit a download hint line
 			const dl = baseUrl.value ? `${baseUrl.value}/api/download-map` : `/api/download-map`;
 			emit("log", `DOWNLOAD: ${dl}`);
 			endSSE();
+			setTimeout(() => { message.value = ""; }, 3000);
 		});
 		es.onerror = () => {
 			if (loading.value) {
-				message.value = "Stream error (check authentication)";
+				message.value = "Connection error";
 				loading.value = false;
 			}
 			emit("running", false);
 			endSSE();
 		};
 	} catch (err: any) {
-		message.value = err?.message || "Failed to start log stream";
+		message.value = err?.message || "Failed to start scan";
 		loading.value = false;
 		emit("running", false);
 	}
@@ -485,5 +601,3 @@ onBeforeUnmount(() => {
 	document.removeEventListener('click', handleClickOutside);
 });
 </script>
-
-

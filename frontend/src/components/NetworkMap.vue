@@ -17,13 +17,13 @@ const props = defineProps<{
 	healthMetrics?: Record<string, DeviceMetrics>;
 }>();
 
-// Get status color for health ring
-function getStatusColor(status?: HealthStatus): string {
+// Get status color for health glow (using light fill colors like selection)
+function getStatusColor(status?: HealthStatus, dark?: boolean): string {
 	switch (status) {
-		case 'healthy': return '#22c55e'; // green-500
-		case 'degraded': return '#f59e0b'; // amber-500
-		case 'unhealthy': return '#ef4444'; // red-500
-		default: return 'transparent'; // unknown - no ring
+		case 'healthy': return dark ? '#22c55e' : '#bbf7d0'; // green-500 / green-200
+		case 'degraded': return dark ? '#f59e0b' : '#fde68a'; // amber-500 / amber-200
+		case 'unhealthy': return dark ? '#ef4444' : '#fecaca'; // red-500 / red-200
+		default: return 'none'; // unknown - no glow
 	}
 }
 
@@ -356,26 +356,17 @@ function roleIcon(role?: string): string {
 		.style("cursor", "pointer")
 		.on("click", (_, d: any) => emit("nodeSelected", d.id));
 
-	// Health status ring (outer ring showing live status)
-	node.append("circle")
-		.attr("class", "status-ring")
-		.attr("r", 26)
-		.attr("fill", "none")
-		.attr("stroke", (d: any) => {
-			const status = getNodeHealthStatus(d.id, d.ref);
-			return getStatusColor(status);
-		})
-		.attr("stroke-width", 3)
-		.attr("opacity", 0.9);
-
-	// Outer glow/halo for selection
+	// Outer glow/halo for status and selection
 	node.append("circle")
 		.attr("r", 24)
 		.attr("fill", (d: any) => {
+			// Selection takes priority
 			if (d.id === props.selectedId) {
 				return dark ? "#fbbf24" : "#fef3c7";
 			}
-			return "none";
+			// Otherwise show health status
+			const status = getNodeHealthStatus(d.id, d.ref);
+			return getStatusColor(status, dark);
 		})
 		.attr("opacity", 0.4);
 

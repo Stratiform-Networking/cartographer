@@ -16,13 +16,13 @@ const props = defineProps<{
 	healthMetrics?: Record<string, DeviceMetrics>;
 }>();
 
-// Get status color for health ring
-function getStatusColor(status?: HealthStatus): string {
+// Get status color for health glow (using light fill colors like selection)
+function getStatusColor(status?: HealthStatus, dark?: boolean): string {
 	switch (status) {
-		case 'healthy': return '#22c55e'; // green-500
-		case 'degraded': return '#f59e0b'; // amber-500
-		case 'unhealthy': return '#ef4444'; // red-500
-		default: return 'transparent'; // unknown - no ring
+		case 'healthy': return dark ? '#22c55e' : '#bbf7d0'; // green-500 / green-200
+		case 'degraded': return dark ? '#f59e0b' : '#fde68a'; // amber-500 / amber-200
+		case 'unhealthy': return dark ? '#ef4444' : '#fecaca'; // red-500 / red-200
+		default: return 'none'; // unknown - no glow
 	}
 }
 
@@ -336,17 +336,14 @@ function render() {
 		.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
 		.style("cursor", "default");
 
-	// Health status ring (outer ring showing live status)
+	// Outer glow/halo for health status
 	node.append("circle")
-		.attr("class", "status-ring")
-		.attr("r", 26)
-		.attr("fill", "none")
-		.attr("stroke", (d: any) => {
+		.attr("r", 24)
+		.attr("fill", (d: any) => {
 			const status = getNodeHealthStatus(d.id, d.ref);
-			return getStatusColor(status);
+			return getStatusColor(status, dark);
 		})
-		.attr("stroke-width", 3)
-		.attr("opacity", 0.9);
+		.attr("opacity", 0.4);
 
 	// Main node circle with shadow effect
 	node.append("circle")

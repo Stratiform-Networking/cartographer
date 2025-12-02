@@ -38,6 +38,9 @@ export interface TreeNode {
 	// Freeform layout positions (persisted)
 	fx?: number;
 	fy?: number;
+	// Parent connection
+	parentId?: string; // ID of parent node for topology connections
+	connectionSpeed?: string; // Connection speed label (e.g., "1GbE", "10GbE")
 	// Version management
 	createdAt?: string; // ISO timestamp when node was created
 	updatedAt?: string; // ISO timestamp when node was last modified

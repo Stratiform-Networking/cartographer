@@ -35,6 +35,17 @@
 			<button @click="exportJSON" class="px-3 py-2 rounded bg-purple-600 text-white text-sm hover:bg-purple-500" :disabled="!props.root.children?.length">
 				Export JSON
 			</button>
+			<button 
+				@click="showEmbedGenerator = true" 
+				class="px-3 py-2 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-500 disabled:opacity-50 flex items-center gap-1.5"
+				:disabled="!props.root.children?.length"
+				title="Generate embeddable map link"
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+				</svg>
+				Embed
+			</button>
 			<label 
 				class="px-3 py-2 rounded text-white text-sm cursor-pointer"
 				:class="props.canEdit ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-500 opacity-50 cursor-not-allowed'"
@@ -157,6 +168,9 @@
 			<div class="border-l border-slate-300 dark:border-slate-600 h-8 mx-1"></div>
 			<slot name="user-menu"></slot>
 		</div>
+
+		<!-- Embed Generator Modal -->
+		<EmbedGenerator v-if="showEmbedGenerator" @close="showEmbedGenerator = false" />
 	</div>
 </template>
 
@@ -167,6 +181,7 @@ import type { ParsedNetworkMap, TreeNode } from "../types/network";
 import { useNetworkData } from "../composables/useNetworkData";
 import { useMapLayout } from "../composables/useMapLayout";
 import { useHealthMonitoring, type MonitoringConfig, type MonitoringStatus } from "../composables/useHealthMonitoring";
+import EmbedGenerator from "./EmbedGenerator.vue";
 
 const props = defineProps<{
 	root: TreeNode;
@@ -198,6 +213,7 @@ const baseUrl = ref<string>("");
 
 // Health monitoring settings
 const showHealthSettings = ref(false);
+const showEmbedGenerator = ref(false);
 const healthConfig = reactive<MonitoringConfig>({
 	enabled: true,
 	check_interval_seconds: 30,

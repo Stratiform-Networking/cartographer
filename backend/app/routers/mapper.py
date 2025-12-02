@@ -222,3 +222,27 @@ def load_layout():
 		raise HTTPException(status_code=500, detail=f"Failed to load layout: {exc}")
 
 
+@router.get("/embed-data")
+def get_embed_data():
+	"""Get the network map data for the embed view (read-only, no auth required)"""
+	layout_path = _saved_layout_path()
+	if not layout_path.exists():
+		return JSONResponse({"exists": False, "root": None})
+	
+	try:
+		with open(layout_path, 'r') as f:
+			layout = json.load(f)
+		
+		# Return just the root tree node for the embed
+		root = layout.get("root")
+		if not root:
+			return JSONResponse({"exists": False, "root": None})
+		
+		return JSONResponse({
+			"exists": True,
+			"root": root
+		})
+	except Exception as exc:
+		raise HTTPException(status_code=500, detail=f"Failed to load embed data: {exc}")
+
+

@@ -265,7 +265,7 @@
 				</section>
 
 				<!-- Internet Connectivity Tests (Gateway/Router only) -->
-				<section v-if="isGatewayDevice && monitoringEnabled">
+				<section v-if="isGatewayDevice">
 					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Internet Connectivity</h3>
 					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
 						<!-- Test IP List -->
@@ -414,6 +414,127 @@
 								></span>
 							</button>
 						</div>
+					</div>
+				</section>
+
+				<!-- Internet Connectivity Tests (Gateway/Router only - also shown when monitoring disabled) -->
+				<section v-if="isGatewayDevice">
+					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Internet Connectivity</h3>
+					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
+						<!-- Test IP List -->
+						<div v-if="testIps.length > 0" class="space-y-2">
+							<div 
+								v-for="(ip, idx) in testIps" 
+								:key="ip"
+								class="bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 overflow-hidden"
+							>
+								<div class="flex items-center justify-between px-3 py-2">
+									<div class="flex items-center gap-2">
+										<div 
+											class="w-2 h-2 rounded-full"
+											:class="getTestIpStatusColor(ip)"
+										></div>
+										<span class="text-sm font-mono text-slate-700 dark:text-slate-300">{{ ip }}</span>
+									</div>
+									<div class="flex items-center gap-1">
+										<button 
+											@click="testSingleIp(ip)"
+											:disabled="testingIp === ip"
+											class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 disabled:opacity-50"
+											title="Test this IP"
+										>
+											<svg 
+												xmlns="http://www.w3.org/2000/svg" 
+												class="h-4 w-4" 
+												:class="{ 'animate-spin': testingIp === ip }"
+												fill="none" 
+												viewBox="0 0 24 24" 
+												stroke="currentColor" 
+												stroke-width="2"
+											>
+												<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+											</svg>
+										</button>
+										<button 
+											@click="removeTestIp(idx)"
+											class="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+											title="Remove this IP"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+											</svg>
+										</button>
+									</div>
+								</div>
+								<!-- Test Results -->
+								<div v-if="testIpResults[ip]" class="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 text-xs space-y-1">
+									<div class="flex justify-between">
+										<span class="text-slate-500 dark:text-slate-400">Status</span>
+										<span :class="testIpResults[ip].ping?.success ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
+											{{ testIpResults[ip].ping?.success ? 'Reachable' : 'Unreachable' }}
+										</span>
+									</div>
+									<div v-if="testIpResults[ip].ping?.avg_latency_ms" class="flex justify-between">
+										<span class="text-slate-500 dark:text-slate-400">Latency</span>
+										<span class="text-slate-700 dark:text-slate-300">{{ testIpResults[ip].ping.avg_latency_ms.toFixed(1) }} ms</span>
+									</div>
+									<div v-if="testIpResults[ip].ping?.packet_loss_percent != null" class="flex justify-between">
+										<span class="text-slate-500 dark:text-slate-400">Packet Loss</span>
+										<span :class="testIpResults[ip].ping.packet_loss_percent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-300'">
+											{{ testIpResults[ip].ping.packet_loss_percent.toFixed(1) }}%
+										</span>
+									</div>
+									<div v-if="testIpResults[ip].ping?.jitter_ms != null" class="flex justify-between">
+										<span class="text-slate-500 dark:text-slate-400">Jitter</span>
+										<span class="text-slate-700 dark:text-slate-300">{{ testIpResults[ip].ping.jitter_ms.toFixed(2) }} ms</span>
+									</div>
+								</div>
+							</div>
+						</div>
+						
+						<!-- Add New Test IP -->
+						<div class="flex gap-2">
+							<input 
+								v-model="newTestIp"
+								type="text"
+								placeholder="8.8.8.8 or 1.1.1.1"
+								class="flex-1 text-sm border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded px-2 py-1"
+								@keyup.enter="addTestIp"
+							/>
+							<button 
+								@click="addTestIp"
+								:disabled="!newTestIp.trim()"
+								class="px-3 py-1 text-sm rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Add
+							</button>
+						</div>
+						
+						<!-- Test All Button -->
+						<button 
+							v-if="testIps.length > 0"
+							@click="testAllIps"
+							:disabled="testingAll"
+							class="w-full px-3 py-2 text-sm rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 flex items-center justify-center gap-2"
+						>
+							<svg 
+								xmlns="http://www.w3.org/2000/svg" 
+								class="h-4 w-4" 
+								:class="{ 'animate-spin': testingAll }"
+								fill="none" 
+								viewBox="0 0 24 24" 
+								stroke="currentColor" 
+								stroke-width="2"
+							>
+								<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							{{ testingAll ? 'Testing...' : 'Test All' }}
+						</button>
+						
+						<!-- Help text -->
+						<p class="text-[10px] text-slate-400 dark:text-slate-500">
+							Add external IPs (e.g., 8.8.8.8, 1.1.1.1) to test internet connectivity through this gateway.
+						</p>
 					</div>
 				</section>
 			</div>

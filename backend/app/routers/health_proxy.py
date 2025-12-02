@@ -164,3 +164,42 @@ async def trigger_check():
     """Proxy trigger immediate check"""
     return await proxy_request("POST", "/monitoring/check-now")
 
+
+# ==================== Gateway Test IP Endpoints ====================
+
+# Note: Specific route must come before parameterized routes
+@router.get("/gateway/test-ips/all")
+async def get_all_gateway_test_ips():
+    """Proxy get all gateway test IP configurations"""
+    return await proxy_request("GET", "/gateway/test-ips/all")
+
+
+@router.post("/gateway/{gateway_ip}/test-ips")
+async def set_gateway_test_ips(gateway_ip: str, request: Request):
+    """Proxy set test IPs for a gateway"""
+    body = await request.json()
+    return await proxy_request("POST", f"/gateway/{gateway_ip}/test-ips", json_body=body)
+
+
+@router.get("/gateway/{gateway_ip}/test-ips")
+async def get_gateway_test_ips(gateway_ip: str):
+    """Proxy get test IPs for a gateway"""
+    return await proxy_request("GET", f"/gateway/{gateway_ip}/test-ips")
+
+
+@router.delete("/gateway/{gateway_ip}/test-ips")
+async def remove_gateway_test_ips(gateway_ip: str):
+    """Proxy remove test IPs for a gateway"""
+    return await proxy_request("DELETE", f"/gateway/{gateway_ip}/test-ips")
+
+
+@router.get("/gateway/{gateway_ip}/test-ips/check")
+async def check_gateway_test_ips(gateway_ip: str):
+    """Proxy check test IPs for a gateway"""
+    return await proxy_request("GET", f"/gateway/{gateway_ip}/test-ips/check")
+
+
+@router.get("/gateway/{gateway_ip}/test-ips/cached")
+async def get_cached_test_ip_metrics(gateway_ip: str):
+    """Proxy get cached test IP metrics for a gateway"""
+    return await proxy_request("GET", f"/gateway/{gateway_ip}/test-ips/cached")

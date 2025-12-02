@@ -223,6 +223,15 @@ async def trigger_immediate_check():
 
 # ==================== Gateway Test IP Endpoints ====================
 
+# Note: Specific route must come before parameterized routes
+@router.get("/gateway/test-ips/all")
+async def get_all_gateway_test_ips():
+    """
+    Get all gateway test IP configurations.
+    """
+    return health_checker.get_all_gateway_test_ips()
+
+
 @router.post("/gateway/{gateway_ip}/test-ips", response_model=GatewayTestIPConfig)
 async def set_gateway_test_ips(gateway_ip: str, request: SetGatewayTestIPsRequest):
     """
@@ -276,12 +285,4 @@ async def get_cached_test_ip_metrics(gateway_ip: str):
     Get cached metrics for all test IPs of a gateway without performing a new check.
     """
     return health_checker.get_cached_test_ip_metrics(gateway_ip)
-
-
-@router.get("/gateway/test-ips/all")
-async def get_all_gateway_test_ips():
-    """
-    Get all gateway test IP configurations.
-    """
-    return health_checker.get_all_gateway_test_ips()
 

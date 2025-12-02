@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Set
 from collections import deque
 import logging
-import aiohttp
+import speedtest
 
 from ..models import (
     DeviceMetrics, 
@@ -261,81 +261,61 @@ class HealthChecker:
     async def run_speed_test(self) -> SpeedTestResult:
         """
         Run a speed test to measure internet download/upload speeds.
-        Uses multiple CDN endpoints for reliable measurement.
+        Uses speedtest-cli (Ookla's speedtest.net) for reliable measurement.
         """
         result = SpeedTestResult(test_timestamp=datetime.utcnow())
         
-        # Download test URLs - various CDN test files
-        download_urls = [
-            ("http://speedtest.tele2.net/10MB.zip", "Tele2", 10_000_000),
-            ("http://ipv4.download.thinkbroadband.com/10MB.zip", "ThinkBroadband", 10_000_000),
-            ("http://proof.ovh.net/files/10Mb.dat", "OVH", 10_000_000),
-        ]
-        
-        # Upload test - we'll use httpbin.org which accepts POST data
-        upload_url = "https://httpbin.org/post"
+        def _run_speedtest():
+            """Run speedtest in a thread to not block async loop"""
+            try:
+                logger.info("Starting speedtest-cli speed test...")
+                st = speedtest.Speedtest()
+                
+                # Get best server
+                logger.info("Finding best server...")
+                st.get_best_server()
+                server = st.best
+                server_name = f"{server.get('sponsor', 'Unknown')} ({server.get('name', 'Unknown')})"
+                logger.info(f"Using server: {server_name}")
+                
+                # Download test
+                logger.info("Running download test...")
+                download_bps = st.download()
+                download_mbps = round(download_bps / 1_000_000, 2)
+                logger.info(f"Download: {download_mbps} Mbps")
+                
+                # Upload test
+                logger.info("Running upload test...")
+                upload_bps = st.upload()
+                upload_mbps = round(upload_bps / 1_000_000, 2)
+                logger.info(f"Upload: {upload_mbps} Mbps")
+                
+                return {
+                    'download_mbps': download_mbps,
+                    'upload_mbps': upload_mbps,
+                    'test_server': server_name,
+                    'error': None
+                }
+            except Exception as e:
+                error_msg = f"Speed test failed: {str(e)}"
+                logger.error(error_msg)
+                return {
+                    'download_mbps': None,
+                    'upload_mbps': None,
+                    'test_server': None,
+                    'error': error_msg
+                }
         
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            timeout = aiohttp.ClientTimeout(total=60, connect=10)
-            connector = aiohttp.TCPConnector(ssl=False)  # Allow non-SSL for speed test servers
+            # Run the blocking speedtest in a thread pool
+            loop = asyncio.get_event_loop()
+            test_result = await loop.run_in_executor(None, _run_speedtest)
             
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector, headers=headers) as session:
-                # Download speed test
-                for url, server_name, expected_bytes in download_urls:
-                    try:
-                        logger.info(f"Trying download speed test from {server_name}: {url}")
-                        start_time = time.time()
-                        bytes_received = 0
-                        
-                        async with session.get(url) as response:
-                            logger.info(f"Download response status: {response.status}")
-                            if response.status == 200:
-                                async for chunk in response.content.iter_chunked(65536):  # 64KB chunks
-                                    bytes_received += len(chunk)
-                                
-                                elapsed = time.time() - start_time
-                                if elapsed > 0.1 and bytes_received > 100000:  # At least 100KB and 0.1s
-                                    # Calculate Mbps (megabits per second)
-                                    result.download_mbps = round((bytes_received * 8) / (elapsed * 1_000_000), 2)
-                                    result.test_server = server_name
-                                    logger.info(f"Speed test download: {result.download_mbps} Mbps ({bytes_received} bytes in {elapsed:.2f}s)")
-                                    break
-                                else:
-                                    logger.warning(f"Download incomplete: {bytes_received} bytes in {elapsed:.2f}s")
-                            else:
-                                logger.warning(f"Download returned status {response.status}")
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Download test timed out for {url}")
-                        continue
-                    except Exception as e:
-                        logger.warning(f"Download test failed for {url}: {e}")
-                        continue
-                
-                # Upload speed test (send 500KB of data to httpbin)
-                try:
-                    upload_size = 500_000  # 500KB
-                    upload_data = b'0' * upload_size
-                    
-                    logger.info("Starting upload speed test...")
-                    start_time = time.time()
-                    async with session.post(upload_url, data=upload_data) as response:
-                        # Wait for response to ensure upload completed
-                        await response.read()
-                        elapsed = time.time() - start_time
-                        
-                        if response.status == 200 and elapsed > 0.1:
-                            result.upload_mbps = round((upload_size * 8) / (elapsed * 1_000_000), 2)
-                            logger.info(f"Speed test upload: {result.upload_mbps} Mbps ({upload_size} bytes in {elapsed:.2f}s)")
-                        else:
-                            logger.warning(f"Upload returned status {response.status}, elapsed: {elapsed:.2f}s")
-                except asyncio.TimeoutError:
-                    logger.warning("Upload test timed out")
-                except Exception as e:
-                    logger.warning(f"Upload test failed: {e}")
-                    
+            result.download_mbps = test_result['download_mbps']
+            result.upload_mbps = test_result['upload_mbps']
+            result.test_server = test_result['test_server']
+            result.error = test_result['error']
+            
         except Exception as e:
             error_msg = f"Speed test failed: {str(e)}"
             logger.error(error_msg)

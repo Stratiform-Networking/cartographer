@@ -465,6 +465,7 @@ const { registerDevices, startPolling, stopPolling } = useHealthMonitoring();
 
 // Track if we've done initial registration
 let hasRegisteredDevices = false;
+let lastRegisteredIps: string[] = [];
 
 // Helper to get IPs of devices that have monitoring enabled, including test IPs from gateways
 function getMonitoredDeviceIPs(root: TreeNode): string[] {
@@ -487,18 +488,28 @@ function getMonitoredDeviceIPs(root: TreeNode): string[] {
 	return [...new Set(ips)];
 }
 
-// Register devices for health monitoring whenever parsed changes
-watch(() => parsed.value?.root, async (root) => {
-	if (root) {
-		const ips = getMonitoredDeviceIPs(root);
-		
-		if (ips.length > 0) {
-			await registerDevices(ips);
-			hasRegisteredDevices = true;
-			console.log(`[Health] Registered ${ips.length} device IPs for monitoring`);
+// Register devices for health monitoring whenever parsed changes (deep watch to catch testIps changes)
+watch(
+	() => parsed.value?.root,
+	async (root) => {
+		if (root) {
+			const ips = getMonitoredDeviceIPs(root);
+			
+			// Only re-register if the IP list has changed
+			const ipsChanged = ips.length !== lastRegisteredIps.length || 
+				ips.some((ip, i) => !lastRegisteredIps.includes(ip)) ||
+				lastRegisteredIps.some(ip => !ips.includes(ip));
+			
+			if (ips.length > 0 && ipsChanged) {
+				lastRegisteredIps = [...ips];
+				await registerDevices(ips);
+				hasRegisteredDevices = true;
+				console.log(`[Health] Registered ${ips.length} device IPs for monitoring:`, ips);
+			}
 		}
-	}
-});
+	},
+	{ deep: true }
+);
 
 // Start polling for health updates when app mounts
 onMounted(async () => {
@@ -510,9 +521,10 @@ onMounted(async () => {
 	if (parsed.value?.root && !hasRegisteredDevices) {
 		const ips = getMonitoredDeviceIPs(parsed.value.root);
 		if (ips.length > 0) {
+			lastRegisteredIps = [...ips];
 			await registerDevices(ips);
 			hasRegisteredDevices = true;
-			console.log(`[Health] Registered ${ips.length} device IPs for monitoring (on mount)`);
+			console.log(`[Health] Registered ${ips.length} device IPs for monitoring (on mount):`, ips);
 		}
 	}
 });
@@ -876,6 +888,7 @@ async function onUpdateTestIps(nodeId: string, testIps: string[]) {
 		
 		// Re-register devices to include the new test IPs in monitoring
 		const allIps = getMonitoredDeviceIPs(parsed.value.root);
+		lastRegisteredIps = [...allIps];
 		await registerDevices(allIps);
 		console.log(`[Health] Re-registered devices with test IPs:`, allIps);
 	}

@@ -87,6 +87,7 @@
 				:data="mapData"
 				:sensitiveMode="sensitiveMode"
 				:isDark="isDark"
+				:healthMetrics="cachedMetrics"
 			/>
 		</div>
 
@@ -103,10 +104,11 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import axios from 'axios';
 import type { TreeNode } from '../types/network';
 import NetworkMapEmbed from './NetworkMapEmbed.vue';
+import { useHealthMonitoring } from '../composables/useHealthMonitoring';
 
 const props = defineProps<{
 	embedId: string;
@@ -120,6 +122,24 @@ const showOwner = ref(false);
 const ownerDisplayName = ref<string | null>(null);
 const networkMapRef = ref<InstanceType<typeof NetworkMapEmbed> | null>(null);
 const isDark = ref(true);
+
+// Health monitoring
+const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
+
+// Helper to extract IPs from the tree
+function extractIPs(node: TreeNode): string[] {
+	const ips: string[] = [];
+	const walk = (n: TreeNode) => {
+		if (n.ip && n.role !== 'group' && n.monitoringEnabled !== false) {
+			ips.push(n.ip);
+		}
+		for (const child of (n.children || [])) {
+			walk(child);
+		}
+	};
+	walk(node);
+	return ips;
+}
 
 async function loadMapData() {
 	loading.value = true;
@@ -138,6 +158,14 @@ async function loadMapData() {
 			sensitiveMode.value = response.data.sensitiveMode || false;
 			showOwner.value = response.data.showOwner || false;
 			ownerDisplayName.value = response.data.ownerDisplayName || null;
+			
+			// Register devices for health monitoring
+			const ips = extractIPs(response.data.root);
+			if (ips.length > 0) {
+				await registerDevices(ips);
+				// Start polling for health metrics updates
+				startPolling(10000);
+			}
 		} else {
 			error.value = 'No network map has been configured yet.';
 		}
@@ -192,6 +220,11 @@ onMounted(() => {
 	}
 	
 	loadMapData();
+});
+
+// Stop health polling when component unmounts
+onBeforeUnmount(() => {
+	stopPolling();
 });
 </script>
 

@@ -7,13 +7,34 @@
 <script lang="ts" setup>
 import * as d3 from "d3";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
-import type { TreeNode } from "../types/network";
+import type { TreeNode, DeviceMetrics, HealthStatus } from "../types/network";
 
 const props = defineProps<{
 	data: TreeNode;
 	sensitiveMode?: boolean;
 	isDark?: boolean;
+	healthMetrics?: Record<string, DeviceMetrics>;
 }>();
+
+// Get status color for health ring
+function getStatusColor(status?: HealthStatus): string {
+	switch (status) {
+		case 'healthy': return '#22c55e'; // green-500
+		case 'degraded': return '#f59e0b'; // amber-500
+		case 'unhealthy': return '#ef4444'; // red-500
+		default: return 'transparent'; // unknown - no ring
+	}
+}
+
+// Get health status for a node by IP
+function getNodeHealthStatus(nodeId: string, nodeRef?: TreeNode): HealthStatus | undefined {
+	if (!props.healthMetrics) return undefined;
+	
+	// Try to get metrics by IP (which is usually the node id)
+	const ip = (nodeRef as any)?.ip || nodeId;
+	const metrics = props.healthMetrics[ip];
+	return metrics?.status;
+}
 
 const svgRef = ref<SVGSVGElement | null>(null);
 
@@ -315,6 +336,18 @@ function render() {
 		.attr("transform", (d: any) => `translate(${d.x},${d.y})`)
 		.style("cursor", "default");
 
+	// Health status ring (outer ring showing live status)
+	node.append("circle")
+		.attr("class", "status-ring")
+		.attr("r", 26)
+		.attr("fill", "none")
+		.attr("stroke", (d: any) => {
+			const status = getNodeHealthStatus(d.id, d.ref);
+			return getStatusColor(status);
+		})
+		.attr("stroke-width", 3)
+		.attr("opacity", 0.9);
+
 	// Main node circle with shadow effect
 	node.append("circle")
 		.attr("r", 18)
@@ -442,7 +475,7 @@ onBeforeUnmount(() => {
 	if (cleanup) cleanup();
 });
 
-watch(() => [props.data, props.sensitiveMode, props.isDark], () => {
+watch(() => [props.data, props.sensitiveMode, props.isDark, props.healthMetrics], () => {
 	render();
 }, { deep: true });
 </script>

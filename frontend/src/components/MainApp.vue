@@ -182,6 +182,7 @@
 						:data="parsed.root"
 						:mode="mode"
 						:selectedId="selectedId"
+						:healthMetrics="cachedMetrics"
 						@nodeSelected="onNodeSelected"
 						@nodePositionChanged="onNodePositionChanged"
 					/>
@@ -546,7 +547,7 @@ function stopResize() {
 
 const { applySavedPositions, clearPositions, exportLayout } = useMapLayout();
 const { parseNetworkMap } = useNetworkData();
-const { registerDevices, startPolling, stopPolling } = useHealthMonitoring();
+const { registerDevices, startPolling, stopPolling, cachedMetrics } = useHealthMonitoring();
 
 // Track if we've done initial registration
 let hasRegisteredDevices = false;

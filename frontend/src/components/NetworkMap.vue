@@ -7,14 +7,35 @@
 <script lang="ts" setup>
 import * as d3 from "d3";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
-import type { TreeNode } from "../types/network";
+import type { TreeNode, DeviceMetrics, HealthStatus } from "../types/network";
 import { useMapLayout } from "../composables/useMapLayout";
 
 const props = defineProps<{
 	data: TreeNode;
 	selectedId?: string;
 	mode?: 'pan' | 'edit';
+	healthMetrics?: Record<string, DeviceMetrics>;
 }>();
+
+// Get status color for health ring
+function getStatusColor(status?: HealthStatus): string {
+	switch (status) {
+		case 'healthy': return '#22c55e'; // green-500
+		case 'degraded': return '#f59e0b'; // amber-500
+		case 'unhealthy': return '#ef4444'; // red-500
+		default: return 'transparent'; // unknown - no ring
+	}
+}
+
+// Get health status for a node by IP
+function getNodeHealthStatus(nodeId: string, nodeRef?: TreeNode): HealthStatus | undefined {
+	if (!props.healthMetrics) return undefined;
+	
+	// Try to get metrics by IP (which is usually the node id)
+	const ip = (nodeRef as any)?.ip || nodeId;
+	const metrics = props.healthMetrics[ip];
+	return metrics?.status;
+}
 
 const emit = defineEmits<{
 	(e: "nodeSelected", id: string | undefined): void;
@@ -335,6 +356,18 @@ function roleIcon(role?: string): string {
 		.style("cursor", "pointer")
 		.on("click", (_, d: any) => emit("nodeSelected", d.id));
 
+	// Health status ring (outer ring showing live status)
+	node.append("circle")
+		.attr("class", "status-ring")
+		.attr("r", 26)
+		.attr("fill", "none")
+		.attr("stroke", (d: any) => {
+			const status = getNodeHealthStatus(d.id, d.ref);
+			return getStatusColor(status);
+		})
+		.attr("stroke-width", 3)
+		.attr("opacity", 0.9);
+
 	// Outer glow/halo for selection
 	node.append("circle")
 		.attr("r", 24)
@@ -530,7 +563,7 @@ onBeforeUnmount(() => {
 	if (cleanup) cleanup();
 });
 
-watch(() => [props.data, props.selectedId, props.mode], () => {
+watch(() => [props.data, props.selectedId, props.mode, props.healthMetrics], () => {
 	render();
 }, { deep: true });
 </script>

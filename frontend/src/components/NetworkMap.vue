@@ -31,6 +31,9 @@ function getStatusColor(status?: HealthStatus, dark?: boolean): string {
 function getNodeHealthStatus(nodeId: string, nodeRef?: TreeNode): HealthStatus | undefined {
 	if (!props.healthMetrics) return undefined;
 	
+	// Don't show status for nodes with monitoring disabled
+	if ((nodeRef as any)?.monitoringEnabled === false) return undefined;
+	
 	// Try to get metrics by IP (which is usually the node id)
 	const ip = (nodeRef as any)?.ip || nodeId;
 	const metrics = props.healthMetrics[ip];

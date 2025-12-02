@@ -27,14 +27,18 @@
 			<!-- Health Status Banner -->
 			<div 
 				class="px-4 py-3 border-b border-slate-200 dark:border-slate-700"
-				:class="statusBannerClass"
+				:class="monitoringEnabled ? statusBannerClass : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400'"
 			>
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-2">
-						<div class="w-3 h-3 rounded-full animate-pulse" :class="statusDotClass"></div>
-						<span class="font-medium text-sm">{{ statusLabel }}</span>
+						<div 
+							class="w-3 h-3 rounded-full" 
+							:class="monitoringEnabled ? [statusDotClass, 'animate-pulse'] : 'bg-slate-400'"
+						></div>
+						<span class="font-medium text-sm">{{ monitoringEnabled ? statusLabel : 'Monitoring Disabled' }}</span>
 					</div>
 					<button 
+						v-if="monitoringEnabled"
 						@click="refreshHealth"
 						:disabled="loading"
 						class="p-1.5 rounded hover:bg-white/20 dark:hover:bg-black/20 transition-colors disabled:opacity-50"
@@ -53,8 +57,11 @@
 						</svg>
 					</button>
 				</div>
-				<p v-if="metrics?.last_check" class="text-xs opacity-75 mt-1">
+				<p v-if="monitoringEnabled && metrics?.last_check" class="text-xs opacity-75 mt-1">
 					Last checked: {{ formatTimestamp(metrics.last_check) }}
+				</p>
+				<p v-else-if="!monitoringEnabled" class="text-xs opacity-75 mt-1">
+					Health checks are paused for this device
 				</p>
 			</div>
 
@@ -217,6 +224,53 @@
 							<span class="text-xs text-slate-500 dark:text-slate-400">Consecutive Failures</span>
 							<span class="text-sm font-medium text-red-600 dark:text-red-400">{{ metrics.consecutive_failures }}</span>
 						</div>
+						<!-- Monitoring Toggle -->
+						<div v-if="node?.ip" class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+							<span class="text-xs text-slate-500 dark:text-slate-400">Health Monitoring</span>
+							<button 
+								@click="toggleMonitoring"
+								class="relative w-11 h-6 rounded-full transition-colors"
+								:class="monitoringEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+								:title="monitoringEnabled ? 'Click to disable monitoring' : 'Click to enable monitoring'"
+							>
+								<span 
+									class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+									:class="monitoringEnabled ? 'translate-x-5' : 'translate-x-0'"
+								></span>
+							</button>
+						</div>
+					</div>
+				</section>
+			</div>
+
+			<!-- Device Info Only (when monitoring disabled) -->
+			<div v-else-if="!monitoringEnabled && node?.ip" class="p-4 space-y-4">
+				<section>
+					<h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Device Info</h3>
+					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+						<div class="flex items-center justify-between">
+							<span class="text-xs text-slate-500 dark:text-slate-400">Role</span>
+							<span class="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">{{ node?.role?.replace('/', ' / ') || 'Unknown' }}</span>
+						</div>
+						<div v-if="node?.connectionSpeed" class="flex items-center justify-between">
+							<span class="text-xs text-slate-500 dark:text-slate-400">Connection Speed</span>
+							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ node.connectionSpeed }}</span>
+						</div>
+						<!-- Monitoring Toggle -->
+						<div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+							<span class="text-xs text-slate-500 dark:text-slate-400">Health Monitoring</span>
+							<button 
+								@click="toggleMonitoring"
+								class="relative w-11 h-6 rounded-full transition-colors"
+								:class="monitoringEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+								:title="monitoringEnabled ? 'Click to disable monitoring' : 'Click to enable monitoring'"
+							>
+								<span 
+									class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200"
+									:class="monitoringEnabled ? 'translate-x-5' : 'translate-x-0'"
+								></span>
+							</button>
+						</div>
 					</div>
 				</section>
 			</div>
@@ -260,9 +314,22 @@ const props = defineProps<{
 
 const emit = defineEmits<{
 	(e: 'close'): void;
+	(e: 'toggleMonitoring', nodeId: string, enabled: boolean): void;
 }>();
 
 const { cachedMetrics } = useHealthMonitoring();
+
+// Whether monitoring is enabled for this node (default: true)
+const monitoringEnabled = computed(() => {
+	return props.node?.monitoringEnabled !== false;
+});
+
+function toggleMonitoring() {
+	if (props.node) {
+		const newState = !monitoringEnabled.value;
+		emit('toggleMonitoring', props.node.id, newState);
+	}
+}
 
 const localMetrics = ref<DeviceMetrics | null>(null);
 const loading = ref(false);

@@ -43,6 +43,8 @@ export interface TreeNode {
 	updatedAt?: string; // ISO timestamp when node was last modified
 	version?: number; // Increments on each change
 	history?: NodeVersion[]; // Previous versions for audit trail
+	// Health monitoring
+	monitoringEnabled?: boolean; // Whether to include this node in health monitoring (default: true)
 }
 
 export interface ParsedNetworkMap {

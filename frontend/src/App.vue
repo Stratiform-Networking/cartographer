@@ -293,6 +293,7 @@
 				v-if="showNodeInfoPanel && selectedNode"
 				:node="selectedNode"
 				@close="closeNodeInfoPanel"
+				@toggleMonitoring="onToggleNodeMonitoring"
 			/>
 		</div>
 		<!-- Terminal / Logs Panel -->
@@ -464,12 +465,19 @@ const { registerDevices, startPolling, stopPolling } = useHealthMonitoring();
 // Track if we've done initial registration
 let hasRegisteredDevices = false;
 
+// Helper to get IPs of devices that have monitoring enabled
+function getMonitoredDeviceIPs(root: TreeNode): string[] {
+	const devices = flattenDevices(root);
+	return devices
+		.filter(d => d.ip && d.monitoringEnabled !== false) // Only include nodes with monitoring enabled (default: true)
+		.map(d => d.ip!)
+		.filter((ip): ip is string => !!ip);
+}
+
 // Register devices for health monitoring whenever parsed changes
 watch(() => parsed.value?.root, async (root) => {
 	if (root) {
-		// Extract all IPs from the device tree
-		const devices = flattenDevices(root);
-		const ips = devices.map(d => d.ip).filter((ip): ip is string => !!ip);
+		const ips = getMonitoredDeviceIPs(root);
 		
 		if (ips.length > 0) {
 			await registerDevices(ips);
@@ -487,8 +495,7 @@ onMounted(async () => {
 	// If we already have parsed data (from MapControls loading saved layout),
 	// register devices now
 	if (parsed.value?.root && !hasRegisteredDevices) {
-		const devices = flattenDevices(parsed.value.root);
-		const ips = devices.map(d => d.ip).filter((ip): ip is string => !!ip);
+		const ips = getMonitoredDeviceIPs(parsed.value.root);
 		if (ips.length > 0) {
 			await registerDevices(ips);
 			hasRegisteredDevices = true;
@@ -808,6 +815,30 @@ function onNodeSelected(id: string | undefined) {
 
 function closeNodeInfoPanel() {
 	showNodeInfoPanel.value = false;
+}
+
+async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
+	if (!parsed.value?.root) return;
+	
+	// Find the node and update its monitoringEnabled property
+	const node = findNodeById(parsed.value.root, nodeId);
+	if (node) {
+		node.monitoringEnabled = enabled;
+		
+		// Update the version for change tracking
+		const now = new Date().toISOString();
+		node.updatedAt = now;
+		node.version = (node.version || 0) + 1;
+		
+		// Re-register devices with updated list
+		const ips = getMonitoredDeviceIPs(parsed.value.root);
+		await registerDevices(ips, true);
+		
+		console.log(`[Health] ${enabled ? 'Enabled' : 'Disabled'} monitoring for ${node.name || nodeId}`);
+		
+		// Trigger auto-save
+		triggerAutoSave();
+	}
 }
 
 function getNodeRoleColor(role?: string): string {

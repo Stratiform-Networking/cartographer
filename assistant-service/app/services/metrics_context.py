@@ -110,12 +110,24 @@ class MetricsContextService:
         
         return "\n".join(lines)
     
-    def _format_gateway_info(self, gateway: Dict[str, Any]) -> str:
-        """Format gateway/ISP information"""
+    def _format_gateway_info(self, gateway: Dict[str, Any], nodes: Dict[str, Any]) -> str:
+        """Format gateway/ISP information, including notes from the gateway node"""
         lines = []
         
         gw_ip = gateway.get("gateway_ip", "Unknown")
         lines.append(f"\n  Gateway: {gw_ip}")
+        
+        # Find the gateway node to get its name and notes
+        gateway_node = None
+        for node_id, node in nodes.items():
+            if node.get("ip") == gw_ip:
+                gateway_node = node
+                break
+        
+        if gateway_node:
+            gw_name = gateway_node.get("name")
+            if gw_name and gw_name != gw_ip:
+                lines.append(f"    Name: {gw_name}")
         
         # Test IPs (external connectivity)
         test_ips = gateway.get("test_ips", [])
@@ -138,6 +150,11 @@ class MetricsContextService:
             isp = speed_test.get("client_isp")
             if isp:
                 lines.append(f"    ISP: {isp}")
+        
+        # Include notes from the gateway node
+        if gateway_node and gateway_node.get("notes"):
+            notes = gateway_node.get("notes")
+            lines.append(f"    Notes: {notes}")
         
         return "\n".join(lines)
     
@@ -233,7 +250,7 @@ class MetricsContextService:
             lines.append(f"\n🌍 ISP & INTERNET CONNECTIVITY")
             lines.append("-" * 40)
             for gw in gateways:
-                lines.append(self._format_gateway_info(gw))
+                lines.append(self._format_gateway_info(gw, nodes))
         
         # Connections summary
         connections = snapshot.get("connections", [])

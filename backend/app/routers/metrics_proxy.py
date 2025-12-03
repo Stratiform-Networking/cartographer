@@ -123,6 +123,14 @@ async def get_gateways(user: AuthenticatedUser = Depends(require_auth)):
     return await proxy_request("GET", "/gateways")
 
 
+# ==================== Debug Endpoints ====================
+
+@router.get("/debug/layout")
+async def debug_layout(user: AuthenticatedUser = Depends(require_auth)):
+    """Debug: Get raw layout data to verify notes are saved. Requires authentication."""
+    return await proxy_request("GET", "/debug/layout")
+
+
 # ==================== Speed Test Endpoint ====================
 
 @router.post("/speed-test")

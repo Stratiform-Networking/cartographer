@@ -14,16 +14,6 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(BaseProvider):
     """Anthropic Claude API provider"""
     
-    # Known working models - these are the stable/latest aliases
-    KNOWN_MODELS = [
-        "claude-sonnet-4-20250514",
-        "claude-3-7-sonnet-20250219",
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022", 
-        "claude-3-opus-20240229",
-        "claude-3-haiku-20240307",
-    ]
-    
     @property
     def name(self) -> str:
         return "anthropic"
@@ -108,81 +98,70 @@ class AnthropicProvider(BaseProvider):
     
     async def list_models(self) -> List[str]:
         """List available Anthropic models from the API with pagination"""
-        try:
-            client = self._get_client()
+        client = self._get_client()
+        
+        # Fetch all models with pagination
+        # API: https://docs.anthropic.com/en/api/models-list
+        all_models = []
+        after_id = None
+        
+        while True:
+            # Build request params
+            kwargs = {"limit": 100}
+            if after_id:
+                kwargs["after_id"] = after_id
             
-            # Fetch all models with pagination
-            # API reference: https://platform.claude.com/docs/en/api/models/list
-            chat_models = []
-            after_id = None
+            page = await client.models.list(**kwargs)
             
-            while True:
-                # Build request params
-                params = {"limit": 100}
-                if after_id:
-                    params["after_id"] = after_id
-                
-                models_response = await client.models.list(**params)
-                
-                # Process models from this page
-                for model in models_response.data:
-                    model_id = model.id
-                    # Include all Claude models (the API only returns available models)
-                    if model_id.startswith('claude'):
-                        chat_models.append(model_id)
-                
-                # Check if there are more pages
-                if not models_response.has_more:
+            # Collect model IDs from this page
+            for model in page.data:
+                all_models.append(model.id)
+                logger.debug(f"Found Anthropic model: {model.id}")
+            
+            # Check for more pages
+            if not page.has_more:
+                break
+            
+            after_id = page.last_id
+        
+        logger.info(f"Retrieved {len(all_models)} models from Anthropic API")
+        
+        if not all_models:
+            raise RuntimeError("Anthropic API returned no models")
+        
+        # Sort with newest/best models first
+        def sort_key(model_name: str):
+            # Priority by model family (newest first)
+            version_priority = 10
+            if 'sonnet-4' in model_name or 'claude-4' in model_name:
+                version_priority = 0
+            elif '3-7' in model_name or '3.7' in model_name:
+                version_priority = 1
+            elif '3-5' in model_name or '3.5' in model_name:
+                version_priority = 2
+            elif 'opus' in model_name:
+                version_priority = 3
+            elif '3' in model_name:
+                version_priority = 4
+            
+            # Model type priority
+            type_priority = 5
+            if 'sonnet' in model_name:
+                type_priority = 0
+            elif 'haiku' in model_name:
+                type_priority = 1
+            elif 'opus' in model_name:
+                type_priority = 2
+            
+            # Get date suffix if present (newer dates first)
+            date_suffix = 0
+            parts = model_name.split('-')
+            for part in reversed(parts):
+                if part.isdigit() and len(part) == 8:
+                    date_suffix = int(part)
                     break
-                    
-                # Set cursor for next page
-                after_id = models_response.last_id
             
-            logger.info(f"Fetched {len(chat_models)} Anthropic models from API")
-            
-            # Sort with newest/best models first
-            def sort_key(model_name):
-                # Priority by model family (newest first)
-                version_priority = 10
-                if 'sonnet-4' in model_name or 'claude-4' in model_name:
-                    version_priority = 0
-                elif '3-7' in model_name or '3.7' in model_name:
-                    version_priority = 1
-                elif '3-5' in model_name or '3.5' in model_name:
-                    version_priority = 2
-                elif 'opus' in model_name:
-                    version_priority = 3
-                elif '3' in model_name:
-                    version_priority = 4
-                
-                # Model type priority (sonnet > haiku > opus for balance)
-                type_priority = 5
-                if 'sonnet' in model_name:
-                    type_priority = 0
-                elif 'haiku' in model_name:
-                    type_priority = 1
-                elif 'opus' in model_name:
-                    type_priority = 2
-                
-                # Get date suffix if present (newer dates first)
-                date_suffix = 0
-                parts = model_name.split('-')
-                for part in reversed(parts):
-                    if part.isdigit() and len(part) == 8:
-                        date_suffix = int(part)
-                        break
-                
-                return (version_priority, type_priority, -date_suffix, model_name)
-            
-            chat_models.sort(key=sort_key)
-            
-            # If API returned models, use them; otherwise fall back
-            if chat_models:
-                return chat_models
-            
-            return self.KNOWN_MODELS
-            
-        except Exception as e:
-            logger.warning(f"Failed to list Anthropic models: {e}")
-            # Fallback to known working models
-            return self.KNOWN_MODELS
+            return (version_priority, type_priority, -date_suffix, model_name)
+        
+        all_models.sort(key=sort_key)
+        return all_models

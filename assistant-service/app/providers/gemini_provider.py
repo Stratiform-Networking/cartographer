@@ -118,69 +118,64 @@ class GeminiProvider(BaseProvider):
     
     async def list_models(self) -> List[str]:
         """List available Gemini models from the API"""
-        try:
-            genai = self._configure_genai()
+        genai = self._configure_genai()
+        
+        # List models from the API
+        chat_models = []
+        for model in genai.list_models():
+            model_name = model.name
+            # Model names come as "models/gemini-1.5-flash" - extract just the model ID
+            if model_name.startswith('models/'):
+                model_id = model_name[7:]  # Remove "models/" prefix
+            else:
+                model_id = model_name
             
-            # List models from the API
-            chat_models = []
-            for model in genai.list_models():
-                model_name = model.name
-                # Model names come as "models/gemini-1.5-flash" - extract just the model ID
-                if model_name.startswith('models/'):
-                    model_id = model_name[7:]  # Remove "models/" prefix
-                else:
-                    model_id = model_name
-                
-                # Filter to generative models that support chat/generateContent
-                supported_methods = getattr(model, 'supported_generation_methods', [])
-                if 'generateContent' in supported_methods or 'streamGenerateContent' in supported_methods:
-                    # Include gemini models, exclude embedding/vision-only models
-                    if 'gemini' in model_id.lower():
-                        if not any(x in model_id.lower() for x in ['embedding', 'aqa', 'vision']):
-                            chat_models.append(model_id)
-            
-            # Sort with newest/best models first
-            def sort_key(model_name):
-                # Priority: 2.0 > 1.5 > 1.0, pro > flash
+            # Filter to generative models that support chat/generateContent
+            supported_methods = getattr(model, 'supported_generation_methods', [])
+            if 'generateContent' in supported_methods or 'streamGenerateContent' in supported_methods:
+                # Include gemini models, exclude embedding/vision-only models
+                if 'gemini' in model_id.lower():
+                    if not any(x in model_id.lower() for x in ['embedding', 'aqa']):
+                        chat_models.append(model_id)
+                        logger.debug(f"Found Gemini model: {model_id}")
+        
+        logger.info(f"Retrieved {len(chat_models)} models from Gemini API")
+        
+        if not chat_models:
+            raise RuntimeError("Gemini API returned no models")
+        
+        # Sort with newest/best models first
+        def sort_key(model_name):
+            # Priority: 2.0 > 1.5 > 1.0, pro > flash
+            version_priority = 0
+            if '2.0' in model_name or '2-0' in model_name:
                 version_priority = 0
-                if '2.0' in model_name or '2-0' in model_name:
-                    version_priority = 0
-                elif '1.5' in model_name or '1-5' in model_name:
-                    version_priority = 1
-                else:
-                    version_priority = 2
-                
-                # flash-8b < flash < pro
+            elif '1.5' in model_name or '1-5' in model_name:
+                version_priority = 1
+            else:
+                version_priority = 2
+            
+            # flash-8b < flash < pro
+            type_priority = 0
+            if 'pro' in model_name.lower():
                 type_priority = 0
-                if 'pro' in model_name.lower():
-                    type_priority = 0
-                elif 'flash-8b' in model_name.lower():
-                    type_priority = 2
-                elif 'flash' in model_name.lower():
-                    type_priority = 1
-                else:
-                    type_priority = 3
-                
-                return (version_priority, type_priority, model_name)
+            elif 'flash-8b' in model_name.lower():
+                type_priority = 2
+            elif 'flash' in model_name.lower():
+                type_priority = 1
+            else:
+                type_priority = 3
             
-            chat_models.sort(key=sort_key)
-            
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_models = []
-            for m in chat_models:
-                if m not in seen:
-                    seen.add(m)
-                    unique_models.append(m)
-            
-            return unique_models if unique_models else [self.default_model]
-            
-        except Exception as e:
-            logger.warning(f"Failed to list Gemini models: {e}")
-            # Fallback to known models
-            return [
-                "gemini-2.0-flash",
-                "gemini-1.5-pro",
-                "gemini-1.5-flash",
-                "gemini-1.5-flash-8b",
-            ]
+            return (version_priority, type_priority, model_name)
+        
+        chat_models.sort(key=sort_key)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_models = []
+        for m in chat_models:
+            if m not in seen:
+                seen.add(m)
+                unique_models.append(m)
+        
+        return unique_models

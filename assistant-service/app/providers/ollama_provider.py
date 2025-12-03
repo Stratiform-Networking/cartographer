@@ -112,11 +112,14 @@ class OllamaProvider(BaseProvider):
     
     async def list_models(self) -> List[str]:
         """List available Ollama models"""
-        try:
-            client = self._get_client()
-            response = await client.list()
-            models = response.get("models", [])
-            return [m.get("name", "") for m in models if m.get("name")]
-        except Exception as e:
-            logger.error(f"Failed to list Ollama models: {e}")
-            return [self.default_model]
+        client = self._get_client()
+        response = await client.list()
+        models = response.get("models", [])
+        
+        model_names = [m.get("name", "") for m in models if m.get("name")]
+        logger.info(f"Retrieved {len(model_names)} models from Ollama")
+        
+        if not model_names:
+            raise RuntimeError("Ollama returned no models - make sure you have pulled at least one model")
+        
+        return model_names

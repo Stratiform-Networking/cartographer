@@ -68,17 +68,11 @@ class ModelCache:
                 if now - cached_at < self._ttl:
                     return models
             
-            try:
-                models = await provider_instance.list_models()
-                self._cache[cache_key] = (models, now)
-                logger.info(f"Cached {len(models)} models for {provider.value}")
-                return models
-            except Exception as e:
-                logger.error(f"Failed to fetch models for {provider.value}: {e}")
-                # Return cached version if available, even if expired
-                if cache_key in self._cache:
-                    return self._cache[cache_key][0]
-                return [provider_instance.default_model]
+            # Fetch from API - let exceptions propagate
+            models = await provider_instance.list_models()
+            self._cache[cache_key] = (models, now)
+            logger.info(f"Cached {len(models)} models for {provider.value}")
+            return models
     
     def invalidate(self, provider: Optional[ModelProvider] = None):
         """Invalidate cache for a specific provider or all providers"""

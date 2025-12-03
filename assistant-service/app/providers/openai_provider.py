@@ -100,40 +100,33 @@ class OpenAIProvider(BaseProvider):
     
     async def list_models(self) -> List[str]:
         """List available OpenAI models from the API"""
-        try:
-            client = self._get_client()
-            models_response = await client.models.list()
-            
-            # Filter to chat models (gpt-* models that support chat)
-            chat_models = []
-            for model in models_response.data:
-                model_id = model.id
-                # Include GPT models that are chat-capable
-                if model_id.startswith(('gpt-4', 'gpt-3.5-turbo', 'o1', 'o3')):
-                    # Exclude embedding, instruct-only, and vision-specific variants
-                    if not any(x in model_id for x in ['embedding', 'instruct', 'vision', 'audio', 'realtime', 'transcribe', 'tts']):
-                        chat_models.append(model_id)
-            
-            # Sort with newest/best models first
-            priority_prefixes = ['o3', 'o1', 'gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
-            
-            def sort_key(model_name):
-                for i, prefix in enumerate(priority_prefixes):
-                    if model_name.startswith(prefix):
-                        return (i, model_name)
-                return (len(priority_prefixes), model_name)
-            
-            chat_models.sort(key=sort_key)
-            
-            return chat_models if chat_models else [self.default_model]
-            
-        except Exception as e:
-            logger.warning(f"Failed to list OpenAI models: {e}")
-            # Fallback to known models
-            return [
-                "gpt-4o",
-                "gpt-4o-mini",
-                "gpt-4-turbo",
-                "gpt-4",
-                "gpt-3.5-turbo",
-            ]
+        client = self._get_client()
+        models_response = await client.models.list()
+        
+        # Filter to chat models (gpt-* and o* models that support chat)
+        chat_models = []
+        for model in models_response.data:
+            model_id = model.id
+            # Include GPT and O-series models that are chat-capable
+            if model_id.startswith(('gpt-4', 'gpt-3.5-turbo', 'o1', 'o3')):
+                # Exclude non-chat variants
+                if not any(x in model_id for x in ['embedding', 'instruct', 'vision', 'audio', 'realtime', 'transcribe', 'tts']):
+                    chat_models.append(model_id)
+                    logger.debug(f"Found OpenAI model: {model_id}")
+        
+        logger.info(f"Retrieved {len(chat_models)} chat models from OpenAI API")
+        
+        if not chat_models:
+            raise RuntimeError("OpenAI API returned no chat models")
+        
+        # Sort with newest/best models first
+        priority_prefixes = ['o3', 'o1', 'gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']
+        
+        def sort_key(model_name):
+            for i, prefix in enumerate(priority_prefixes):
+                if model_name.startswith(prefix):
+                    return (i, model_name)
+            return (len(priority_prefixes), model_name)
+        
+        chat_models.sort(key=sort_key)
+        return chat_models

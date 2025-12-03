@@ -328,10 +328,26 @@ async def get_context_debug():
 @router.get("/context/raw")
 async def get_context_raw():
     """Debug endpoint to see raw snapshot data from metrics service"""
+    import httpx
+    import os
+    
+    METRICS_SERVICE_URL = os.environ.get("METRICS_SERVICE_URL", "http://localhost:8003")
+    
+    # First, let's get the raw snapshot from metrics service
     snapshot = await metrics_context_service.fetch_network_snapshot()
     
+    # Also try to get the layout directly to compare
+    layout_data = None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{METRICS_SERVICE_URL}/api/metrics/debug/layout")
+            if response.status_code == 200:
+                layout_data = response.json()
+    except Exception as e:
+        layout_data = {"error": str(e)}
+    
     if not snapshot:
-        return {"error": "Failed to fetch snapshot from metrics service"}
+        return {"error": "Failed to fetch snapshot from metrics service", "layout_debug": layout_data}
     
     # Extract key data for debugging
     nodes = snapshot.get("nodes", {})
@@ -371,6 +387,7 @@ async def get_context_raw():
         "total_gateways": len(gateways),
         "nodes": node_details,
         "gateways": gateway_details,
+        "layout_debug": layout_data,
     }
 
 

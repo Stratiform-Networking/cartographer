@@ -453,3 +453,40 @@ async def get_gateways():
         "count": len(snapshot.gateways),
         "gateways": [gw.model_dump(mode="json") for gw in snapshot.gateways]
     })
+
+
+@router.get("/debug/layout")
+async def debug_layout():
+    """Debug endpoint to see raw layout data from backend"""
+    layout = await metrics_aggregator._fetch_network_layout()
+    
+    if not layout:
+        return {"error": "Failed to fetch layout"}
+    
+    # Extract nodes with notes from the layout tree
+    def extract_nodes(node, depth=0):
+        result = [{
+            "id": node.get("id"),
+            "name": node.get("name"),
+            "ip": node.get("ip"),
+            "role": node.get("role"),
+            "notes": node.get("notes"),
+            "depth": depth,
+        }]
+        for child in node.get("children", []):
+            result.extend(extract_nodes(child, depth + 1))
+        return result
+    
+    root = layout.get("root", {})
+    nodes = extract_nodes(root) if root else []
+    
+    # Filter to only nodes with notes
+    nodes_with_notes = [n for n in nodes if n.get("notes")]
+    
+    return {
+        "layout_exists": layout is not None,
+        "has_root": "root" in layout,
+        "total_nodes": len(nodes),
+        "nodes_with_notes": nodes_with_notes,
+        "all_nodes": nodes,
+    }

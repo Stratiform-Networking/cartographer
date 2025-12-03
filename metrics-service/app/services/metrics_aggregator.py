@@ -126,9 +126,15 @@ class MetricsAggregator:
             return {}
     
     async def _fetch_gateway_test_ips(self) -> Dict[str, Any]:
-        """Fetch all gateway test IP configurations and metrics."""
+        """Fetch all gateway test IP metrics (with status) from health service."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
+                # Use the metrics endpoint which includes status, not just config
+                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/gateway/test-ips/all/metrics")
+                if response.status_code == 200:
+                    return response.json()
+                # Fallback to old endpoint if new one doesn't exist
+                logger.warning("New metrics endpoint not available, falling back to config endpoint")
                 response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/gateway/test-ips/all")
                 if response.status_code == 200:
                     return response.json()

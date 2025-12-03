@@ -228,9 +228,26 @@ async def trigger_immediate_check():
 @router.get("/gateway/test-ips/all")
 async def get_all_gateway_test_ips():
     """
-    Get all gateway test IP configurations.
+    Get all gateway test IP configurations (without metrics/status).
     """
     return health_checker.get_all_gateway_test_ips()
+
+
+@router.get("/gateway/test-ips/all/metrics")
+async def get_all_gateway_test_ip_metrics():
+    """
+    Get all gateway test IP metrics (with status) from cache.
+    Returns a dict mapping gateway_ip -> {test_ips: [...metrics...]}
+    """
+    result = {}
+    for gateway_ip in health_checker.get_all_gateway_test_ips().keys():
+        metrics = health_checker.get_cached_test_ip_metrics(gateway_ip)
+        result[gateway_ip] = {
+            "gateway_ip": gateway_ip,
+            "test_ips": [tip.model_dump(mode="json") for tip in metrics.test_ips],
+            "last_check": metrics.last_check.isoformat() if metrics.last_check else None,
+        }
+    return result
 
 
 @router.post("/gateway/{gateway_ip}/test-ips", response_model=GatewayTestIPConfig)

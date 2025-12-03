@@ -312,6 +312,68 @@ async def refresh_context():
     }
 
 
+@router.get("/context/debug")
+async def get_context_debug():
+    """Debug endpoint to see the full context string being sent to AI"""
+    metrics_context_service.clear_cache()  # Force fresh data
+    context_string, summary = await metrics_context_service.build_context_string()
+    
+    return {
+        "context_string": context_string,
+        "summary": summary,
+        "context_length": len(context_string),
+    }
+
+
+@router.get("/context/raw")
+async def get_context_raw():
+    """Debug endpoint to see raw snapshot data from metrics service"""
+    snapshot = await metrics_context_service.fetch_network_snapshot()
+    
+    if not snapshot:
+        return {"error": "Failed to fetch snapshot from metrics service"}
+    
+    # Extract key data for debugging
+    nodes = snapshot.get("nodes", {})
+    gateways = snapshot.get("gateways", [])
+    
+    # Get detailed node info
+    node_details = []
+    for node_id, node in nodes.items():
+        node_details.append({
+            "id": node_id,
+            "name": node.get("name"),
+            "ip": node.get("ip"),
+            "role": node.get("role"),
+            "notes": node.get("notes"),
+            "has_isp_info": node.get("isp_info") is not None,
+        })
+    
+    # Get gateway details
+    gateway_details = []
+    for gw in gateways:
+        gw_detail = {
+            "gateway_ip": gw.get("gateway_ip"),
+            "test_ips": [],
+        }
+        for tip in gw.get("test_ips", []):
+            gw_detail["test_ips"].append({
+                "ip": tip.get("ip"),
+                "label": tip.get("label"),
+                "status": tip.get("status"),
+                "status_type": str(type(tip.get("status"))),
+            })
+        gateway_details.append(gw_detail)
+    
+    return {
+        "snapshot_available": True,
+        "total_nodes": len(nodes),
+        "total_gateways": len(gateways),
+        "nodes": node_details,
+        "gateways": gateway_details,
+    }
+
+
 # ==================== Chat Endpoints ====================
 
 @router.post("/chat", response_model=ChatResponse)

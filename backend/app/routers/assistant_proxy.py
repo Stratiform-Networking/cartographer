@@ -87,6 +87,18 @@ async def refresh_context(user: AuthenticatedUser = Depends(require_auth)):
     return await proxy_request("POST", "/context/refresh")
 
 
+@router.get("/context/debug")
+async def get_context_debug(user: AuthenticatedUser = Depends(require_auth)):
+    """Debug: Get full context string sent to AI. Requires authentication."""
+    return await proxy_request("GET", "/context/debug")
+
+
+@router.get("/context/raw")
+async def get_context_raw(user: AuthenticatedUser = Depends(require_auth)):
+    """Debug: Get raw snapshot data from metrics. Requires authentication."""
+    return await proxy_request("GET", "/context/raw")
+
+
 # ==================== Chat Endpoints ====================
 
 @router.post("/chat")

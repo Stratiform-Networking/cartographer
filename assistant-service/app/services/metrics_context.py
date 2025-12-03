@@ -118,22 +118,55 @@ class MetricsContextService:
         lines.append(f"\n  Gateway: {gw_ip}")
         
         # Find the gateway node to get its name and notes
+        # The nodes dict is keyed by node_id, so we need to search by IP
         gateway_node = None
         for node_id, node in nodes.items():
-            if node.get("ip") == gw_ip:
+            node_ip = node.get("ip")
+            if node_ip and node_ip == gw_ip:
                 gateway_node = node
+                logger.debug(f"Found gateway node for {gw_ip}: {node.get('name')}")
                 break
         
         if gateway_node:
             gw_name = gateway_node.get("name")
             if gw_name and gw_name != gw_ip:
                 lines.append(f"    Name: {gw_name}")
+        else:
+            logger.warning(f"Could not find gateway node for IP {gw_ip}")
         
         # Test IPs (external connectivity)
         test_ips = gateway.get("test_ips", [])
         if test_ips:
-            healthy = sum(1 for t in test_ips if t.get("status") == "healthy")
+            # Count healthy test IPs - status can be "healthy" string or HealthStatus enum value
+            healthy = 0
+            for t in test_ips:
+                status = t.get("status")
+                # Handle both string "healthy" and potential dict/object forms
+                if isinstance(status, str):
+                    if status.lower() == "healthy":
+                        healthy += 1
+                elif isinstance(status, dict):
+                    # In case it's serialized as {"value": "healthy"}
+                    if status.get("value", "").lower() == "healthy":
+                        healthy += 1
+                logger.debug(f"Test IP {t.get('ip')}: status={status}, type={type(status)}")
+            
             lines.append(f"    External Connectivity: {healthy}/{len(test_ips)} test IPs healthy")
+            
+            # List individual test IPs with their status
+            for t in test_ips:
+                tip_ip = t.get("ip", "Unknown")
+                tip_label = t.get("label", "")
+                tip_status = t.get("status", "unknown")
+                if isinstance(tip_status, str):
+                    tip_status = tip_status.lower()
+                elif isinstance(tip_status, dict):
+                    tip_status = tip_status.get("value", "unknown").lower()
+                
+                tip_display = f"{tip_ip}"
+                if tip_label:
+                    tip_display += f" ({tip_label})"
+                lines.append(f"      - {tip_display}: {tip_status}")
         
         # Speed test results
         speed_test = gateway.get("last_speed_test")
@@ -210,9 +243,25 @@ class MetricsContextService:
         nodes_by_role = {}
         for node_id, node in nodes.items():
             role = node.get("role", "unknown")
+            # Normalize role string (handle both enum value and potential variations)
+            if isinstance(role, str):
+                role = role.lower()
+            else:
+                role = "unknown"
+            
+            # Map common variations
+            if "gateway" in role or "router" in role:
+                role = "gateway/router"
+            elif "switch" in role or "ap" in role or "access" in role:
+                role = "switch/ap"
+            
             if role not in nodes_by_role:
                 nodes_by_role[role] = []
             nodes_by_role[role].append(node)
+            
+            # Debug log for nodes with notes
+            if node.get("notes"):
+                logger.debug(f"Node with notes: {node.get('name')} ({node.get('ip')}): {node.get('notes')[:50]}...")
         
         # Role display order
         role_order = [
@@ -246,10 +295,19 @@ class MetricsContextService:
         
         # Gateway/ISP information
         gateways = snapshot.get("gateways", [])
+        logger.debug(f"Found {len(gateways)} gateways in snapshot")
+        
+        # Log all gateway nodes for debugging
+        for node_id, node in nodes.items():
+            node_role = node.get("role")
+            if node_role and "gateway" in str(node_role).lower():
+                logger.debug(f"Gateway node: id={node_id}, ip={node.get('ip')}, name={node.get('name')}, notes={node.get('notes')}")
+        
         if gateways:
             lines.append(f"\n🌍 ISP & INTERNET CONNECTIVITY")
             lines.append("-" * 40)
             for gw in gateways:
+                logger.debug(f"Processing gateway: {gw.get('gateway_ip')}, test_ips count: {len(gw.get('test_ips', []))}")
                 lines.append(self._format_gateway_info(gw, nodes))
         
         # Connections summary

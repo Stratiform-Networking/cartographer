@@ -195,6 +195,8 @@ export type PortStatus = "active" | "unused" | "blocked"; // blocked = does not 
 
 export type PortSpeed = "10M" | "100M" | "1G" | "2.5G" | "5G" | "10G" | "25G" | "40G" | "100G" | "auto" | string;
 
+export type PoeStatus = "off" | "poe" | "poe+" | "poe++"; // 802.3af (15W), 802.3at (30W), 802.3bt (60W+)
+
 export interface LanPort {
 	// Position in the grid (1-indexed)
 	row: number;
@@ -208,6 +210,9 @@ export interface LanPort {
 	// Speed configuration
 	speed?: PortSpeed; // Configured speed
 	negotiatedSpeed?: PortSpeed; // Actual negotiated speed (if different)
+	
+	// PoE configuration
+	poe?: PoeStatus; // Power over Ethernet status
 	
 	// Connection info
 	connectedDeviceId?: string; // ID of the connected TreeNode

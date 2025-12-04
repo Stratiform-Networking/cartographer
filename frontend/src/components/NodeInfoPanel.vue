@@ -474,21 +474,52 @@
 
 						<!-- Port Grid Display -->
 						<div v-else class="space-y-3">
-							<!-- Grid Actions -->
+							<!-- Grid Actions & Edit Mode Toggle -->
 							<div v-if="hasWritePermission" class="flex items-center justify-between">
 								<span class="text-xs text-slate-500 dark:text-slate-400">
 									{{ lanPortsConfig.cols }} × {{ lanPortsConfig.rows }} grid ({{ lanPortsConfig.ports.length }} ports)
 								</span>
-								<button
-									@click="showPortGridSetup = true; portGridCols = lanPortsConfig.cols; portGridRows = lanPortsConfig.rows"
-									class="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
-								>
-									Resize Grid
-								</button>
+								<div class="flex items-center gap-2">
+									<!-- Edit Mode Toggle -->
+									<button
+										@click="portEditMode = !portEditMode"
+										class="flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors"
+										:class="portEditMode 
+											? 'bg-amber-500 text-white' 
+											: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+										:title="portEditMode ? 'Exit edit mode' : 'Enter edit mode to configure ports'"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+										</svg>
+										{{ portEditMode ? 'Done' : 'Edit Ports' }}
+									</button>
+									<button
+										@click="showPortGridSetup = true; portGridCols = lanPortsConfig.cols; portGridRows = lanPortsConfig.rows"
+										class="text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+									>
+										Resize
+									</button>
+								</div>
+							</div>
+
+							<!-- Mode indicator -->
+							<div 
+								v-if="hasWritePermission"
+								class="text-xs px-2 py-1 rounded text-center"
+								:class="portEditMode 
+									? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' 
+									: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'"
+							>
+								{{ portEditMode ? '⚙️ Edit Mode: Click ports to configure type, speed, status & PoE' : '🔌 Click ports to set connections' }}
 							</div>
 
 							<!-- Visual Port Grid -->
-							<div class="bg-slate-100 dark:bg-slate-900 rounded-lg p-3 overflow-x-auto">
+							<div 
+								class="rounded-lg p-3 overflow-x-auto transition-colors"
+								:class="portEditMode ? 'bg-amber-50 dark:bg-amber-900/10 ring-2 ring-amber-400/50' : 'bg-slate-100 dark:bg-slate-900'"
+							>
 								<div 
 									class="grid gap-1.5 min-w-fit"
 									:style="{ gridTemplateColumns: `repeat(${lanPortsConfig.cols}, minmax(32px, 1fr))` }"
@@ -496,7 +527,7 @@
 									<div 
 										v-for="port in sortedPorts"
 										:key="`${port.row}-${port.col}`"
-										@click="hasWritePermission && openPortEditor(port)"
+										@click="hasWritePermission && onPortClick(port)"
 										class="relative group cursor-pointer"
 									>
 										<!-- Port Visual -->
@@ -517,6 +548,14 @@
 											class="absolute -top-1 -right-1 px-1 py-0.5 text-[8px] font-bold rounded bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-800 leading-none"
 										>
 											{{ formatSpeedShort(port.negotiatedSpeed || port.speed) }}
+										</div>
+										<!-- PoE indicator (lightning bolt) -->
+										<div 
+											v-if="port.poe && port.poe !== 'off' && port.status !== 'blocked'"
+											class="absolute -top-1 -left-1 text-[10px] leading-none"
+											:title="getPoeLabel(port.poe)"
+										>
+											⚡
 										</div>
 										<!-- Connection indicator (dot if connected) -->
 										<div 
@@ -550,6 +589,10 @@
 									<div class="w-2 h-2 rounded-full bg-emerald-500"></div>
 									<span>Connected</span>
 								</div>
+								<div class="flex items-center gap-1">
+									<span>⚡</span>
+									<span>PoE</span>
+								</div>
 							</div>
 
 							<!-- Active Connections List -->
@@ -569,7 +612,8 @@
 											{{ conn.connectedDeviceName || conn.connectionLabel || 'Unknown device' }}
 										</span>
 									</div>
-									<div class="flex items-center gap-2">
+									<div class="flex items-center gap-1.5">
+										<span v-if="conn.poe && conn.poe !== 'off'" class="text-[10px]" :title="getPoeLabel(conn.poe)">⚡</span>
 										<span 
 											v-if="conn.speed || conn.negotiatedSpeed"
 											class="px-1.5 py-0.5 rounded text-[10px] font-medium"
@@ -599,19 +643,23 @@
 					</div>
 				</section>
 
-				<!-- Port Editor Modal -->
+				<!-- Port Configuration Modal (Edit Mode) -->
 				<Teleport to="body">
 					<div 
-						v-if="editingPort" 
+						v-if="editingPort && portEditMode" 
 						class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 						@click.self="closePortEditor"
 					>
 						<div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-80 max-h-[80vh] overflow-auto">
-							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-								<h4 class="font-semibold text-slate-800 dark:text-slate-100">
-									Edit Port {{ getPortLabel(editingPort) }}
+							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20">
+								<h4 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+										<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+									</svg>
+									Configure Port {{ getPortLabel(editingPort) }}
 								</h4>
-								<button @click="closePortEditor" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+								<button @click="closePortEditor" class="p-1 rounded hover:bg-amber-100 dark:hover:bg-slate-700">
 									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
 									</svg>
@@ -649,19 +697,34 @@
 								<!-- Port Type -->
 								<div v-if="editingPort.status !== 'blocked'">
 									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">Port Type</label>
-									<select 
-										v-model="editingPort.type"
-										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-									>
-										<option value="rj45">RJ45 (Copper)</option>
-										<option value="sfp">SFP (1G Fiber)</option>
-										<option value="sfp+">SFP+ (10G Fiber)</option>
-									</select>
+									<div class="grid grid-cols-3 gap-1">
+										<button
+											@click="editingPort.type = 'rj45'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="editingPort.type === 'rj45' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+										>
+											RJ45
+										</button>
+										<button
+											@click="editingPort.type = 'sfp'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="editingPort.type === 'sfp' ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+										>
+											SFP
+										</button>
+										<button
+											@click="editingPort.type = 'sfp+'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="editingPort.type === 'sfp+' ? 'bg-cyan-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+										>
+											SFP+
+										</button>
+									</div>
 								</div>
 
 								<!-- Port Speed -->
-								<div v-if="editingPort.status === 'active'">
-									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">Configured Speed</label>
+								<div v-if="editingPort.status !== 'blocked'">
+									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">Speed</label>
 									<select 
 										v-model="editingPort.speed"
 										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
@@ -679,31 +742,123 @@
 									</select>
 								</div>
 
-								<!-- Negotiated Speed (optional override) -->
-								<div v-if="editingPort.status === 'active'">
-									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">
-										Negotiated Speed 
-										<span class="font-normal text-slate-400">(actual link speed)</span>
-									</label>
-									<select 
-										v-model="editingPort.negotiatedSpeed"
-										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+								<!-- PoE Status -->
+								<div v-if="editingPort.status !== 'blocked' && editingPort.type === 'rj45'">
+									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">Power over Ethernet (PoE)</label>
+									<div class="grid grid-cols-4 gap-1">
+										<button
+											@click="editingPort.poe = 'off'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="(!editingPort.poe || editingPort.poe === 'off') ? 'bg-slate-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+										>
+											Off
+										</button>
+										<button
+											@click="editingPort.poe = 'poe'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="editingPort.poe === 'poe' ? 'bg-yellow-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											title="802.3af - 15W"
+										>
+											PoE
+										</button>
+										<button
+											@click="editingPort.poe = 'poe+'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="editingPort.poe === 'poe+' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											title="802.3at - 30W"
+										>
+											PoE+
+										</button>
+										<button
+											@click="editingPort.poe = 'poe++'"
+											class="px-2 py-1.5 text-xs rounded transition-colors"
+											:class="editingPort.poe === 'poe++' ? 'bg-red-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											title="802.3bt - 60W+"
+										>
+											PoE++
+										</button>
+									</div>
+									<p class="text-[10px] text-slate-400 mt-1">
+										{{ getPoeDescription(editingPort.poe) }}
+									</p>
+								</div>
+							</div>
+							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+								<button
+									@click="closePortEditor"
+									class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+								>
+									Cancel
+								</button>
+								<button
+									@click="savePortChanges"
+									class="px-3 py-1.5 text-sm rounded bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+								>
+									Save
+								</button>
+							</div>
+						</div>
+					</div>
+				</Teleport>
+
+				<!-- Connection Editor Modal (Normal Mode) -->
+				<Teleport to="body">
+					<div 
+						v-if="editingPort && !portEditMode" 
+						class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+						@click.self="closePortEditor"
+					>
+						<div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-80 max-h-[80vh] overflow-auto">
+							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+								<h4 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+									</svg>
+									Port {{ getPortLabel(editingPort) }} Connection
+								</h4>
+								<button @click="closePortEditor" class="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							</div>
+
+							<!-- Port Info Summary -->
+							<div class="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+								<div class="flex items-center gap-3 text-xs">
+									<span 
+										class="px-1.5 py-0.5 rounded"
+										:class="editingPort.type === 'rj45' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' : 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400'"
 									>
-										<option value="">Same as configured</option>
-										<option value="10M">10 Mbps</option>
-										<option value="100M">100 Mbps</option>
-										<option value="1G">1 Gbps</option>
-										<option value="2.5G">2.5 Gbps</option>
-										<option value="5G">5 Gbps</option>
-										<option value="10G">10 Gbps</option>
-										<option value="25G">25 Gbps</option>
-										<option value="40G">40 Gbps</option>
-										<option value="100G">100 Gbps</option>
-									</select>
+										{{ editingPort.type.toUpperCase() }}
+									</span>
+									<span v-if="editingPort.speed" class="text-slate-600 dark:text-slate-400">
+										{{ editingPort.speed }}
+									</span>
+									<span v-if="editingPort.poe && editingPort.poe !== 'off'" class="flex items-center gap-0.5 text-yellow-600 dark:text-yellow-400">
+										⚡ {{ editingPort.poe.toUpperCase() }}
+									</span>
+									<span 
+										class="ml-auto px-1.5 py-0.5 rounded text-[10px]"
+										:class="{
+											'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400': editingPort.status === 'active',
+											'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400': editingPort.status === 'unused',
+											'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400': editingPort.status === 'blocked'
+										}"
+									>
+										{{ editingPort.status }}
+									</span>
+								</div>
+							</div>
+
+							<div class="p-4 space-y-4">
+								<!-- Warning if port is blocked -->
+								<div v-if="editingPort.status === 'blocked'" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-xs text-red-700 dark:text-red-300">
+									This port is blocked. Switch to Edit Mode to change its status.
 								</div>
 
 								<!-- Connected Device -->
-								<div v-if="editingPort.status === 'active'">
+								<div v-if="editingPort.status !== 'blocked'">
 									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">Connected Device</label>
 									<select 
 										v-model="editingPort.connectedDeviceId"
@@ -722,7 +877,7 @@
 								</div>
 
 								<!-- Connection Label (custom) -->
-								<div v-if="editingPort.status === 'active'">
+								<div v-if="editingPort.status !== 'blocked'">
 									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">
 										Connection Label 
 										<span class="font-normal text-slate-400">(optional)</span>
@@ -734,20 +889,54 @@
 										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									/>
 								</div>
+
+								<!-- Negotiated Speed (actual link speed) -->
+								<div v-if="editingPort.status === 'active'">
+									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">
+										Actual Link Speed
+										<span class="font-normal text-slate-400">(negotiated)</span>
+									</label>
+									<select 
+										v-model="editingPort.negotiatedSpeed"
+										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+									>
+										<option value="">Same as configured</option>
+										<option value="10M">10 Mbps</option>
+										<option value="100M">100 Mbps</option>
+										<option value="1G">1 Gbps</option>
+										<option value="2.5G">2.5 Gbps</option>
+										<option value="5G">5 Gbps</option>
+										<option value="10G">10 Gbps</option>
+										<option value="25G">25 Gbps</option>
+										<option value="40G">40 Gbps</option>
+										<option value="100G">100 Gbps</option>
+									</select>
+								</div>
 							</div>
-							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
 								<button
-									@click="closePortEditor"
-									class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+									@click="portEditMode = true"
+									class="text-xs text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
 								>
-									Cancel
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+									</svg>
+									Edit port config
 								</button>
-								<button
-									@click="savePortChanges"
-									class="px-3 py-1.5 text-sm rounded bg-cyan-500 hover:bg-cyan-600 text-white transition-colors"
-								>
-									Save
-								</button>
+								<div class="flex gap-2">
+									<button
+										@click="closePortEditor"
+										class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+									>
+										Cancel
+									</button>
+									<button
+										@click="savePortChanges"
+										class="px-3 py-1.5 text-sm rounded bg-cyan-500 hover:bg-cyan-600 text-white transition-colors"
+									>
+										Save
+									</button>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -1697,7 +1886,7 @@
 <script lang="ts" setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue';
 import axios from 'axios';
-import type { TreeNode, DeviceMetrics, HealthStatus, GatewayTestIP, GatewayTestIPMetrics, GatewayTestIPsResponse, SpeedTestResult, LanPortsConfig, LanPort, PortType, PortStatus, PortSpeed } from '../types/network';
+import type { TreeNode, DeviceMetrics, HealthStatus, GatewayTestIP, GatewayTestIPMetrics, GatewayTestIPsResponse, SpeedTestResult, LanPortsConfig, LanPort, PortType, PortStatus, PortSpeed, PoeStatus } from '../types/network';
 import MetricCard from './MetricCard.vue';
 import { useHealthMonitoring } from '../composables/useHealthMonitoring';
 
@@ -2313,6 +2502,7 @@ const portGridRows = ref(2);
 const defaultPortType = ref<PortType>('rj45');
 const editingPort = ref<LanPort | null>(null);
 const originalEditingPort = ref<LanPort | null>(null);
+const portEditMode = ref(false); // Edit mode for configuring port type, speed, status, PoE
 
 // Local copy of lanPorts config that we can modify
 const lanPortsConfig = ref<LanPortsConfig | null>(null);
@@ -2332,6 +2522,7 @@ watch(() => props.node?.id, () => {
 	showPortGridSetup.value = false;
 	editingPort.value = null;
 	lanPortsExpanded.value = true;
+	portEditMode.value = false;
 });
 
 // Get sorted ports (row by row, column by column)
@@ -2433,12 +2624,15 @@ function getPortTooltip(port: LanPort): string {
 	const parts: string[] = [`Port ${getPortLabel(port)}`];
 	
 	if (port.status === 'blocked') {
-		parts.push('(Blocked/Unused)');
+		parts.push('(Blocked/Does not exist)');
 	} else {
 		parts.push(`Type: ${port.type.toUpperCase()}`);
 		if (port.status === 'active') {
 			if (port.negotiatedSpeed || port.speed) {
 				parts.push(`Speed: ${port.negotiatedSpeed || port.speed}`);
+			}
+			if (port.poe && port.poe !== 'off') {
+				parts.push(`PoE: ${port.poe.toUpperCase()}`);
 			}
 			if (port.connectedDeviceName) {
 				parts.push(`Connected to: ${port.connectedDeviceName}`);
@@ -2478,16 +2672,38 @@ function getSpeedBadgeClass(speed?: PortSpeed): string {
 	return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400';
 }
 
-function openPortEditor(port: LanPort) {
+function onPortClick(port: LanPort) {
 	if (!hasWritePermission.value) return;
 	// Create a deep copy for editing
 	editingPort.value = JSON.parse(JSON.stringify(port));
 	originalEditingPort.value = port;
 }
 
+function openPortEditor(port: LanPort) {
+	onPortClick(port);
+}
+
 function closePortEditor() {
 	editingPort.value = null;
 	originalEditingPort.value = null;
+}
+
+function getPoeLabel(poe?: PoeStatus): string {
+	switch (poe) {
+		case 'poe': return 'PoE (802.3af, 15W)';
+		case 'poe+': return 'PoE+ (802.3at, 30W)';
+		case 'poe++': return 'PoE++ (802.3bt, 60W+)';
+		default: return 'No PoE';
+	}
+}
+
+function getPoeDescription(poe?: PoeStatus): string {
+	switch (poe) {
+		case 'poe': return '802.3af - Up to 15W power delivery';
+		case 'poe+': return '802.3at - Up to 30W power delivery';
+		case 'poe++': return '802.3bt - Up to 60W+ power delivery';
+		default: return 'Power over Ethernet disabled';
+	}
 }
 
 function onConnectedDeviceChange() {
@@ -2520,6 +2736,11 @@ function savePortChanges() {
 			editingPort.value.connectionLabel = undefined;
 			editingPort.value.speed = undefined;
 			editingPort.value.negotiatedSpeed = undefined;
+		}
+		
+		// Clear PoE if blocked or not RJ45 (PoE is only for copper ports)
+		if (editingPort.value.status === 'blocked' || editingPort.value.type !== 'rj45') {
+			editingPort.value.poe = undefined;
 		}
 		
 		lanPortsConfig.value.ports[portIndex] = { ...editingPort.value };

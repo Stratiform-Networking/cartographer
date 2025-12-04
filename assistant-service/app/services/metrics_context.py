@@ -338,15 +338,10 @@ class MetricsContextService:
             lines.append(f"  ❓ Unknown: {unknown}")
         
         # Organize nodes by role
-        # Filter out root node and group nodes to match frontend's device count
+        # Filter out group nodes to match frontend's device count
         nodes = snapshot.get("nodes", {})
-        root_node_id = snapshot.get("root_node_id")
         nodes_by_role = {}
         for node_id, node in nodes.items():
-            # Skip root node and group nodes (matches frontend's flattenDevices logic)
-            if node_id == root_node_id:
-                continue
-            
             role = node.get("role", "unknown")
             # Normalize role string (handle both enum value and potential variations)
             if isinstance(role, str):
@@ -424,12 +419,10 @@ class MetricsContextService:
         if connections:
             lines.append(f"\n🔗 NETWORK CONNECTIONS: {len(connections)} total")
         
-        # User notes summary - collect all nodes with notes (excluding root and groups)
+        # User notes summary - collect all nodes with notes (excluding groups)
         nodes_with_notes = []
         for node_id, node in nodes.items():
-            # Skip root node and group nodes
-            if node_id == root_node_id:
-                continue
+            # Skip group nodes
             node_role = node.get("role", "")
             if isinstance(node_role, str) and node_role.lower() == "group":
                 continue

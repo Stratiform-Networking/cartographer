@@ -513,8 +513,9 @@ class MetricsAggregator:
             speed_test_results,
         )
         
-        # Count node statuses (excluding root and group nodes to match frontend)
-        # The frontend's flattenDevices excludes the root node and filters out role="group"
+        # Count node statuses (excluding group nodes to match frontend)
+        # The frontend's flattenDevices filters out role="group" nodes
+        # Note: The root node (gateway) IS counted as a device since it appears as a child of a group
         status_counts = {
             HealthStatus.HEALTHY: 0,
             HealthStatus.DEGRADED: 0,
@@ -524,7 +525,7 @@ class MetricsAggregator:
 
         device_nodes = {
             node_id: node for node_id, node in nodes.items()
-            if node_id != root_node_id and node.role != DeviceRole.GROUP
+            if node.role != DeviceRole.GROUP
         }
         for node in device_nodes.values():
             status_counts[node.status] = status_counts.get(node.status, 0) + 1
@@ -559,8 +560,6 @@ class MetricsAggregator:
             f"degraded={status_counts[HealthStatus.DEGRADED]}, "
             f"unhealthy={status_counts[HealthStatus.UNHEALTHY]}, "
             f"total tree nodes={len(nodes)})"
-            f"Nodes: {nodes}"
-            f"Filtered devices: {device_nodes}"
         )
         
         return snapshot

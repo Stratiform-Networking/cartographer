@@ -479,7 +479,7 @@ class MetricsAggregator:
             # Queue children
             for child in children:
                 queue.append((child, depth + 1, node_metrics.id))
-        
+
         return nodes, connections, root_node_id
     
     # ==================== Snapshot Generation ====================
@@ -521,6 +521,7 @@ class MetricsAggregator:
             HealthStatus.UNHEALTHY: 0,
             HealthStatus.UNKNOWN: 0,
         }
+
         device_nodes = {
             node_id: node for node_id, node in nodes.items()
             if node_id != root_node_id and node.role != DeviceRole.GROUP
@@ -558,6 +559,7 @@ class MetricsAggregator:
             f"degraded={status_counts[HealthStatus.DEGRADED]}, "
             f"unhealthy={status_counts[HealthStatus.UNHEALTHY]}, "
             f"total tree nodes={len(nodes)})"
+            f"Nodes: {nodes}"
         )
         
         return snapshot

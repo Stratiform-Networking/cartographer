@@ -254,6 +254,11 @@ class DeviceBaseline(BaseModel):
     hourly_availability: Dict[int, float] = Field(default_factory=dict)  # hour -> availability %
     daily_availability: Dict[int, float] = Field(default_factory=dict)  # day_of_week -> availability %
     
+    # Stable state detection
+    is_stable_offline: bool = False  # True if device is consistently offline (normal behavior)
+    is_stable_online: bool = False  # True if device is consistently online (normal behavior)
+    state_transitions: int = 0  # Number of times device changed state (online <-> offline)
+    
     # Timestamps
     first_seen: Optional[datetime] = None
     last_updated: Optional[datetime] = None

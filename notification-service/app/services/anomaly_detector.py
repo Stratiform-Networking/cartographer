@@ -37,6 +37,10 @@ LATENCY_ZSCORE_THRESHOLD = 3.0  # Standard deviations from mean
 PACKET_LOSS_THRESHOLD = 0.1  # 10% packet loss is concerning
 UNEXPECTED_OFFLINE_THRESHOLD = 0.9  # If device is usually online 90%+ of time
 MIN_SAMPLES_FOR_BASELINE = 10  # Minimum samples before making predictions
+STABLE_STATE_MIN_SAMPLES = 20  # Minimum samples to consider a device in stable state
+STABLE_STATE_TRANSITION_RATIO = 0.1  # Max ratio of state transitions to be considered stable
+STABLE_OFFLINE_AVAILABILITY_THRESHOLD = 20.0  # Below this % availability, device is considered "normally offline"
+STABLE_ONLINE_AVAILABILITY_THRESHOLD = 80.0  # Above this % availability, device is considered "normally online"
 
 
 @dataclass
@@ -200,6 +204,57 @@ class DeviceStats:
         expected = "online" if hour_avail >= 50 else "offline"
         
         return (expected, confidence)
+    
+    def is_stable_state(self, min_samples: int = STABLE_STATE_MIN_SAMPLES, 
+                        transition_ratio: float = STABLE_STATE_TRANSITION_RATIO) -> bool:
+        """
+        Check if the device is in a stable state (consistently online or offline).
+        
+        A device is considered stable if:
+        - It has enough samples
+        - The ratio of state transitions to total checks is low
+        """
+        if self.total_checks < min_samples:
+            return False
+        
+        # Calculate transition ratio (state changes per check)
+        if self.total_checks <= 1:
+            return False
+            
+        actual_transition_ratio = self.state_transitions / (self.total_checks - 1)
+        return actual_transition_ratio <= transition_ratio
+    
+    def is_stable_offline(self, min_samples: int = STABLE_STATE_MIN_SAMPLES,
+                          transition_ratio: float = STABLE_STATE_TRANSITION_RATIO,
+                          availability_threshold: float = STABLE_OFFLINE_AVAILABILITY_THRESHOLD) -> bool:
+        """
+        Check if device is consistently offline (this is its normal state).
+        
+        Returns True if device:
+        - Has enough samples
+        - Has very low availability (mostly offline)
+        - Has few state transitions (stable behavior)
+        """
+        if not self.is_stable_state(min_samples, transition_ratio):
+            return False
+        
+        return self.availability < availability_threshold
+    
+    def is_stable_online(self, min_samples: int = STABLE_STATE_MIN_SAMPLES,
+                         transition_ratio: float = STABLE_STATE_TRANSITION_RATIO,
+                         availability_threshold: float = STABLE_ONLINE_AVAILABILITY_THRESHOLD) -> bool:
+        """
+        Check if device is consistently online (this is its normal state).
+        
+        Returns True if device:
+        - Has enough samples  
+        - Has very high availability (mostly online)
+        - Has few state transitions (stable behavior)
+        """
+        if not self.is_stable_state(min_samples, transition_ratio):
+            return False
+        
+        return self.availability > availability_threshold
     
     def to_dict(self) -> Dict:
         """Serialize to dictionary"""
@@ -383,6 +438,22 @@ class AnomalyDetector:
                 confidence=0.0,
             )
         
+        # Check for stable offline device - this is the device's normal behavior
+        # Don't flag consistently offline devices as anomalies
+        if not success and stats.is_stable_offline():
+            logger.debug(
+                f"Device {device_ip} is in stable offline state "
+                f"(availability: {stats.availability:.1f}%, "
+                f"transitions: {stats.state_transitions}/{stats.total_checks}, "
+                f"samples: {stats.total_checks})"
+            )
+            return AnomalyDetectionResult(
+                is_anomaly=False,
+                anomaly_score=0.0,
+                reason="Device is in stable offline state (learned baseline behavior)",
+                confidence=min(stats.total_checks / 100.0, 1.0),
+            )
+        
         contributing_factors = []
         max_anomaly_score = 0.0
         detected_type = None
@@ -526,9 +597,19 @@ class AnomalyDetector:
         # Check for state change
         state_changed = previous_state and previous_state != current_state
         
+        # Check if device is in a stable offline state (this is its normal behavior)
+        is_stable_offline_device = stats and stats.is_stable_offline()
+        
         if not success:
             # Device is offline
-            if result.is_anomaly:
+            if is_stable_offline_device:
+                # This device is normally offline - don't notify
+                logger.debug(
+                    f"Skipping notification for stable offline device {device_ip} "
+                    f"(availability: {stats.availability:.1f}%)"
+                )
+                should_notify = False
+            elif result.is_anomaly:
                 should_notify = True
                 event_type = NotificationType.ANOMALY_DETECTED
                 priority = NotificationPriority.HIGH
@@ -626,6 +707,9 @@ class AnomalyDetector:
             offline_count=stats.failed_checks,
             hourly_availability=hourly_avail,
             daily_availability=daily_avail,
+            is_stable_offline=stats.is_stable_offline(),
+            is_stable_online=stats.is_stable_online(),
+            state_transitions=stats.state_transitions,
             first_seen=stats.first_seen,
             last_updated=stats.last_updated,
             model_version=self.MODEL_VERSION,

@@ -30,6 +30,11 @@ from ..models import (
     TestIPMetrics,
     SpeedTestMetrics,
     SpeedTestMetrics,
+    LanPortsConfig,
+    LanPort,
+    PortType,
+    PortStatus,
+    PoeStatus,
 )
 from .redis_publisher import redis_publisher
 
@@ -295,6 +300,66 @@ class MetricsAggregator:
             check_history=self._transform_check_history(test_ip_data.get("check_history", [])),
         )
     
+    def _transform_lan_ports(self, lan_ports_data: Optional[Dict]) -> Optional[LanPortsConfig]:
+        """Transform LAN ports configuration from layout data."""
+        if not lan_ports_data:
+            return None
+        
+        ports = []
+        for port_data in lan_ports_data.get("ports", []):
+            # Parse port type
+            port_type_str = port_data.get("type", "rj45").lower()
+            try:
+                if port_type_str == "sfp+":
+                    port_type = PortType.SFP_PLUS
+                else:
+                    port_type = PortType(port_type_str)
+            except ValueError:
+                port_type = PortType.RJ45
+            
+            # Parse port status
+            port_status_str = port_data.get("status", "unused").lower()
+            try:
+                port_status = PortStatus(port_status_str)
+            except ValueError:
+                port_status = PortStatus.UNUSED
+            
+            # Parse PoE status
+            poe_status = None
+            poe_str = port_data.get("poe")
+            if poe_str:
+                try:
+                    if poe_str == "poe+":
+                        poe_status = PoeStatus.POE_PLUS
+                    elif poe_str == "poe++":
+                        poe_status = PoeStatus.POE_PLUS_PLUS
+                    else:
+                        poe_status = PoeStatus(poe_str.lower())
+                except ValueError:
+                    poe_status = None
+            
+            ports.append(LanPort(
+                row=port_data.get("row", 1),
+                col=port_data.get("col", 1),
+                port_number=port_data.get("portNumber"),
+                type=port_type,
+                status=port_status,
+                speed=port_data.get("speed"),
+                negotiated_speed=port_data.get("negotiatedSpeed"),
+                poe=poe_status,
+                connected_device_id=port_data.get("connectedDeviceId"),
+                connected_device_name=port_data.get("connectedDeviceName"),
+                connection_label=port_data.get("connectionLabel"),
+            ))
+        
+        return LanPortsConfig(
+            rows=lan_ports_data.get("rows", 1),
+            cols=lan_ports_data.get("cols", 1),
+            ports=ports,
+            label_format=lan_ports_data.get("labelFormat", "numeric"),
+            start_number=lan_ports_data.get("startNumber", 1),
+        )
+    
     # ==================== Node Processing ====================
     
     def _process_node(
@@ -400,6 +465,9 @@ class MetricsAggregator:
                     last_speed_test_timestamp=last_speed_timestamp,
                 )
         
+        # Transform LAN ports if present
+        lan_ports = self._transform_lan_ports(node_data.get("lanPorts"))
+        
         # Create the node metrics
         node_metrics = NodeMetrics(
             id=node_id,
@@ -422,6 +490,7 @@ class MetricsAggregator:
             updated_at=updated_at,
             version=node_data.get("version"),
             isp_info=isp_info,
+            lan_ports=lan_ports,
             monitoring_enabled=node_data.get("monitoringEnabled", True),
         )
         

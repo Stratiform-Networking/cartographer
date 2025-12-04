@@ -168,11 +168,74 @@ class MetricsContextService:
             )
             lines.append(f"    Open Ports: {ports_str}")
         
+        # LAN Ports configuration
+        lan_ports = node.get("lan_ports")
+        if lan_ports:
+            lines.append(self._format_lan_ports(lan_ports))
+        
         # Notes
         if node.get("notes"):
             lines.append(f"    Notes: {node['notes']}")
         
         return "\n".join(lines)
+    
+    def _format_lan_ports(self, lan_ports: Dict[str, Any]) -> str:
+        """Format LAN ports configuration for a device"""
+        lines = []
+        
+        rows = lan_ports.get("rows", 0)
+        cols = lan_ports.get("cols", 0)
+        ports = lan_ports.get("ports", [])
+        
+        if not ports:
+            return ""
+        
+        total_ports = len(ports)
+        active_ports = [p for p in ports if p.get("status") == "active"]
+        unused_ports = [p for p in ports if p.get("status") == "unused"]
+        blocked_ports = [p for p in ports if p.get("status") == "blocked"]
+        
+        # Count port types
+        rj45_count = len([p for p in ports if p.get("type") == "rj45" and p.get("status") != "blocked"])
+        sfp_count = len([p for p in ports if p.get("type") in ["sfp", "sfp+"] and p.get("status") != "blocked"])
+        poe_count = len([p for p in ports if p.get("poe") and p.get("poe") != "off"])
+        
+        lines.append(f"    LAN Ports: {total_ports} total ({rows}x{cols} grid)")
+        lines.append(f"      Port Types: {rj45_count} RJ45, {sfp_count} SFP/SFP+")
+        lines.append(f"      Status: {len(active_ports)} active, {len(unused_ports)} unused, {len(blocked_ports)} blocked")
+        
+        if poe_count > 0:
+            lines.append(f"      PoE Enabled: {poe_count} ports")
+        
+        # List active connections
+        connected_ports = [p for p in active_ports if p.get("connected_device_id") or p.get("connected_device_name")]
+        if connected_ports:
+            lines.append(f"      Active Connections ({len(connected_ports)}):")
+            for port in connected_ports[:10]:  # Limit to first 10 connections
+                port_num = self._get_port_label(port, lan_ports)
+                port_type = port.get("type", "rj45").upper()
+                speed = port.get("negotiated_speed") or port.get("speed") or "auto"
+                connected_to = port.get("connected_device_name") or port.get("connection_label") or "Unknown device"
+                poe_info = ""
+                if port.get("poe") and port.get("poe") != "off":
+                    poe_info = f" [PoE: {port.get('poe').upper()}]"
+                
+                lines.append(f"        Port {port_num} ({port_type}, {speed}) → {connected_to}{poe_info}")
+        
+        return "\n".join(lines)
+    
+    def _get_port_label(self, port: Dict[str, Any], lan_ports: Dict[str, Any]) -> str:
+        """Get the display label for a port"""
+        if port.get("port_number"):
+            return str(port.get("port_number"))
+        
+        # Calculate port number from position
+        row = port.get("row", 1)
+        col = port.get("col", 1)
+        cols = lan_ports.get("cols", 1)
+        start_num = lan_ports.get("start_number", 1)
+        
+        return str((row - 1) * cols + col + start_num - 1)
     
     def _format_gateway_info(self, gateway: Dict[str, Any], nodes: Dict[str, Any]) -> str:
         """Format gateway/ISP information, including notes from the gateway node"""
@@ -418,6 +481,35 @@ class MetricsContextService:
         connections = snapshot.get("connections", [])
         if connections:
             lines.append(f"\n🔗 NETWORK CONNECTIONS: {len(connections)} total")
+        
+        # LAN Infrastructure summary - devices with configured LAN ports
+        lan_devices = []
+        for node_id, node in nodes.items():
+            lan_ports = node.get("lan_ports")
+            if lan_ports and lan_ports.get("ports"):
+                ports = lan_ports.get("ports", [])
+                active_ports = [p for p in ports if p.get("status") == "active"]
+                connected_ports = [p for p in active_ports if p.get("connected_device_id") or p.get("connected_device_name")]
+                lan_devices.append({
+                    "name": node.get("name", node_id),
+                    "ip": node.get("ip", "N/A"),
+                    "total_ports": len(ports),
+                    "active_ports": len(active_ports),
+                    "connected_ports": len(connected_ports),
+                    "lan_ports": lan_ports,
+                })
+        
+        if lan_devices:
+            lines.append(f"\n🔌 LAN INFRASTRUCTURE")
+            lines.append("-" * 40)
+            total_lan_ports = sum(d["total_ports"] for d in lan_devices)
+            total_active = sum(d["active_ports"] for d in lan_devices)
+            total_connected = sum(d["connected_ports"] for d in lan_devices)
+            lines.append(f"  Devices with LAN ports: {len(lan_devices)}")
+            lines.append(f"  Total ports: {total_lan_ports}")
+            lines.append(f"  Active ports: {total_active}")
+            lines.append(f"  Connected ports: {total_connected}")
+            lines.append(f"\n  Port details are listed under each device above.")
         
         # User notes summary - collect all nodes with notes (excluding groups)
         nodes_with_notes = []

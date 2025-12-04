@@ -117,6 +117,68 @@ class GatewayISPInfo(BaseModel):
     last_speed_test_timestamp: Optional[datetime] = None
 
 
+# ==================== LAN Port Metrics ====================
+
+class PortType(str, Enum):
+    """Physical port type"""
+    RJ45 = "rj45"
+    SFP = "sfp"
+    SFP_PLUS = "sfp+"
+
+
+class PortStatus(str, Enum):
+    """Port status"""
+    ACTIVE = "active"
+    UNUSED = "unused"
+    BLOCKED = "blocked"  # Does not exist or permanently disabled
+
+
+class PoeStatus(str, Enum):
+    """Power over Ethernet status"""
+    OFF = "off"
+    POE = "poe"      # 802.3af - 15W
+    POE_PLUS = "poe+"  # 802.3at - 30W
+    POE_PLUS_PLUS = "poe++"  # 802.3bt - 60W+
+
+
+class LanPort(BaseModel):
+    """Individual LAN port configuration and status"""
+    # Position in the grid (1-indexed)
+    row: int
+    col: int
+    
+    # Port configuration
+    port_number: Optional[int] = None  # Optional port label/number
+    type: PortType = PortType.RJ45
+    status: PortStatus = PortStatus.UNUSED
+    
+    # Speed configuration
+    speed: Optional[str] = None  # Configured speed (e.g., "1G", "10G")
+    negotiated_speed: Optional[str] = None  # Actual negotiated speed
+    
+    # PoE configuration
+    poe: Optional[PoeStatus] = None
+    
+    # Connection info
+    connected_device_id: Optional[str] = None
+    connected_device_name: Optional[str] = None
+    connection_label: Optional[str] = None
+
+
+class LanPortsConfig(BaseModel):
+    """LAN ports configuration for a network device"""
+    # Grid dimensions
+    rows: int
+    cols: int
+    
+    # Port definitions
+    ports: List[LanPort] = []
+    
+    # Display options
+    label_format: Optional[str] = "numeric"  # "numeric", "alpha", or "custom"
+    start_number: int = 1
+
+
 # ==================== Node Connection Metrics ====================
 
 class NodeConnection(BaseModel):
@@ -173,6 +235,9 @@ class NodeMetrics(BaseModel):
     
     # ISP info (for gateway devices)
     isp_info: Optional[GatewayISPInfo] = None
+    
+    # LAN port configuration (for switches, routers, servers)
+    lan_ports: Optional[LanPortsConfig] = None
     
     # Monitoring config
     monitoring_enabled: bool = True

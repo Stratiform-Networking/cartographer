@@ -560,6 +560,7 @@ class MetricsAggregator:
             f"unhealthy={status_counts[HealthStatus.UNHEALTHY]}, "
             f"total tree nodes={len(nodes)})"
             f"Nodes: {nodes}"
+            f"Filtered devices: {device_nodes}"
         )
         
         return snapshot

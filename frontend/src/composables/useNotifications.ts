@@ -269,6 +269,37 @@ export function useNotifications() {
     await axios.delete(`${API_BASE}/scheduled/${broadcastId}`);
   }
 
+  // ==================== Silenced Devices (Monitoring Disabled) ====================
+
+  // Get list of silenced devices
+  async function getSilencedDevices(): Promise<string[]> {
+    const response = await axios.get<{ devices: string[] }>(`${API_BASE}/silenced-devices`);
+    return response.data.devices;
+  }
+
+  // Set full list of silenced devices
+  async function setSilencedDevices(deviceIps: string[]): Promise<void> {
+    await axios.post(`${API_BASE}/silenced-devices`, deviceIps);
+  }
+
+  // Silence a specific device (disable monitoring notifications)
+  async function silenceDevice(deviceIp: string): Promise<void> {
+    await axios.post(`${API_BASE}/silenced-devices/${encodeURIComponent(deviceIp)}`);
+  }
+
+  // Unsilence a device (enable monitoring notifications)
+  async function unsilenceDevice(deviceIp: string): Promise<void> {
+    await axios.delete(`${API_BASE}/silenced-devices/${encodeURIComponent(deviceIp)}`);
+  }
+
+  // Check if a device is silenced
+  async function isDeviceSilenced(deviceIp: string): Promise<boolean> {
+    const response = await axios.get<{ silenced: boolean }>(
+      `${API_BASE}/silenced-devices/${encodeURIComponent(deviceIp)}`
+    );
+    return response.data.silenced;
+  }
+
   return {
     isLoading,
     error,
@@ -286,6 +317,11 @@ export function useNotifications() {
     scheduleBroadcast,
     cancelScheduledBroadcast,
     deleteScheduledBroadcast,
+    getSilencedDevices,
+    setSilencedDevices,
+    silenceDevice,
+    unsilenceDevice,
+    isDeviceSilenced,
   };
 }
 

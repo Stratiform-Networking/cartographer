@@ -45,6 +45,7 @@ DATA_DIR = Path(os.environ.get("NOTIFICATION_DATA_DIR", "/app/data"))
 PREFERENCES_FILE = DATA_DIR / "notification_preferences.json"
 HISTORY_FILE = DATA_DIR / "notification_history.json"
 SCHEDULED_FILE = DATA_DIR / "scheduled_broadcasts.json"
+SILENCED_DEVICES_FILE = DATA_DIR / "silenced_devices.json"
 
 # Rate limiting
 MAX_HISTORY_SIZE = 1000  # Keep last 1000 notifications in memory
@@ -61,11 +62,13 @@ class NotificationManager:
         self._rate_limits: Dict[str, deque] = {}  # user_id -> deque of timestamps
         self._scheduled_broadcasts: Dict[str, ScheduledBroadcast] = {}
         self._scheduler_task: Optional[asyncio.Task] = None
+        self._silenced_devices: set = set()  # Device IPs with monitoring disabled
         
         # Load persisted data
         self._load_preferences()
         self._load_history()
         self._load_scheduled_broadcasts()
+        self._load_silenced_devices()
     
     def _save_preferences(self):
         """Save preferences to disk"""
@@ -171,6 +174,68 @@ class NotificationManager:
             logger.info(f"Loaded {len(self._scheduled_broadcasts)} scheduled broadcasts")
         except Exception as e:
             logger.error(f"Failed to load scheduled broadcasts: {e}")
+    
+    def _save_silenced_devices(self):
+        """Save silenced devices list to disk"""
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            
+            with open(SILENCED_DEVICES_FILE, 'w') as f:
+                json.dump(list(self._silenced_devices), f, indent=2)
+            
+            logger.debug(f"Saved {len(self._silenced_devices)} silenced devices")
+        except Exception as e:
+            logger.error(f"Failed to save silenced devices: {e}")
+    
+    def _load_silenced_devices(self):
+        """Load silenced devices list from disk"""
+        try:
+            if not SILENCED_DEVICES_FILE.exists():
+                return
+            
+            with open(SILENCED_DEVICES_FILE, 'r') as f:
+                data = json.load(f)
+            
+            self._silenced_devices = set(data)
+            logger.info(f"Loaded {len(self._silenced_devices)} silenced devices")
+        except Exception as e:
+            logger.error(f"Failed to load silenced devices: {e}")
+    
+    # ==================== Silenced Devices (Monitoring Disabled) ====================
+    
+    def is_device_silenced(self, device_ip: str) -> bool:
+        """Check if a device has monitoring/notifications disabled"""
+        return device_ip in self._silenced_devices
+    
+    def silence_device(self, device_ip: str) -> bool:
+        """Silence notifications for a device (monitoring disabled)"""
+        if device_ip in self._silenced_devices:
+            return False
+        
+        self._silenced_devices.add(device_ip)
+        self._save_silenced_devices()
+        logger.info(f"Silenced device {device_ip}")
+        return True
+    
+    def unsilence_device(self, device_ip: str) -> bool:
+        """Re-enable notifications for a device (monitoring enabled)"""
+        if device_ip not in self._silenced_devices:
+            return False
+        
+        self._silenced_devices.discard(device_ip)
+        self._save_silenced_devices()
+        logger.info(f"Unsilenced device {device_ip}")
+        return True
+    
+    def set_silenced_devices(self, device_ips: List[str]) -> None:
+        """Set the full list of silenced devices"""
+        self._silenced_devices = set(device_ips)
+        self._save_silenced_devices()
+        logger.info(f"Set {len(self._silenced_devices)} silenced devices")
+    
+    def get_silenced_devices(self) -> List[str]:
+        """Get list of silenced device IPs"""
+        return list(self._silenced_devices)
     
     # ==================== Scheduled Broadcast Scheduler ====================
     
@@ -682,8 +747,15 @@ class NotificationManager:
         
         This should be called after each health check to train the ML model
         and potentially send notifications.
+        
+        Note: Devices with monitoring disabled (silenced) will still train the
+        ML model but will not trigger notifications.
         """
+        # Check if device has monitoring disabled (silenced)
+        is_silenced = self.is_device_silenced(device_ip)
+        
         # Let the anomaly detector analyze and potentially create an event
+        # We still train the ML model even for silenced devices
         event = anomaly_detector.create_network_event(
             device_ip=device_ip,
             success=success,
@@ -693,10 +765,12 @@ class NotificationManager:
             previous_state=previous_state,
         )
         
-        if event:
+        if event and not is_silenced:
             # Broadcast to all users who should receive this notification
             results = await self.broadcast_notification(event)
             logger.info(f"Broadcasted notification to {len(results)} users: {event.title}")
+        elif event and is_silenced:
+            logger.debug(f"Skipping notification for silenced device {device_ip}: {event.title}")
 
 
 # Singleton instance

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routers.notifications import router as notifications_router
 from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
+from .services.anomaly_detector import anomaly_detector
 
 # Configure logging
 logging.basicConfig(
@@ -52,6 +53,11 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Notification Service...")
+    
+    # Save ML model state
+    logger.info("Saving ML anomaly detection model state...")
+    anomaly_detector.save()
+    logger.info("ML model state saved")
     
     # Stop scheduled broadcast scheduler
     await notification_manager.stop_scheduler()

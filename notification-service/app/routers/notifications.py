@@ -294,3 +294,39 @@ async def delete_scheduled_broadcast(broadcast_id: str):
         raise HTTPException(status_code=400, detail="Cannot delete broadcast (not found or still pending)")
     return {"success": True, "message": "Broadcast deleted"}
 
+
+# ==================== Silenced Devices (Monitoring Disabled) ====================
+
+@router.get("/silenced-devices")
+async def get_silenced_devices():
+    """Get list of devices with notifications silenced (monitoring disabled)"""
+    return {"devices": notification_manager.get_silenced_devices()}
+
+
+@router.post("/silenced-devices")
+async def set_silenced_devices(device_ips: List[str]):
+    """Set the full list of silenced devices"""
+    notification_manager.set_silenced_devices(device_ips)
+    return {"success": True, "count": len(device_ips)}
+
+
+@router.post("/silenced-devices/{device_ip}")
+async def silence_device(device_ip: str):
+    """Silence notifications for a specific device (disable monitoring)"""
+    success = notification_manager.silence_device(device_ip)
+    return {"success": True, "already_silenced": not success}
+
+
+@router.delete("/silenced-devices/{device_ip}")
+async def unsilence_device(device_ip: str):
+    """Re-enable notifications for a device (enable monitoring)"""
+    success = notification_manager.unsilence_device(device_ip)
+    return {"success": True, "was_silenced": success}
+
+
+@router.get("/silenced-devices/{device_ip}")
+async def check_device_silenced(device_ip: str):
+    """Check if a specific device is silenced"""
+    is_silenced = notification_manager.is_device_silenced(device_ip)
+    return {"device_ip": device_ip, "silenced": is_silenced}
+

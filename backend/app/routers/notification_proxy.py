@@ -12,6 +12,7 @@ from typing import Optional
 from ..dependencies import (
     AuthenticatedUser,
     require_auth,
+    require_write_access,
     require_owner,
 )
 
@@ -307,6 +308,39 @@ async def cancel_scheduled_broadcast(broadcast_id: str, user: AuthenticatedUser 
 async def delete_scheduled_broadcast(broadcast_id: str, user: AuthenticatedUser = Depends(require_owner)):
     """Delete a scheduled broadcast. Owner only."""
     return await proxy_request("DELETE", f"/scheduled/{broadcast_id}")
+
+
+# ==================== Silenced Devices (Monitoring Disabled) ====================
+
+@router.get("/silenced-devices")
+async def get_silenced_devices(user: AuthenticatedUser = Depends(require_auth)):
+    """Get list of devices with notifications silenced."""
+    return await proxy_request("GET", "/silenced-devices")
+
+
+@router.post("/silenced-devices")
+async def set_silenced_devices(request: Request, user: AuthenticatedUser = Depends(require_write_access)):
+    """Set the full list of silenced devices. Requires write access."""
+    body = await request.json()
+    return await proxy_request("POST", "/silenced-devices", json_body=body)
+
+
+@router.post("/silenced-devices/{device_ip}")
+async def silence_device(device_ip: str, user: AuthenticatedUser = Depends(require_write_access)):
+    """Silence notifications for a device. Requires write access."""
+    return await proxy_request("POST", f"/silenced-devices/{device_ip}")
+
+
+@router.delete("/silenced-devices/{device_ip}")
+async def unsilence_device(device_ip: str, user: AuthenticatedUser = Depends(require_write_access)):
+    """Re-enable notifications for a device. Requires write access."""
+    return await proxy_request("DELETE", f"/silenced-devices/{device_ip}")
+
+
+@router.get("/silenced-devices/{device_ip}")
+async def check_device_silenced(device_ip: str, user: AuthenticatedUser = Depends(require_auth)):
+    """Check if a device is silenced."""
+    return await proxy_request("GET", f"/silenced-devices/{device_ip}")
 
 
 # ==================== Internal Endpoints (for health service integration) ====================

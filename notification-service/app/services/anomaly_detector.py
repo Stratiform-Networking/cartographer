@@ -347,8 +347,9 @@ class AnomalyDetector:
         
         self._last_training = check_time
         
-        # Periodically save state (every 100 updates)
-        if stats.total_checks % 100 == 0:
+        # Periodically save state (every 50 updates or every 10 for new devices)
+        save_interval = 10 if stats.total_checks < 100 else 50
+        if stats.total_checks % save_interval == 0:
             self._save_state()
     
     def detect_anomaly(
@@ -465,6 +466,8 @@ class AnomalyDetector:
         
         if is_anomaly:
             self._anomalies_detected += 1
+            # Save state when anomaly is detected (important event)
+            self._save_state()
         
         # Calculate confidence based on sample size
         confidence = min(stats.total_checks / 100.0, 1.0)
@@ -661,6 +664,11 @@ class AnomalyDetector:
         self._last_training = None
         self._save_state()
         logger.info("Reset all anomaly detection data")
+    
+    def save(self):
+        """Public method to save state - call on shutdown"""
+        self._save_state()
+        logger.info(f"Saved anomaly detector state with {len(self._device_stats)} devices and {sum(s.total_checks for s in self._device_stats.values())} total samples")
 
 
 # Singleton instance

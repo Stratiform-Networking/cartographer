@@ -72,7 +72,7 @@ defineEmits<{
 	(e: "select", id: string): void;
 }>();
 
-const { cachedMetrics } = useHealthMonitoring();
+const { cachedMetrics, monitoringStatus } = useHealthMonitoring();
 
 const query = ref("");
 
@@ -224,8 +224,12 @@ function getStatusBackground(node: TreeNode): string {
 	const ip = (node as any).ip;
 	if (!ip) return '';
 	
+	// Check if device is in the actively monitored list
+	const isMonitored = monitoringStatus.value?.monitored_devices?.includes(ip);
+	if (!isMonitored) return ''; // Not monitored - leave default
+	
 	const metrics = cachedMetrics.value?.[ip];
-	if (!metrics) return ''; // Not monitored - leave default
+	if (!metrics) return ''; // No metrics yet
 	
 	switch (metrics.status) {
 		case 'healthy': return 'bg-emerald-50 dark:bg-emerald-900/20';

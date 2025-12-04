@@ -279,28 +279,28 @@
 								<!-- Preview grid -->
 								<div v-if="portGridCols > 0 && portGridRows > 0" class="mt-3">
 									<p class="text-xs text-slate-500 dark:text-slate-400 mb-2">Preview ({{ portGridCols }} × {{ portGridRows }} = {{ portGridCols * portGridRows }} ports)</p>
-									<div class="bg-slate-200 dark:bg-slate-700 rounded p-2 overflow-x-auto">
+									<div class="bg-slate-200 dark:bg-slate-700 rounded p-2 pb-3 overflow-x-auto">
 										<div 
-											class="grid gap-1"
+											class="grid gap-1.5 gap-y-2.5"
 											:style="{ gridTemplateColumns: `repeat(${portGridCols}, minmax(20px, 1fr))` }"
 										>
 											<div 
 												v-for="n in portGridCols * portGridRows"
 												:key="n"
-												class="h-5 text-[9px] flex items-center justify-center font-mono border relative overflow-hidden"
+												class="h-5 text-[9px] flex items-center justify-center font-mono border relative"
 												:class="defaultPortType === 'rj45' 
 													? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 border-amber-400 dark:border-amber-600 rounded-sm' 
 													: 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-600 rounded'"
 											>
-												<!-- RJ45 clip notch (cutout at bottom) -->
+												<!-- RJ45 clip tab (sticks out at bottom) -->
 												<div 
 													v-if="defaultPortType === 'rj45'"
-													class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-slate-200 dark:bg-slate-700 rounded-t-sm"
+													class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-amber-300 dark:bg-amber-700 border border-amber-400 dark:border-amber-600 rounded-b-sm"
 												></div>
 												<!-- SFP pull tab -->
 												<div 
 													v-if="defaultPortType !== 'rj45'"
-													class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
+													class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
 												></div>
 												<span class="relative z-10">{{ n }}</span>
 											</div>
@@ -375,11 +375,11 @@
 
 							<!-- Visual Port Grid -->
 							<div 
-								class="rounded-lg p-3 overflow-x-auto transition-colors"
+								class="rounded-lg p-3 pb-4 overflow-x-auto transition-colors"
 								:class="portEditMode ? 'bg-amber-50 dark:bg-amber-900/10 ring-2 ring-amber-400/50' : 'bg-slate-100 dark:bg-slate-900'"
 							>
 								<div 
-									class="grid gap-1.5 min-w-fit"
+									class="grid gap-2 gap-y-3 min-w-fit"
 									:style="{ gridTemplateColumns: `repeat(${lanPortsConfig.cols}, minmax(32px, 1fr))` }"
 								>
 									<div 
@@ -390,15 +390,17 @@
 									>
 										<!-- Port Visual -->
 										<div 
-											class="h-8 flex items-center justify-center text-[10px] font-mono font-medium border-2 transition-all relative overflow-hidden"
+											class="h-8 flex items-center justify-center text-[10px] font-mono font-medium border-2 transition-all relative"
 											:class="[getPortClasses(port), getPortShape(port)]"
 											:title="getPortTooltip(port)"
 										>
-											<!-- RJ45 clip notch (cutout at bottom) -->
+											<!-- RJ45 clip tab (sticks out at bottom) -->
 											<div 
 												v-if="port.type === 'rj45' && port.status !== 'blocked'"
-												class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-1.5 rounded-t-sm"
-												:class="portEditMode ? 'bg-amber-50 dark:bg-amber-900/10' : 'bg-slate-100 dark:bg-slate-900'"
+												class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2.5 h-1.5 border-2 rounded-b-sm"
+												:class="port.status === 'active' 
+													? 'bg-amber-300 dark:bg-amber-700 border-amber-400 dark:border-amber-600' 
+													: 'bg-slate-400 dark:bg-slate-600 border-slate-500 dark:border-slate-500'"
 											></div>
 											<!-- SFP handle/pull tab indicator -->
 											<div 
@@ -443,14 +445,14 @@
 							<!-- Legend -->
 							<div class="flex flex-wrap gap-3 text-[10px] text-slate-500 dark:text-slate-400">
 								<div class="flex items-center gap-1">
-									<div class="w-3 h-3.5 rounded-sm bg-amber-200 dark:bg-amber-800 border border-amber-400 dark:border-amber-600 relative overflow-hidden">
-										<div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-slate-100 dark:bg-slate-900 rounded-t-sm"></div>
+									<div class="w-3 h-3 rounded-sm bg-amber-200 dark:bg-amber-800 border border-amber-400 dark:border-amber-600 relative mb-1">
+										<div class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-amber-300 dark:bg-amber-700 border border-amber-400 dark:border-amber-600 rounded-b-sm"></div>
 									</div>
 									<span>RJ45</span>
 								</div>
 								<div class="flex items-center gap-1">
-									<div class="w-4 h-2.5 rounded bg-cyan-200 dark:bg-cyan-800 border border-cyan-400 dark:border-cyan-600 relative overflow-hidden">
-										<div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-cyan-600 dark:bg-cyan-400 opacity-30 rounded-full"></div>
+									<div class="w-4 h-2.5 rounded bg-cyan-200 dark:bg-cyan-800 border border-cyan-400 dark:border-cyan-600 relative">
+										<div class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-cyan-600 dark:bg-cyan-400 opacity-30 rounded-full"></div>
 									</div>
 									<span>SFP/SFP+</span>
 								</div>
@@ -1501,27 +1503,30 @@
 								{{ hasWritePermission ? 'Enable monitoring to configure LAN ports' : 'No ports configured' }}
 							</p>
 						</div>
-						<div v-else class="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 overflow-x-auto">
+						<div v-else class="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 pb-3 overflow-x-auto">
 							<div 
-								class="grid gap-1 min-w-fit"
+								class="grid gap-1.5 gap-y-2.5 min-w-fit"
 								:style="{ gridTemplateColumns: `repeat(${lanPortsConfig.cols}, minmax(24px, 1fr))` }"
 							>
 								<div 
 									v-for="port in sortedPorts"
 									:key="`disabled-${port.row}-${port.col}`"
-									class="h-6 text-[9px] flex items-center justify-center font-mono border relative overflow-hidden"
+									class="h-6 text-[9px] flex items-center justify-center font-mono border relative"
 									:class="[getPortClasses(port), getPortShape(port)]"
 									:title="getPortTooltip(port)"
 								>
-									<!-- RJ45 clip notch (cutout at bottom) -->
+									<!-- RJ45 clip tab (sticks out at bottom) -->
 									<div 
 										v-if="port.type === 'rj45' && port.status !== 'blocked'"
-										class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1 bg-slate-100 dark:bg-slate-900 rounded-t-sm"
+										class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1 border rounded-b-sm"
+										:class="port.status === 'active' 
+											? 'bg-amber-300 dark:bg-amber-700 border-amber-400 dark:border-amber-600' 
+											: 'bg-slate-400 dark:bg-slate-600 border-slate-500 dark:border-slate-500'"
 									></div>
 									<!-- SFP pull tab -->
 									<div 
 										v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"
-										class="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
+										class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
 									></div>
 									<span v-if="port.status !== 'blocked'" class="relative z-10">{{ getPortLabel(port) }}</span>
 									<span v-else class="text-slate-400 dark:text-slate-600 relative z-10">✕</span>

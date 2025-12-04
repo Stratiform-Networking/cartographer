@@ -24,6 +24,7 @@ from ..models import (
     GatewayTestIPsResponse,
     SpeedTestResult,
 )
+from .notification_reporter import report_health_check
 
 logger = logging.getLogger(__name__)
 
@@ -443,6 +444,15 @@ class HealthChecker:
         
         # Cache the results
         self._metrics_cache[ip] = metrics
+        
+        # Report to notification service (async, fire-and-forget to not slow down checks)
+        asyncio.create_task(report_health_check(
+            device_ip=ip,
+            success=ping_result.success,
+            latency_ms=ping_result.avg_latency_ms,
+            packet_loss=ping_result.packet_loss_percent / 100.0 if ping_result.packet_loss_percent else None,
+            device_name=dns_result.resolved_hostname if dns_result and dns_result.resolved_hostname else None,
+        ))
         
         return metrics
     

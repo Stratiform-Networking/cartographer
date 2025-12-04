@@ -43,6 +43,8 @@ services:
       - METRICS_SERVICE_URL=http://localhost:8003
       # Assistant service is on localhost when using host network
       - ASSISTANT_SERVICE_URL=http://localhost:8004
+      # Notification service is on localhost when using host network
+      - NOTIFICATION_SERVICE_URL=http://localhost:8005
     # Network scanning requires elevated privileges
     cap_add:
       - NET_ADMIN
@@ -56,6 +58,8 @@ services:
       metrics:
         condition: service_healthy
       assistant:
+        condition: service_healthy
+      notifications:
         condition: service_healthy
 
   # Health Monitoring Microservice
@@ -71,6 +75,8 @@ services:
     environment:
       - CORS_ORIGINS=*
       - HEALTH_DATA_DIR=/app/data
+      # Notification service for reporting health checks
+      - NOTIFICATION_SERVICE_URL=http://localhost:8005
     # Health checks require ping capabilities
     cap_add:
       - NET_RAW
@@ -174,12 +180,48 @@ services:
       retries: 3
       start_period: 10s
 
+  # Notification Microservice
+  notifications:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    container_name: cartographer-notifications
+    # Use host network for consistent localhost access
+    network_mode: host
+    volumes:
+      - notification-data:/app/data
+    environment:
+      - CORS_ORIGINS=*
+      - NOTIFICATION_DATA_DIR=/app/data
+      # Email notifications via Resend (same key as auth service)
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-Cartographer <notifications@cartographer.app>}
+      - APPLICATION_URL=${APPLICATION_URL:-http://localhost:5173}
+      # Discord bot credentials (optional - set in .env file)
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
+      # Health service for integrating with health checks
+      - HEALTH_SERVICE_URL=http://localhost:8001
+    restart: unless-stopped
+    depends_on:
+      health:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 volumes:
   cartographer-data:
     driver: local
   health-data:
     driver: local
   auth-data:
+    driver: local
+  notification-data:
     driver: local
   redis-data:
     driver: local

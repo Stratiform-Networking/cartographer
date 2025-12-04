@@ -80,6 +80,22 @@
 						</div>
 					</button>
 
+					<!-- Notifications -->
+					<button
+						@click="onNotifications"
+						class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"
+					>
+						<div class="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+							</svg>
+						</div>
+						<div class="flex flex-col items-start">
+							<span class="font-medium">Notifications</span>
+							<span class="text-xs text-slate-500 dark:text-slate-400">Email & Discord alerts</span>
+						</div>
+					</button>
+
 					<!-- Change Password -->
 					<button
 						@click="onChangePassword"
@@ -252,6 +268,7 @@ import { getRoleLabel, getFullName } from "../types/auth";
 const emit = defineEmits<{
 	(e: "logout"): void;
 	(e: "manageUsers"): void;
+	(e: "notifications"): void;
 }>();
 
 const { user, isOwner, logout, changePassword } = useAuth();
@@ -313,6 +330,11 @@ onUnmounted(() => {
 function onManageUsers() {
 	isOpen.value = false;
 	emit("manageUsers");
+}
+
+function onNotifications() {
+	isOpen.value = false;
+	emit("notifications");
 }
 
 function onChangePassword() {

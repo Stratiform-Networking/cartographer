@@ -32,7 +32,7 @@
 		>
 			<!-- User Menu Slot -->
 			<template #user-menu>
-				<UserMenu @logout="onLogout" @manageUsers="showUserManagement = true" />
+				<UserMenu @logout="onLogout" @manageUsers="showUserManagement = true" @notifications="showNotificationSettings = true" />
 			</template>
 		</MapControls>
 		<div class="flex flex-1 min-h-0">
@@ -463,6 +463,7 @@
 
 		<!-- User Management Modal -->
 		<UserManagement v-if="showUserManagement" @close="showUserManagement = false" />
+		<NotificationSettings v-if="showNotificationSettings" @close="showNotificationSettings = false" />
 
 		<!-- Assistant Panel (Slide-in from right) -->
 		<Transition
@@ -507,6 +508,7 @@ import LoginScreen from "./LoginScreen.vue";
 import UserMenu from "./UserMenu.vue";
 import UserManagement from "./UserManagement.vue";
 import AssistantChat from "./AssistantChat.vue";
+import NotificationSettings from "./NotificationSettings.vue";
 import type { ParsedNetworkMap, TreeNode, NodeVersion } from "../types/network";
 import { useMapLayout } from "../composables/useMapLayout";
 import { useNetworkData } from "../composables/useNetworkData";
@@ -519,6 +521,7 @@ const authLoading = ref(true);
 const needsSetup = ref(false);
 const showUserManagement = ref(false);
 const showAssistant = ref(false);
+const showNotificationSettings = ref(false);
 
 // Check auth status on mount
 async function initAuth() {

@@ -59,6 +59,8 @@ If you run [Ollama](https://ollama.ai) locally, no API key is needed — just ma
 
 Cartographer can alert you when things go wrong on your network:
 
+![Discord Notification](https://raw.githubusercontent.com/DevArtech/cartographer/refs/heads/main/assets/notification.png)
+
 - **Device down** — Know immediately when a server, router, or important device stops responding.
 - **Device recovered** — Get a heads-up when things come back online.
 - **Unusual behavior** — Cartographer learns what's normal for your network and flags anything strange — like unexpected outages or performance issues.
@@ -70,18 +72,37 @@ You can receive alerts via:
 - **Email** — Get clean, easy-to-read emails when something needs your attention.
 - **Discord** — Send alerts to a Discord channel or get direct messages from the Cartographer bot.
 
-To set up notifications, add your credentials to the `.env` file:
+### Setting up email notifications
+
+To receive email alerts, sign up for a free [Resend](https://resend.com) account and add your API key to `.env`:
 
 ```bash
-# For email notifications (using Resend)
 RESEND_API_KEY=your_key_here
-
-# For Discord notifications
-DISCORD_BOT_TOKEN=your_bot_token
-DISCORD_CLIENT_ID=your_client_id
 ```
 
-Then configure your preferences in the app — choose which alerts you want, set quiet hours so you're not woken up at 3am, and pick your preferred notification channel.
+### Setting up Discord notifications
+
+1. **Create a Discord app** — Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click "New Application". Give it a name like "Cartographer".
+
+2. **Create a bot** — In your app's settings, go to the "Bot" section and click "Add Bot". Copy the bot token.
+
+3. **Add your credentials to `.env`**:
+   ```bash
+   DISCORD_BOT_TOKEN=your_bot_token
+   DISCORD_CLIENT_ID=your_client_id  # Found in the "General Information" section
+   ```
+
+4. **Invite the bot to your server** — Once Cartographer is running, go to the notification settings in the app. You'll find an invite link to add the bot to your Discord server.
+
+5. **Pick a channel** — In the app's notification preferences, select which Discord server and channel should receive alerts (or enable DMs to get alerts privately).
+
+### Customizing your alerts
+
+In the app, you can configure:
+- Which types of alerts you want (device offline, anomalies, etc.)
+- Quiet hours so you're not woken up at 3am
+- Rate limits to prevent notification spam
+- Minimum priority threshold
 
 ## Configuration
 

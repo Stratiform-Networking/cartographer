@@ -59,7 +59,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { TreeNode } from "../types/network";
 import { useHealthMonitoring } from "../composables/useHealthMonitoring";
 
@@ -73,6 +73,13 @@ defineEmits<{
 }>();
 
 const { cachedMetrics } = useHealthMonitoring();
+
+// Force reactivity on deep changes (like monitoringEnabled toggle)
+// This counter increments when any property in the tree changes
+const deepChangeKey = ref(0);
+watch(() => props.root, () => {
+	deepChangeKey.value++;
+}, { deep: true });
 
 const query = ref("");
 
@@ -193,7 +200,11 @@ function sortByDepthAndIP(nodes: TreeNode[], root: TreeNode): TreeNode[] {
 	return sorted;
 }
 
-const all = computed(() => sortByDepthAndIP(flatten(props.root), props.root));
+const all = computed(() => {
+	// Access deepChangeKey to ensure this computed re-evaluates on deep property changes
+	void deepChangeKey.value;
+	return sortByDepthAndIP(flatten(props.root), props.root);
+});
 const filtered = computed(() => {
 	const q = query.value.trim().toLowerCase();
 	if (!q) return all.value;
@@ -221,10 +232,10 @@ function roleDot(role?: string) {
 
 // Get status background class for monitored devices
 function getStatusBackground(node: TreeNode): string {
-	// Check if monitoring is disabled for this specific device
-	if ((node as any).monitoringEnabled === false) return ''; // Monitoring disabled - leave default
+	// Check if monitoring is disabled for this specific device (matches NetworkMap logic)
+	if (node.monitoringEnabled === false) return ''; // Monitoring disabled - leave default
 	
-	const ip = (node as any).ip;
+	const ip = node.ip;
 	if (!ip) return '';
 	
 	const metrics = cachedMetrics.value?.[ip];

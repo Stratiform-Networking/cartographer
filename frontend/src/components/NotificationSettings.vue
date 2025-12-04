@@ -461,6 +461,131 @@
 									</div>
 								</div>
 							</div>
+
+							<!-- Broadcast Notification (Owner Only) -->
+							<div v-if="isOwner" class="space-y-4">
+								<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+									</svg>
+									Send Global Notification
+								</h3>
+
+								<div class="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700/30 space-y-4">
+									<p class="text-sm text-amber-700 dark:text-amber-400">
+										Send a notification to all users who have notifications enabled. Use this for system announcements, maintenance notices, or important updates.
+									</p>
+
+									<!-- Notification Type -->
+									<div>
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+											Notification Type
+										</label>
+										<select
+											v-model="broadcastType"
+											class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+										>
+											<option value="scheduled_maintenance">🔧 Scheduled Maintenance</option>
+											<option value="system_status">ℹ️ System Status</option>
+											<option value="security_alert">🔒 Security Alert</option>
+											<option value="isp_issue">🌐 ISP Issue</option>
+											<option value="anomaly_detected">⚠️ Anomaly Detected</option>
+										</select>
+									</div>
+
+									<!-- Priority -->
+									<div>
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+											Priority
+										</label>
+										<div class="flex gap-2">
+											<button
+												v-for="(info, priority) in PRIORITY_INFO"
+												:key="priority"
+												@click="broadcastPriority = priority"
+												:class="[
+													'flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
+													broadcastPriority === priority
+														? 'border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+														: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+												]"
+											>
+												{{ info.label }}
+											</button>
+										</div>
+									</div>
+
+									<!-- Title -->
+									<div>
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+											Title
+										</label>
+										<input
+											v-model="broadcastTitle"
+											type="text"
+											placeholder="e.g., Scheduled Maintenance Tonight"
+											class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+										/>
+									</div>
+
+									<!-- Message -->
+									<div>
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+											Message
+										</label>
+										<textarea
+											v-model="broadcastMessage"
+											rows="3"
+											placeholder="Enter the notification message..."
+											class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+										></textarea>
+									</div>
+
+									<!-- Send Button -->
+									<div class="flex items-center justify-between pt-2">
+										<p class="text-xs text-slate-500 dark:text-slate-400">
+											This will be sent to all users with notifications enabled
+										</p>
+										<button
+											@click="sendBroadcast"
+											:disabled="sendingBroadcast || !broadcastTitle.trim() || !broadcastMessage.trim()"
+											class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+										>
+											<svg v-if="sendingBroadcast" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+												<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+												<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+											</svg>
+											<svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+											</svg>
+											{{ sendingBroadcast ? 'Sending...' : 'Send to All Users' }}
+										</button>
+									</div>
+
+									<!-- Broadcast Result -->
+									<Transition
+										enter-active-class="transition ease-out duration-200"
+										enter-from-class="opacity-0"
+										enter-to-class="opacity-100"
+										leave-active-class="transition ease-in duration-150"
+										leave-from-class="opacity-100"
+										leave-to-class="opacity-0"
+									>
+										<div 
+											v-if="broadcastResult" 
+											class="p-3 rounded-lg"
+											:class="broadcastResult.success ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'"
+										>
+											<p v-if="broadcastResult.success" class="text-sm font-medium">
+												✓ Notification sent to {{ broadcastResult.users_notified }} user(s)
+											</p>
+											<p v-else class="text-sm font-medium">
+												✗ {{ broadcastResult.error || 'Failed to send notification' }}
+											</p>
+										</div>
+									</Transition>
+								</div>
+							</div>
 						</template>
 					</template>
 
@@ -508,10 +633,13 @@ import {
 	type NotificationPriority,
 	type TestNotificationResult,
 } from "../composables/useNotifications";
+import { useAuth } from "../composables/useAuth";
 
 defineEmits<{
 	(e: "close"): void;
 }>();
+
+const { isOwner } = useAuth();
 
 const {
 	isLoading,
@@ -523,6 +651,7 @@ const {
 	getDiscordGuilds,
 	getDiscordChannels,
 	sendTestNotification,
+	sendBroadcastNotification,
 } = useNotifications();
 
 // State
@@ -539,6 +668,14 @@ const loadingChannels = ref(false);
 const testingEmail = ref(false);
 const testingDiscord = ref(false);
 const testResult = ref<TestNotificationResult | null>(null);
+
+// Broadcast notification state (owner only)
+const broadcastTitle = ref("");
+const broadcastMessage = ref("");
+const broadcastType = ref<NotificationType>("scheduled_maintenance");
+const broadcastPriority = ref<NotificationPriority>("medium");
+const sendingBroadcast = ref(false);
+const broadcastResult = ref<{ success: boolean; users_notified?: number; error?: string } | null>(null);
 
 // Load data
 onMounted(async () => {
@@ -722,6 +859,41 @@ async function testDiscord() {
 		setTimeout(() => { testResult.value = null; }, 5000);
 	} finally {
 		testingDiscord.value = false;
+	}
+}
+
+// Broadcast notification (owner only)
+async function sendBroadcast() {
+	if (!broadcastTitle.value.trim() || !broadcastMessage.value.trim()) {
+		broadcastResult.value = { success: false, error: "Title and message are required" };
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+		return;
+	}
+	
+	sendingBroadcast.value = true;
+	broadcastResult.value = null;
+	
+	try {
+		const result = await sendBroadcastNotification(
+			broadcastTitle.value.trim(),
+			broadcastMessage.value.trim(),
+			broadcastType.value,
+			broadcastPriority.value
+		);
+		broadcastResult.value = { success: true, users_notified: result.users_notified };
+		
+		// Clear form on success
+		broadcastTitle.value = "";
+		broadcastMessage.value = "";
+		broadcastType.value = "scheduled_maintenance";
+		broadcastPriority.value = "medium";
+		
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+	} catch (e: any) {
+		broadcastResult.value = { success: false, error: e.message };
+		setTimeout(() => { broadcastResult.value = null; }, 5000);
+	} finally {
+		sendingBroadcast.value = false;
 	}
 }
 </script>

@@ -219,6 +219,41 @@ async def reset_all_ml_data(user: AuthenticatedUser = Depends(require_owner)):
     return await proxy_request("DELETE", "/ml/reset")
 
 
+# ==================== Global Notifications (Owner Only) ====================
+
+@router.post("/broadcast")
+async def send_global_notification(request: Request, user: AuthenticatedUser = Depends(require_owner)):
+    """
+    Send a global notification to all users. Owner only.
+    
+    Expects a JSON body with:
+    - title: str - The notification title
+    - message: str - The notification message
+    - event_type: str - The type of notification (e.g., 'scheduled_maintenance', 'system_status')
+    - priority: str - The priority level ('low', 'medium', 'high', 'critical')
+    """
+    body = await request.json()
+    
+    # Build the network event for the notification service
+    event = {
+        "event_id": f"global-{user.user_id}-{body.get('title', 'notification')[:20]}",
+        "event_type": body.get("event_type", "scheduled_maintenance"),
+        "priority": body.get("priority", "medium"),
+        "title": body.get("title", "System Notification"),
+        "message": body.get("message", ""),
+        "details": {
+            "sent_by": user.username,
+            "is_global": True,
+        }
+    }
+    
+    return await proxy_request(
+        "POST",
+        "/send-notification",
+        json_body=event,
+    )
+
+
 # ==================== Internal Endpoints (for health service integration) ====================
 
 @router.post("/internal/process-health-check")

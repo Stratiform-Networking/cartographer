@@ -188,6 +188,25 @@ export function useNotifications() {
     return response.data;
   }
 
+  // Send broadcast notification (owner only)
+  async function sendBroadcastNotification(
+    title: string,
+    message: string,
+    eventType: NotificationType = 'scheduled_maintenance',
+    priority: NotificationPriority = 'medium'
+  ): Promise<{ success: boolean; users_notified: number }> {
+    const response = await axios.post<{ success: boolean; users_notified: number }>(
+      `${API_BASE}/broadcast`,
+      {
+        title,
+        message,
+        event_type: eventType,
+        priority,
+      }
+    );
+    return response.data;
+  }
+
   return {
     isLoading,
     error,
@@ -200,6 +219,7 @@ export function useNotifications() {
     getDiscordInviteUrl,
     sendTestNotification,
     getStats,
+    sendBroadcastNotification,
   };
 }
 

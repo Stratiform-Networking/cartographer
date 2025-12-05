@@ -292,11 +292,11 @@
 													? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 border-amber-400 dark:border-amber-600 rounded-sm' 
 													: 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-600 rounded'"
 											>
-												<!-- RJ45 clip tab (sticks out at bottom) -->
-												<div 
-													v-if="defaultPortType === 'rj45'"
-													class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-amber-300 dark:bg-amber-700 border border-amber-400 dark:border-amber-600 rounded-b-sm"
-												></div>
+											<!-- RJ45 clip tab (sticks out at bottom) -->
+											<div 
+												v-if="defaultPortType === 'rj45'"
+												class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-amber-200 dark:bg-amber-800 border border-t-0 border-amber-400 dark:border-amber-600 rounded-b-sm"
+											></div>
 												<!-- SFP pull tab -->
 												<div 
 													v-if="defaultPortType !== 'rj45'"
@@ -419,10 +419,10 @@
 											<!-- RJ45 clip tab (sticks out at bottom) -->
 											<div 
 												v-if="port.type === 'rj45' && port.status !== 'blocked'"
-												class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1/2 h-1.5 border-2 rounded-b-sm"
+												class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1/2 h-1.5 border-2 border-t-0 rounded-b-sm"
 												:class="port.status === 'active' 
-													? 'bg-amber-300 dark:bg-amber-700 border-amber-400 dark:border-amber-600' 
-													: 'bg-slate-400 dark:bg-slate-600 border-slate-500 dark:border-slate-500'"
+													? 'bg-amber-200 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600' 
+													: 'bg-slate-300 dark:bg-slate-700 border-slate-400 dark:border-slate-600'"
 											></div>
 											<!-- SFP handle/pull tab indicator -->
 											<div 
@@ -1533,14 +1533,14 @@
 									:class="[getPortClasses(port), getPortShape(port)]"
 									:title="getPortTooltip(port)"
 								>
-									<!-- RJ45 clip tab (sticks out at bottom) -->
-									<div 
-										v-if="port.type === 'rj45' && port.status !== 'blocked'"
-										class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1/2 h-1 border rounded-b-sm"
-										:class="port.status === 'active' 
-											? 'bg-amber-300 dark:bg-amber-700 border-amber-400 dark:border-amber-600' 
-											: 'bg-slate-400 dark:bg-slate-600 border-slate-500 dark:border-slate-500'"
-									></div>
+								<!-- RJ45 clip tab (sticks out at bottom) -->
+								<div 
+									v-if="port.type === 'rj45' && port.status !== 'blocked'"
+									class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1/2 h-1 border border-t-0 rounded-b-sm"
+									:class="port.status === 'active' 
+										? 'bg-amber-200 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600' 
+										: 'bg-slate-300 dark:bg-slate-700 border-slate-400 dark:border-slate-600'"
+								></div>
 									<!-- SFP pull tab -->
 									<div 
 										v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"

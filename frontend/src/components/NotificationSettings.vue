@@ -510,6 +510,167 @@
 								</div>
 							</div>
 
+							<!-- Application Updates Section -->
+							<div class="space-y-4">
+								<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+									</svg>
+									Application Updates
+								</h3>
+
+								<div class="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4">
+									<!-- Current Version Info -->
+									<div class="flex items-center justify-between">
+										<div>
+											<p class="font-medium text-slate-900 dark:text-white">Current Version</p>
+											<p class="text-sm text-slate-500 dark:text-slate-400">
+												v{{ versionInfo.current }}
+												<template v-if="versionInfo.updateAvailable">
+													<span class="ml-2 px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400">
+														v{{ versionInfo.latest }} available
+													</span>
+												</template>
+											</p>
+										</div>
+										<button
+											@click="checkForUpdatesManual"
+											:disabled="isCheckingVersion"
+											class="px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-50 transition-colors text-sm font-medium flex items-center gap-2"
+										>
+											<svg 
+												xmlns="http://www.w3.org/2000/svg" 
+												class="h-4 w-4"
+												:class="{ 'animate-spin': isCheckingVersion }"
+												fill="none" 
+												viewBox="0 0 24 24" 
+												stroke="currentColor" 
+												stroke-width="2"
+											>
+												<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+											</svg>
+											{{ isCheckingVersion ? 'Checking...' : 'Check for Updates' }}
+										</button>
+									</div>
+
+									<!-- Update Check Result -->
+									<Transition
+										enter-active-class="transition ease-out duration-200"
+										enter-from-class="opacity-0 -translate-y-2"
+										enter-to-class="opacity-100 translate-y-0"
+										leave-active-class="transition ease-in duration-150"
+										leave-from-class="opacity-100 translate-y-0"
+										leave-to-class="opacity-0 -translate-y-2"
+									>
+										<div 
+											v-if="updateCheckResult" 
+											class="p-3 rounded-lg"
+											:class="updateCheckResult.has_update 
+												? 'bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700/30' 
+												: 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/30'"
+										>
+											<div class="flex items-start gap-3">
+												<svg 
+													v-if="updateCheckResult.has_update"
+													xmlns="http://www.w3.org/2000/svg" 
+													class="h-5 w-5 text-cyan-500 flex-shrink-0 mt-0.5" 
+													fill="none" 
+													viewBox="0 0 24 24" 
+													stroke="currentColor" 
+													stroke-width="2"
+												>
+													<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+												</svg>
+												<svg 
+													v-else
+													xmlns="http://www.w3.org/2000/svg" 
+													class="h-5 w-5 text-emerald-500 flex-shrink-0 mt-0.5" 
+													fill="none" 
+													viewBox="0 0 24 24" 
+													stroke="currentColor" 
+													stroke-width="2"
+												>
+													<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+												</svg>
+												<div class="flex-1">
+													<p class="font-medium" :class="updateCheckResult.has_update ? 'text-cyan-700 dark:text-cyan-400' : 'text-emerald-700 dark:text-emerald-400'">
+														{{ updateCheckResult.has_update ? `Update Available: v${updateCheckResult.latest_version}` : 'You\'re up to date!' }}
+													</p>
+													<p class="text-sm" :class="updateCheckResult.has_update ? 'text-cyan-600 dark:text-cyan-500' : 'text-emerald-600 dark:text-emerald-500'">
+														<template v-if="updateCheckResult.has_update">
+															{{ getUpdateTypeDescription(updateCheckResult.update_type) }}
+														</template>
+														<template v-else>
+															Running the latest version (v{{ updateCheckResult.current_version }})
+														</template>
+													</p>
+													<a
+														v-if="updateCheckResult.has_update && updateCheckResult.changelog_url"
+														:href="updateCheckResult.changelog_url"
+														target="_blank"
+														rel="noopener noreferrer"
+														class="inline-flex items-center gap-1 mt-2 text-sm font-medium text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300"
+													>
+														View changelog
+														<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+															<path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+														</svg>
+													</a>
+												</div>
+											</div>
+										</div>
+									</Transition>
+
+									<!-- Update Notification Preferences -->
+									<div class="pt-3 border-t border-slate-200 dark:border-slate-700">
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+											Notify me about updates
+										</label>
+										<p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+											Choose which types of updates trigger notifications
+										</p>
+										<div class="space-y-2">
+											<label 
+												v-for="option in updateNotifyOptions" 
+												:key="option.value"
+												class="flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-colors"
+												:class="[
+													updateNotifyLevel === option.value
+														? 'bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800'
+														: 'bg-slate-50 dark:bg-slate-700/50 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-700'
+												]"
+											>
+												<input
+													type="radio"
+													:value="option.value"
+													v-model="updateNotifyLevel"
+													@change="saveUpdateNotifyPreference"
+													class="mt-0.5 h-4 w-4 border-slate-300 dark:border-slate-600 text-cyan-600 focus:ring-cyan-500 focus:ring-offset-0 dark:bg-slate-700"
+												/>
+												<div class="flex-1 min-w-0">
+													<div class="flex items-center gap-2">
+														<span class="font-medium text-slate-900 dark:text-white">
+															{{ option.label }}
+														</span>
+														<span
+															:class="[
+																'text-xs px-1.5 py-0.5 rounded font-medium',
+																option.badgeClass
+															]"
+														>
+															{{ option.badge }}
+														</span>
+													</div>
+													<p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+														{{ option.description }}
+													</p>
+												</div>
+											</label>
+										</div>
+									</div>
+								</div>
+							</div>
+
 							<!-- ML Stats -->
 							<div v-if="serviceStatus?.ml_model_status" class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
 								<div class="flex items-center gap-2 mb-3">
@@ -804,6 +965,7 @@ import {
 	type ScheduledBroadcast,
 } from "../composables/useNotifications";
 import { useAuth } from "../composables/useAuth";
+import { useVersionCheck, type VersionType } from "../composables/useVersionCheck";
 
 defineEmits<{
 	(e: "close"): void;
@@ -856,6 +1018,119 @@ const scheduledDateTime = ref("");
 const scheduledBroadcasts = ref<ScheduledBroadcast[]>([]);
 const loadingScheduled = ref(false);
 
+// Version check state
+const {
+	versionInfo,
+	checkForUpdates,
+	setEnabledTypes,
+	preferences: versionPreferences,
+	isChecking: isCheckingVersion,
+} = useVersionCheck();
+
+const updateCheckResult = ref<{
+	success: boolean;
+	current_version: string;
+	latest_version: string;
+	has_update: boolean;
+	update_type: string | null;
+	changelog_url: string | null;
+} | null>(null);
+
+// Update notification level: 'major', 'minor', or 'patch'
+const updateNotifyLevel = ref<'major' | 'minor' | 'patch'>('minor');
+
+// Update notification options
+const updateNotifyOptions = [
+	{
+		value: 'major' as const,
+		label: 'Major updates only',
+		badge: 'x.0.0',
+		badgeClass: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+		description: 'Only notify about major releases with significant changes',
+	},
+	{
+		value: 'minor' as const,
+		label: 'Minor updates and above',
+		badge: '0.x.0',
+		badgeClass: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+		description: 'Notify about new features and major releases',
+	},
+	{
+		value: 'patch' as const,
+		label: 'All updates',
+		badge: '0.0.x',
+		badgeClass: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+		description: 'Notify about all updates including bug fixes',
+	},
+];
+
+// Initialize update notify level from version preferences
+function initUpdateNotifyLevel() {
+	const types = versionPreferences.value.enabledTypes;
+	if (types.includes('patch')) {
+		updateNotifyLevel.value = 'patch';
+	} else if (types.includes('minor')) {
+		updateNotifyLevel.value = 'minor';
+	} else {
+		updateNotifyLevel.value = 'major';
+	}
+}
+
+// Save update notification preference
+function saveUpdateNotifyPreference() {
+	const level = updateNotifyLevel.value;
+	let enabledTypes: VersionType[] = [];
+	
+	if (level === 'patch') {
+		enabledTypes = ['major', 'minor', 'patch'];
+	} else if (level === 'minor') {
+		enabledTypes = ['major', 'minor'];
+	} else {
+		enabledTypes = ['major'];
+	}
+	
+	setEnabledTypes(enabledTypes);
+}
+
+// Check for updates manually
+async function checkForUpdatesManual() {
+	updateCheckResult.value = null;
+	await checkForUpdates();
+	
+	// Build result from versionInfo
+	updateCheckResult.value = {
+		success: true,
+		current_version: versionInfo.value.current,
+		latest_version: versionInfo.value.latest,
+		has_update: versionInfo.value.updateAvailable,
+		update_type: versionInfo.value.updateType,
+		changelog_url: versionInfo.value.updateAvailable ? 'https://github.com/DevArtech/cartographer/blob/main/CHANGELOG.md' : null,
+	};
+	
+	// Auto-hide result after 10 seconds if no update
+	if (!versionInfo.value.updateAvailable) {
+		setTimeout(() => {
+			if (updateCheckResult.value && !updateCheckResult.value.has_update) {
+				updateCheckResult.value = null;
+			}
+		}, 10000);
+	}
+}
+
+// Get update type description
+function getUpdateTypeDescription(updateType: string | null): string {
+	switch (updateType) {
+		case 'major':
+			return 'This is a major release with significant changes';
+		case 'minor':
+			return 'New features and improvements are available';
+		case 'patch':
+			return 'Bug fixes and minor improvements';
+		default:
+			return 'A new version is available';
+	}
+}
+
 // Computed: minimum schedule datetime (5 minutes from now)
 const minScheduleDateTime = computed(() => {
 	const now = new Date();
@@ -906,6 +1181,9 @@ onMounted(async () => {
 		if (isOwner.value) {
 			await loadScheduledBroadcasts();
 		}
+		
+		// Initialize update notification level from stored preferences
+		initUpdateNotifyLevel();
 	} catch (e) {
 		console.error("Failed to load notification settings:", e);
 	}

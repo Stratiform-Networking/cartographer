@@ -280,20 +280,18 @@ class CartographerWriteUser(AuthenticatedUser):
     
     @task(1)
     @tag("notifications", "write")
-    def notifications_process_health(self):
-        """Process health check"""
-        ip = random.choice(SAMPLE_IPS)
-        with self.client.post(
-            "/api/notifications/process-health-check",
-            params={
-                "device_ip": ip,
-                "success": random.choice([True, True, True, False]),
-                "latency_ms": random.uniform(1, 50),
-            },
+    def notifications_update_preferences(self):
+        """Update notification preferences"""
+        with self.client.put(
+            "/api/notifications/preferences",
             headers=self._auth_headers(),
+            json={
+                "email_enabled": random.choice([True, False]),
+                "discord_enabled": random.choice([True, False]),
+            },
             catch_response=True
         ) as r:
-            if r.status_code in [200, 500]:
+            if r.status_code in [200, 400, 500]:
                 r.success()
 
 

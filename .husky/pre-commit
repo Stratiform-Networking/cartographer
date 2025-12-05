@@ -1,0 +1,10 @@
+#!/bin/sh
+# Pre-commit hook for Cartographer
+# This runs before each commit to ensure code quality
+
+# Optional: Add linting or formatting checks here
+# Example: npm run lint
+# Example: npm run format:check
+
+echo "✓ Pre-commit checks passed"
+

@@ -123,6 +123,74 @@ Then edit `.env` with your settings. See `.example.env` for all available option
 - Open the **Assistant** panel and ask questions about your network in plain English.
 - Set up **Notifications** to stay informed — the more Cartographer monitors your network, the smarter its alerts get.
 
+## Contributing
+
+### Commit conventions
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for semantic versioning. All commits must follow this format:
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+**Commit types:**
+
+| Type | Description | Version Bump |
+|------|-------------|--------------|
+| `feat` | New feature | Minor (0.x.0) |
+| `fix` | Bug fix | Patch (0.0.x) |
+| `perf` | Performance improvement | Patch |
+| `docs` | Documentation only | None |
+| `style` | Code style (formatting, semicolons) | None |
+| `refactor` | Code refactoring | None |
+| `test` | Adding or updating tests | None |
+| `chore` | Maintenance tasks | None |
+| `ci` | CI/CD changes | None |
+| `build` | Build system changes | None |
+| `lint` | Linting fixes | None |
+| `config` | Configuration changes | None |
+
+**Examples:**
+```bash
+feat(auth): add OAuth2 support
+fix(network): resolve connection timeout issue
+docs: update README with deployment instructions
+refactor(backend): simplify database queries
+```
+
+**Breaking changes** trigger a major version bump. Add `!` after the type or include `BREAKING CHANGE:` in the footer:
+```bash
+feat!: redesign API endpoints
+```
+
+### Setup for development
+
+```bash
+# Install development dependencies (commit validation)
+npm install
+
+# The prepare script automatically sets up git hooks
+```
+
+### Creating releases
+
+```bash
+# Preview what the next release would look like
+npm run release:dry-run
+
+# Create a release (bumps version, updates changelog, creates tag)
+npm run release
+
+# Or specify the version bump type
+npm run release:patch  # 0.0.x
+npm run release:minor  # 0.x.0
+npm run release:major  # x.0.0
+```
+
 ## Need help?
 
 - Make sure Docker is running and you're on the same network you want to map.

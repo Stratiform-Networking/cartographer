@@ -325,6 +325,9 @@ class AnomalyDetector:
         self._anomalies_detected: int = 0
         self._false_positives: int = 0
         self._last_training: Optional[datetime] = None
+        # Track devices we've sent offline notifications for
+        # so we can send online notifications when they recover
+        self._notified_offline: set = set()
         
         # Load persisted state
         self._load_state()
@@ -340,6 +343,7 @@ class AnomalyDetector:
                 "anomalies_detected": self._anomalies_detected,
                 "false_positives": self._false_positives,
                 "last_training": self._last_training.isoformat() if self._last_training else None,
+                "notified_offline": list(self._notified_offline),  # Track devices with pending online notifications
             }
             
             with open(MODEL_STATE_FILE, 'w') as f:
@@ -371,8 +375,9 @@ class AnomalyDetector:
             self._anomalies_detected = state.get("anomalies_detected", 0)
             self._false_positives = state.get("false_positives", 0)
             self._last_training = datetime.fromisoformat(state["last_training"]) if state.get("last_training") else None
+            self._notified_offline = set(state.get("notified_offline", []))
             
-            logger.info(f"Loaded anomaly detector state with {len(self._device_stats)} devices")
+            logger.info(f"Loaded anomaly detector state with {len(self._device_stats)} devices, {len(self._notified_offline)} pending online notifications")
         except Exception as e:
             logger.error(f"Failed to load anomaly detector state: {e}")
     
@@ -672,6 +677,10 @@ class AnomalyDetector:
                     title = f"Device Offline: {device_name or device_ip}"
                     message = f"The device at {device_ip} is no longer responding."
                 
+                # Track that we sent an offline notification - we'll send online when it recovers
+                self._notified_offline.add(device_ip)
+                self._save_state()  # Persist immediately so we don't lose tracking on restart
+                
                 logger.info(
                     f"Device {device_ip} went offline - creating DEVICE_OFFLINE notification "
                     f"(previous_state={previous_state}, effective_previous_state={effective_previous_state}, "
@@ -685,14 +694,16 @@ class AnomalyDetector:
                     message += f" ({stats.consecutive_failures} consecutive failures)"
         
         elif success and (
-            # Device came back online from any non-online state (offline, degraded)
+            # PRIMARY: We sent an offline notification for this device - send online when it recovers
+            device_ip in self._notified_offline or
+            # FALLBACK: Device came back online from any non-online state (offline, degraded)
             device_was_not_online or
-            # Or this is a genuine recovery: first success after MULTIPLE failures
+            # FALLBACK: This is a genuine recovery: first success after MULTIPLE failures
             # AND device isn't "stable offline" (which would indicate a fluke success)
             (stats and 
              stats.consecutive_successes == 1 and 
-             stats.failed_checks >= 3 and  # Require history of being offline
-             not stats.is_stable_offline())  # Don't notify for stable offline devices with fluky successes
+             stats.failed_checks >= 3 and
+             not stats.is_stable_offline())
         ):
             # Device came back online from offline/degraded state
             should_notify = True
@@ -705,9 +716,18 @@ class AnomalyDetector:
             else:
                 message = f"The device at {device_ip} is now responding."
             
+            # Check if we had sent an offline notification (before removing from tracking)
+            had_offline_notification = device_ip in self._notified_offline
+            
+            # Remove from tracking - we're sending the online notification now
+            if had_offline_notification:
+                self._notified_offline.discard(device_ip)
+                self._save_state()  # Persist immediately
+            
             logger.info(
                 f"Device {device_ip} came back online - creating DEVICE_ONLINE notification "
                 f"(previous_state={previous_state}, effective_previous_state={effective_previous_state}, "
+                f"had_offline_notification={had_offline_notification}, "
                 f"consecutive_successes={stats.consecutive_successes if stats else 'N/A'}, "
                 f"failed_checks={stats.failed_checks if stats else 'N/A'})"
             )

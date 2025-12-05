@@ -212,6 +212,47 @@ function clearDismissed(): void {
 	savePreferences();
 }
 
+// Undismiss a specific version (to force show the banner)
+function undismissVersion(version: string): void {
+	const index = preferences.value.dismissed.indexOf(version);
+	if (index !== -1) {
+		preferences.value.dismissed.splice(index, 1);
+		savePreferences();
+	}
+}
+
+// Force show banner for current update (undismiss if previously dismissed)
+function forceShowBanner(): void {
+	const latest = latestVersion.value;
+	if (latest) {
+		undismissVersion(latest);
+	}
+}
+
+// Trigger backend notification for version update
+async function triggerBackendNotification(): Promise<{ success: boolean; users_notified?: number; error?: string }> {
+	try {
+		const response = await fetch("/api/notifications/version/notify", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+		});
+		
+		if (!response.ok) {
+			const errorData = await response.json().catch(() => ({}));
+			throw new Error(errorData.detail || `HTTP ${response.status}`);
+		}
+		
+		const result = await response.json();
+		console.log("[VersionCheck] Backend notification triggered:", result);
+		return result;
+	} catch (e: any) {
+		console.error("[VersionCheck] Failed to trigger backend notification:", e);
+		return { success: false, error: e.message || "Failed to send notification" };
+	}
+}
+
 // Start periodic version checks
 function startPeriodicChecks(): void {
 	if (checkInterval) return;
@@ -300,6 +341,9 @@ export function useVersionCheck() {
 		toggleVersionType,
 		isTypeEnabled,
 		clearDismissed,
+		undismissVersion,
+		forceShowBanner,
+		triggerBackendNotification,
 		startPeriodicChecks,
 		stopPeriodicChecks,
 

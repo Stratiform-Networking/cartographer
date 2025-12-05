@@ -150,22 +150,36 @@
 												</template>
 											</p>
 
-											<!-- Changelog Link -->
-											<a
-												v-if="updateCheckResult.has_update"
-												:href="CHANGELOG_URL"
-												target="_blank"
-												rel="noopener noreferrer"
-												class="inline-flex items-center gap-1.5 mt-3 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition-colors"
-											>
-												<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-													<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-												</svg>
-												View Changelog
-												<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-													<path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-												</svg>
-											</a>
+											<!-- Actions -->
+											<div v-if="updateCheckResult.has_update" class="flex items-center gap-3 mt-3">
+												<a
+													:href="CHANGELOG_URL"
+													target="_blank"
+													rel="noopener noreferrer"
+													class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium rounded-lg transition-colors"
+												>
+													<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+													</svg>
+													View Changelog
+													<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+													</svg>
+												</a>
+												<span v-if="isSendingNotification" class="text-xs text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
+													<svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+														<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+														<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+													</svg>
+													Notifying users...
+												</span>
+												<span v-else class="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+													<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+														<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+													</svg>
+													Banner shown &amp; users notified
+												</span>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -270,8 +284,13 @@ const {
 	setEnabledTypes,
 	preferences: versionPreferences,
 	isChecking: isCheckingVersion,
+	forceShowBanner,
+	triggerBackendNotification,
 	CHANGELOG_URL,
 } = useVersionCheck();
+
+// Track if we're sending backend notification
+const isSendingNotification = ref(false);
 
 // Update check result state
 const updateCheckResult = ref<{
@@ -349,14 +368,35 @@ async function checkForUpdatesManual() {
 	updateCheckResult.value = null;
 	await checkForUpdates();
 	
+	const hasUpdate = versionInfo.value.updateAvailable;
+	
 	// Build result from versionInfo
 	updateCheckResult.value = {
 		success: true,
 		current_version: versionInfo.value.current,
 		latest_version: versionInfo.value.latest,
-		has_update: versionInfo.value.updateAvailable,
+		has_update: hasUpdate,
 		update_type: versionInfo.value.updateType,
 	};
+	
+	// If an update is found, show the banner and trigger backend notification
+	if (hasUpdate) {
+		// Force show the banner (undismiss if previously dismissed)
+		forceShowBanner();
+		
+		// Trigger backend notification to notify all subscribed users
+		isSendingNotification.value = true;
+		try {
+			const result = await triggerBackendNotification();
+			if (result.success) {
+				console.log(`[UpdateSettings] Notified ${result.users_notified} users about update`);
+			}
+		} catch (e) {
+			console.error("[UpdateSettings] Failed to send backend notification:", e);
+		} finally {
+			isSendingNotification.value = false;
+		}
+	}
 }
 
 // Get update type label

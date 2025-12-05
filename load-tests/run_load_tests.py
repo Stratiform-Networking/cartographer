@@ -5,9 +5,13 @@ Cartographer Load Test Runner
 This script provides an easy way to run load tests against Cartographer microservices.
 It can run tests against individual services or all services at once.
 
+IMPORTANT: All endpoints require authentication. Provide credentials via:
+    --username and --password arguments, OR
+    LOADTEST_USERNAME and LOADTEST_PASSWORD environment variables
+
 Usage:
+    python run_load_tests.py --service all -u 10 -r 2 -t 60 --username myuser --password mypass
     python run_load_tests.py --service health --users 10 --spawn-rate 2 --time 60
-    python run_load_tests.py --service all --users 50 --spawn-rate 5 --time 300
     python run_load_tests.py --service auth --users 20 --web  # Opens web UI
 """
 
@@ -61,6 +65,8 @@ def run_locust(
     tags: list,
     headless: bool,
     html_report: str,
+    username: str,
+    password: str,
 ):
     """Run locust with the specified configuration"""
     
@@ -70,12 +76,22 @@ def run_locust(
     if not host:
         host = f"http://localhost:{service_config['port']}"
     
+    # Set environment variables for authentication
+    env = os.environ.copy()
+    if username:
+        env["LOADTEST_USERNAME"] = username
+        env["LOADTEST_OWNER_USERNAME"] = username
+    if password:
+        env["LOADTEST_PASSWORD"] = password
+        env["LOADTEST_OWNER_PASSWORD"] = password
+    
     cmd = ["locust", "-f", locustfile, "--host", host]
     
     if web:
         # Web UI mode
         print(f"\n🌐 Starting Locust Web UI for {service} service")
         print(f"   Target: {host}")
+        print(f"   Username: {username or env.get('LOADTEST_USERNAME', 'loadtest')}")
         print(f"   Open http://localhost:8089 in your browser\n")
     else:
         # Headless mode
@@ -91,6 +107,7 @@ def run_locust(
         
         print(f"\n🚀 Running load test for {service} service")
         print(f"   Target: {host}")
+        print(f"   Username: {username or env.get('LOADTEST_USERNAME', 'loadtest')}")
         print(f"   Users: {users}")
         print(f"   Spawn rate: {spawn_rate}/s")
         print(f"   Duration: {run_time}s")
@@ -102,7 +119,7 @@ def run_locust(
         cmd.extend(["--tags", ",".join(tags)])
     
     try:
-        subprocess.run(cmd)
+        subprocess.run(cmd, env=env)
     except KeyboardInterrupt:
         print("\n\n⏹️  Load test stopped by user")
     except FileNotFoundError:
@@ -126,14 +143,18 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run quick test on health service
-  python run_load_tests.py -s health -u 10 -r 2 -t 30
+  # Run quick test with credentials
+  python run_load_tests.py -s all -u 10 -r 2 -t 30 --username myuser --password mypass
+
+  # Run using environment variables (recommended for CI/CD)
+  set LOADTEST_USERNAME=myuser && set LOADTEST_PASSWORD=mypass
+  python run_load_tests.py -s all -u 10 -r 2 -t 30
 
   # Run comprehensive test on all services
-  python run_load_tests.py -s all -u 100 -r 10 -t 300 --html report.html
+  python run_load_tests.py -s all -u 100 -r 10 -t 300 --html report.html --username admin --password secret
 
   # Open web UI for interactive testing
-  python run_load_tests.py -s metrics --web
+  python run_load_tests.py -s metrics --web --username myuser --password mypass
 
   # Test only read operations
   python run_load_tests.py -s health -u 50 -r 5 -t 60 --tags read
@@ -199,6 +220,16 @@ Examples:
         help="List available services and exit"
     )
     
+    parser.add_argument(
+        "--username",
+        help="Username for authentication (or set LOADTEST_USERNAME env var)"
+    )
+    
+    parser.add_argument(
+        "--password",
+        help="Password for authentication (or set LOADTEST_PASSWORD env var)"
+    )
+    
     args = parser.parse_args()
     
     if args.list:
@@ -221,6 +252,8 @@ Examples:
         tags=args.tags or [],
         headless=not args.web,
         html_report=args.html,
+        username=args.username,
+        password=args.password,
     )
 
 

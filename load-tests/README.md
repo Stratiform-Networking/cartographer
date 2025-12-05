@@ -9,11 +9,50 @@ This directory contains load testing scripts for all Cartographer microservices 
 cd load-tests
 pip install -r requirements.txt
 
-# Run a quick test on all services
+# Run a quick test on all services (provide your Cartographer credentials)
+python run_load_tests.py -s all -u 10 -r 2 -t 60 --username YOUR_USERNAME --password YOUR_PASSWORD
+
+# Or using environment variables
+export LOADTEST_USERNAME=your_username
+export LOADTEST_PASSWORD=your_password
+python run_load_tests.py -s all -u 10 -r 2 -t 60
+
+# Windows PowerShell:
+$env:LOADTEST_USERNAME="your_username"
+$env:LOADTEST_PASSWORD="your_password"
 python run_load_tests.py -s all -u 10 -r 2 -t 60
 
 # Or open the web UI for interactive testing
-python run_load_tests.py -s all --web
+python run_load_tests.py -s all --web --username YOUR_USERNAME --password YOUR_PASSWORD
+```
+
+## ⚠️ Authentication Required
+
+**All Cartographer API endpoints require JWT authentication.** You must provide valid credentials:
+
+### Option 1: Command Line Arguments (Quick Testing)
+```bash
+python run_load_tests.py -s all --username myuser --password mypass
+```
+
+### Option 2: Environment Variables (Recommended for CI/CD)
+```bash
+# Linux/Mac
+export LOADTEST_USERNAME=your_username
+export LOADTEST_PASSWORD=your_password
+
+# Windows Command Prompt
+set LOADTEST_USERNAME=your_username
+set LOADTEST_PASSWORD=your_password
+
+# Windows PowerShell
+$env:LOADTEST_USERNAME="your_username"
+$env:LOADTEST_PASSWORD="your_password"
+```
+
+### Option 3: Using Locust Directly
+```bash
+LOADTEST_USERNAME=user LOADTEST_PASSWORD=pass locust -f locustfile_all.py --host=http://localhost:8000
 ```
 
 ## Services
@@ -161,13 +200,26 @@ locust -f locustfile_assistant.py --tags safe
 ### Speed Tests
 Speed test endpoints take 30-60 seconds and consume bandwidth. They are excluded from regular load tests but can be triggered manually.
 
-## Authentication
+## Authentication Details
 
-Some endpoints require authentication. The load tests attempt to log in with test credentials:
-- Regular user: `loadtest` / `loadtest123`
-- Owner user: `loadtest_owner` / `loadtest_owner123`
+The load tests authenticate at startup using the provided credentials:
+- `LOADTEST_USERNAME` / `LOADTEST_PASSWORD` - Used for read operations
+- `LOADTEST_OWNER_USERNAME` / `LOADTEST_OWNER_PASSWORD` - Used for write operations (defaults to same as above)
 
-Create these users before running authenticated tests, or modify the credentials in the locustfiles.
+If authentication fails:
+1. Check that the user exists in your Cartographer instance
+2. Verify the password is correct
+3. Check the console for authentication error messages
+
+The load tests will log successful authentication:
+```
+✅ Successfully authenticated as myuser
+```
+
+Or authentication failures:
+```
+❌ Authentication failed for myuser: 401
+```
 
 ## Interpreting Results
 

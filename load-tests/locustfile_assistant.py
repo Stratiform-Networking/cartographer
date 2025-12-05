@@ -5,13 +5,21 @@ Tests AI assistant endpoints including provider status, model listing, and chat.
 
 IMPORTANT: Chat endpoints use MOCKED responses by default to avoid AI API costs.
 The mock tests verify the endpoint infrastructure without making real AI calls.
+
+Authentication:
+    Set environment variables before running:
+    - LOADTEST_USERNAME: Username for authentication (default: admin)
+    - LOADTEST_PASSWORD: Password for authentication (default: admin)
 """
 
+import os
 import random
-import json
-import time
-from locust import HttpUser, task, between, tag
+from locust import HttpUser, task, between, tag, events
 
+
+# Authentication credentials from environment variables
+AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
+AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
 
 # AI Providers available in the system
 PROVIDERS = ["openai", "anthropic", "gemini", "ollama"]
@@ -26,18 +34,40 @@ SAMPLE_MESSAGES = [
     "Explain my network topology",
 ]
 
-# Mock AI responses for load testing (avoids real API calls)
-MOCK_RESPONSES = [
-    "Based on your network topology, I can see several devices connected.",
-    "Your network appears healthy with all devices responding normally.",
-    "I found 5 devices on your network, including your gateway router.",
-    "The gateway IP address is 192.168.1.1.",
-    "All monitored devices are currently online and healthy.",
-    "Your network topology shows a star configuration with the router at the center.",
-]
+
+class AuthenticatedAssistantUser(HttpUser):
+    """Base class for authenticated assistant service users."""
+    
+    abstract = True
+    access_token = None
+    
+    def on_start(self):
+        """Authenticate before running tests"""
+        response = self.client.post(
+            "/api/auth/login",
+            json={
+                "username": AUTH_USERNAME,
+                "password": AUTH_PASSWORD
+            },
+            catch_response=True
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            self.access_token = data.get("access_token")
+            response.success()
+        else:
+            response.failure(f"Login failed: {response.status_code}")
+    
+    def _auth_headers(self):
+        """Get headers with authorization token"""
+        headers = {}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+        return headers
 
 
-class AssistantServiceUser(HttpUser):
+class AssistantServiceUser(AuthenticatedAssistantUser):
     """
     Load test user for the Assistant Service.
     
@@ -46,6 +76,9 @@ class AssistantServiceUser(HttpUser):
     
     Run with:
         locust -f locustfile_assistant.py --host=http://localhost:8004
+        
+    Or via backend proxy:
+        locust -f locustfile_assistant.py --host=http://localhost:8000
     """
     
     wait_time = between(1, 3)
@@ -57,13 +90,13 @@ class AssistantServiceUser(HttpUser):
     @tag("config", "read", "safe")
     def get_config(self):
         """Get assistant configuration and provider status - high frequency"""
-        self.client.get("/api/assistant/config")
+        self.client.get("/api/assistant/config", headers=self._auth_headers())
     
     @task(8)
     @tag("providers", "read", "safe")
     def list_providers(self):
         """List all providers and their availability"""
-        self.client.get("/api/assistant/providers")
+        self.client.get("/api/assistant/providers", headers=self._auth_headers())
     
     @task(5)
     @tag("providers", "read", "safe")
@@ -72,6 +105,7 @@ class AssistantServiceUser(HttpUser):
         provider = random.choice(PROVIDERS)
         with self.client.get(
             f"/api/assistant/models/{provider}",
+            headers=self._auth_headers(),
             name="/api/assistant/models/[provider]",
             catch_response=True
         ) as response:
@@ -85,6 +119,7 @@ class AssistantServiceUser(HttpUser):
         """Refresh model lists for all providers - low frequency"""
         with self.client.post(
             "/api/assistant/models/refresh",
+            headers=self._auth_headers(),
             name="/api/assistant/models/refresh",
             catch_response=True,
             timeout=30
@@ -98,13 +133,13 @@ class AssistantServiceUser(HttpUser):
     @tag("context", "read", "safe")
     def get_network_context(self):
         """Get current network context for assistant - high frequency"""
-        self.client.get("/api/assistant/context")
+        self.client.get("/api/assistant/context", headers=self._auth_headers())
     
     @task(4)
     @tag("context", "read", "safe")
     def get_context_status(self):
         """Get context service status"""
-        self.client.get("/api/assistant/context/status")
+        self.client.get("/api/assistant/context/status", headers=self._auth_headers())
     
     @task(2)
     @tag("context", "write", "safe")
@@ -112,6 +147,7 @@ class AssistantServiceUser(HttpUser):
         """Refresh network context cache"""
         with self.client.post(
             "/api/assistant/context/refresh",
+            headers=self._auth_headers(),
             name="/api/assistant/context/refresh",
             catch_response=True,
             timeout=15
@@ -123,13 +159,13 @@ class AssistantServiceUser(HttpUser):
     @tag("context", "read", "safe")
     def get_context_debug(self):
         """Get full context string for debugging"""
-        self.client.get("/api/assistant/context/debug")
+        self.client.get("/api/assistant/context/debug", headers=self._auth_headers())
     
     @task(1)
     @tag("context", "read", "safe")
     def get_context_raw(self):
         """Get raw snapshot data"""
-        self.client.get("/api/assistant/context/raw")
+        self.client.get("/api/assistant/context/raw", headers=self._auth_headers())
     
     # ==================== Healthcheck ====================
     
@@ -140,7 +176,7 @@ class AssistantServiceUser(HttpUser):
         self.client.get("/healthz")
 
 
-class AssistantChatMockUser(HttpUser):
+class AssistantChatMockUser(AuthenticatedAssistantUser):
     """
     Load test user for chat endpoints with MOCKED behavior.
     
@@ -149,9 +185,6 @@ class AssistantChatMockUser(HttpUser):
     - Tests request validation and routing
     - Measures endpoint availability and initial response time
     - Does NOT incur any AI API costs
-    
-    Run with:
-        locust -f locustfile_assistant.py --host=http://localhost:8004 --tags mock-chat
     """
     
     wait_time = between(1, 3)
@@ -175,6 +208,7 @@ class AssistantChatMockUser(HttpUser):
         # Use very short timeout - we're testing the endpoint, not the AI
         with self.client.post(
             "/api/assistant/chat",
+            headers=self._auth_headers(),
             json={
                 "provider": provider,
                 "message": message,
@@ -186,11 +220,7 @@ class AssistantChatMockUser(HttpUser):
             catch_response=True,
             timeout=2  # Very short timeout - won't wait for AI
         ) as response:
-            # Any response is a success for infrastructure testing:
-            # - 200: Quick response (unlikely unless cached/mocked on server)
-            # - 503: Provider not configured (valid infrastructure response)
-            # - 500: Server error (endpoint is reachable)
-            # - Timeout: Endpoint accepted request, AI is processing (expected)
+            # Any response is a success for infrastructure testing
             response.success()
     
     @task(5)
@@ -204,6 +234,7 @@ class AssistantChatMockUser(HttpUser):
         # Test with invalid provider
         with self.client.post(
             "/api/assistant/chat",
+            headers=self._auth_headers(),
             json={
                 "provider": "invalid_provider",
                 "message": "test",
@@ -230,6 +261,7 @@ class AssistantChatMockUser(HttpUser):
         
         with self.client.post(
             "/api/assistant/chat/stream",
+            headers=self._auth_headers(),
             json={
                 "provider": provider,
                 "message": message,
@@ -255,6 +287,7 @@ class AssistantChatMockUser(HttpUser):
         # Ollama is often not configured in production
         with self.client.post(
             "/api/assistant/chat",
+            headers=self._auth_headers(),
             json={
                 "provider": "ollama",
                 "message": "hi",
@@ -270,15 +303,12 @@ class AssistantChatMockUser(HttpUser):
                 response.success()
 
 
-class AssistantEndpointStressUser(HttpUser):
+class AssistantEndpointStressUser(AuthenticatedAssistantUser):
     """
     High-frequency stress test for assistant endpoints.
     
     Tests endpoint capacity without any AI calls.
     Safe to run at high concurrency.
-    
-    Run with:
-        locust -f locustfile_assistant.py --host=http://localhost:8004 --tags stress
     """
     
     wait_time = between(0.5, 1.5)  # Fast requests
@@ -288,25 +318,25 @@ class AssistantEndpointStressUser(HttpUser):
     @tag("stress", "read", "safe")
     def rapid_config_check(self):
         """Rapidly check config endpoint"""
-        self.client.get("/api/assistant/config")
+        self.client.get("/api/assistant/config", headers=self._auth_headers())
     
     @task(8)
     @tag("stress", "read", "safe")
     def rapid_provider_check(self):
         """Rapidly check providers"""
-        self.client.get("/api/assistant/providers")
+        self.client.get("/api/assistant/providers", headers=self._auth_headers())
     
     @task(6)
     @tag("stress", "read", "safe")
     def rapid_context_check(self):
         """Rapidly check context"""
-        self.client.get("/api/assistant/context")
+        self.client.get("/api/assistant/context", headers=self._auth_headers())
     
     @task(4)
     @tag("stress", "read", "safe")
     def rapid_context_status(self):
         """Rapidly check context status"""
-        self.client.get("/api/assistant/context/status")
+        self.client.get("/api/assistant/context/status", headers=self._auth_headers())
     
     @task(5)
     @tag("stress", "read", "safe")
@@ -315,55 +345,12 @@ class AssistantEndpointStressUser(HttpUser):
         self.client.get("/healthz")
 
 
-# ============================================================================
-# REAL AI TESTING (DISABLED BY DEFAULT - COSTS MONEY!)
-# ============================================================================
-# 
-# The classes below make REAL AI API calls and WILL INCUR COSTS.
-# They are commented out by default for safety.
-# 
-# To enable real AI testing:
-# 1. Uncomment the classes below
-# 2. Run with: locust -f locustfile_assistant.py --tags real-chat
-# 3. Monitor your AI provider usage/costs!
-#
-# ============================================================================
+# ==================== Event Hooks ====================
 
-# class AssistantRealChatUser(HttpUser):
-#     """
-#     ⚠️  WARNING: REAL AI API CALLS - COSTS MONEY! ⚠️
-#     
-#     This class makes actual API calls to AI providers.
-#     Only uncomment and use when you specifically need to test real AI integration.
-#     
-#     Run with:
-#         locust -f locustfile_assistant.py --host=http://localhost:8004 --tags real-chat
-#     """
-#     
-#     wait_time = between(10, 30)  # Very slow to minimize costs
-#     weight = 1  # Lowest weight
-#     
-#     @task(1)
-#     @tag("real-chat", "write", "costly")
-#     def real_chat_test(self):
-#         """
-#         ⚠️  MAKES REAL AI API CALLS - COSTS MONEY! ⚠️
-#         """
-#         provider = random.choice(PROVIDERS)
-#         message = random.choice(SAMPLE_MESSAGES)
-#         
-#         with self.client.post(
-#             "/api/assistant/chat",
-#             json={
-#                 "provider": provider,
-#                 "message": message,
-#                 "include_network_context": True,
-#                 "conversation_history": [],
-#                 "temperature": 0.7,
-#             },
-#             name="/api/assistant/chat (REAL)",
-#             catch_response=True,
-#             timeout=60
-#         ) as response:
-#             if response.status_code in [200, 503, 500]:
-#                 response.success()
+@events.test_start.add_listener
+def on_test_start(environment, **kwargs):
+    print(f"\n{'='*60}")
+    print(f"  Assistant Service Load Test (MOCKED - No AI Costs)")
+    print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Target: {environment.host}")
+    print(f"{'='*60}\n")

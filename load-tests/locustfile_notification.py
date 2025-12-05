@@ -3,20 +3,25 @@ Load Test for Notification Service (port 8005)
 
 Tests notification preferences, history, Discord integration, 
 ML anomaly detection, and scheduled broadcasts.
+
+Authentication:
+    Set environment variables before running:
+    - LOADTEST_USERNAME: Username for authentication (default: admin)
+    - LOADTEST_PASSWORD: Password for authentication (default: admin)
 """
 
+import os
 import random
 import uuid
 from datetime import datetime, timedelta
-from locust import HttpUser, task, between, tag
+from locust import HttpUser, task, between, tag, events
 from faker import Faker
 
 fake = Faker()
 
-# Sample user IDs for testing
-SAMPLE_USER_IDS = [
-    str(uuid.uuid4()) for _ in range(10)
-]
+# Authentication credentials from environment variables
+AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
+AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
 
 # Sample device IPs
 SAMPLE_DEVICE_IPS = [
@@ -28,23 +33,55 @@ SAMPLE_DEVICE_IPS = [
 ]
 
 
-class NotificationServiceUser(HttpUser):
+class AuthenticatedNotificationUser(HttpUser):
+    """Base class for authenticated notification service users."""
+    
+    abstract = True
+    access_token = None
+    user_id = None
+    
+    def on_start(self):
+        """Authenticate before running tests"""
+        response = self.client.post(
+            "/api/auth/login",
+            json={
+                "username": AUTH_USERNAME,
+                "password": AUTH_PASSWORD
+            },
+            catch_response=True
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            self.access_token = data.get("access_token")
+            user_data = data.get("user", {})
+            self.user_id = user_data.get("id", str(uuid.uuid4()))
+            response.success()
+        else:
+            response.failure(f"Login failed: {response.status_code}")
+    
+    def _auth_headers(self):
+        """Get headers with authorization token and user ID"""
+        headers = {}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
+        headers["X-User-Id"] = self.user_id or str(uuid.uuid4())
+        headers["X-Username"] = AUTH_USERNAME
+        return headers
+
+
+class NotificationServiceUser(AuthenticatedNotificationUser):
     """
     Load test user for the Notification Service.
     
     Run with:
         locust -f locustfile_notification.py --host=http://localhost:8005
+        
+    Or via backend proxy:
+        locust -f locustfile_notification.py --host=http://localhost:8000
     """
     
     wait_time = between(1, 3)
-    
-    def _random_user_id(self):
-        """Get a random user ID for testing"""
-        return random.choice(SAMPLE_USER_IDS)
-    
-    def _user_headers(self, user_id=None):
-        """Get headers with user ID"""
-        return {"X-User-Id": user_id or self._random_user_id()}
     
     # ==================== Service Status ====================
     
@@ -52,7 +89,7 @@ class NotificationServiceUser(HttpUser):
     @tag("status", "read")
     def get_service_status(self):
         """Get notification service status - high frequency"""
-        self.client.get("/api/notifications/status")
+        self.client.get("/api/notifications/status", headers=self._auth_headers())
     
     # ==================== Preferences ====================
     
@@ -60,20 +97,15 @@ class NotificationServiceUser(HttpUser):
     @tag("preferences", "read")
     def get_preferences(self):
         """Get notification preferences for a user"""
-        headers = self._user_headers()
-        self.client.get(
-            "/api/notifications/preferences",
-            headers=headers
-        )
+        self.client.get("/api/notifications/preferences", headers=self._auth_headers())
     
     @task(2)
     @tag("preferences", "write")
     def update_preferences(self):
         """Update notification preferences"""
-        headers = self._user_headers()
         with self.client.put(
             "/api/notifications/preferences",
-            headers=headers,
+            headers=self._auth_headers(),
             json={
                 "email_enabled": random.choice([True, False]),
                 "discord_enabled": random.choice([True, False]),
@@ -92,11 +124,10 @@ class NotificationServiceUser(HttpUser):
     @tag("history", "read")
     def get_notification_history(self):
         """Get notification history for a user"""
-        headers = self._user_headers()
         page = random.randint(1, 5)
         self.client.get(
             f"/api/notifications/history?page={page}&per_page=20",
-            headers=headers,
+            headers=self._auth_headers(),
             name="/api/notifications/history"
         )
     
@@ -104,11 +135,7 @@ class NotificationServiceUser(HttpUser):
     @tag("stats", "read")
     def get_notification_stats(self):
         """Get notification statistics"""
-        headers = self._user_headers()
-        self.client.get(
-            "/api/notifications/stats",
-            headers=headers
-        )
+        self.client.get("/api/notifications/stats", headers=self._auth_headers())
     
     # ==================== Discord Integration ====================
     
@@ -116,7 +143,7 @@ class NotificationServiceUser(HttpUser):
     @tag("discord", "read")
     def get_discord_info(self):
         """Get Discord bot information"""
-        self.client.get("/api/notifications/discord/info")
+        self.client.get("/api/notifications/discord/info", headers=self._auth_headers())
     
     @task(3)
     @tag("discord", "read")
@@ -124,6 +151,7 @@ class NotificationServiceUser(HttpUser):
         """Get Discord servers the bot is in"""
         with self.client.get(
             "/api/notifications/discord/guilds",
+            headers=self._auth_headers(),
             name="/api/notifications/discord/guilds",
             catch_response=True
         ) as response:
@@ -137,6 +165,7 @@ class NotificationServiceUser(HttpUser):
         """Get Discord bot invite URL"""
         with self.client.get(
             "/api/notifications/discord/invite-url",
+            headers=self._auth_headers(),
             name="/api/notifications/discord/invite-url",
             catch_response=True
         ) as response:
@@ -149,7 +178,7 @@ class NotificationServiceUser(HttpUser):
     @tag("ml", "read")
     def get_ml_model_status(self):
         """Get ML anomaly detection model status"""
-        self.client.get("/api/notifications/ml/status")
+        self.client.get("/api/notifications/ml/status", headers=self._auth_headers())
     
     @task(3)
     @tag("ml", "read")
@@ -158,6 +187,7 @@ class NotificationServiceUser(HttpUser):
         device_ip = random.choice(SAMPLE_DEVICE_IPS)
         with self.client.get(
             f"/api/notifications/ml/baseline/{device_ip}",
+            headers=self._auth_headers(),
             name="/api/notifications/ml/baseline/[ip]",
             catch_response=True
         ) as response:
@@ -171,7 +201,7 @@ class NotificationServiceUser(HttpUser):
     @tag("silenced", "read")
     def get_silenced_devices(self):
         """Get list of silenced devices"""
-        self.client.get("/api/notifications/silenced-devices")
+        self.client.get("/api/notifications/silenced-devices", headers=self._auth_headers())
     
     @task(2)
     @tag("silenced", "read")
@@ -180,6 +210,7 @@ class NotificationServiceUser(HttpUser):
         device_ip = random.choice(SAMPLE_DEVICE_IPS)
         self.client.get(
             f"/api/notifications/silenced-devices/{device_ip}",
+            headers=self._auth_headers(),
             name="/api/notifications/silenced-devices/[ip]"
         )
     
@@ -189,7 +220,7 @@ class NotificationServiceUser(HttpUser):
     @tag("scheduled", "read")
     def get_scheduled_broadcasts(self):
         """Get all scheduled broadcasts"""
-        self.client.get("/api/notifications/scheduled")
+        self.client.get("/api/notifications/scheduled", headers=self._auth_headers())
     
     @task(2)
     @tag("scheduled", "read")
@@ -198,6 +229,7 @@ class NotificationServiceUser(HttpUser):
         broadcast_id = str(uuid.uuid4())
         with self.client.get(
             f"/api/notifications/scheduled/{broadcast_id}",
+            headers=self._auth_headers(),
             name="/api/notifications/scheduled/[id]",
             catch_response=True
         ) as response:
@@ -211,7 +243,7 @@ class NotificationServiceUser(HttpUser):
     @tag("version", "read")
     def get_version_status(self):
         """Get version status and update info"""
-        self.client.get("/api/notifications/version")
+        self.client.get("/api/notifications/version", headers=self._auth_headers())
     
     @task(2)
     @tag("version", "write")
@@ -219,6 +251,7 @@ class NotificationServiceUser(HttpUser):
         """Trigger version check"""
         with self.client.post(
             "/api/notifications/version/check",
+            headers=self._auth_headers(),
             name="/api/notifications/version/check",
             catch_response=True
         ) as response:
@@ -234,22 +267,13 @@ class NotificationServiceUser(HttpUser):
         self.client.get("/healthz")
 
 
-class NotificationWriteUser(HttpUser):
+class NotificationWriteUser(AuthenticatedNotificationUser):
     """
     Load test user for notification write operations.
-    
-    Run with:
-        locust -f locustfile_notification.py --host=http://localhost:8005
     """
     
     wait_time = between(3, 8)  # Slower for write operations
     weight = 1  # Lower weight
-    
-    def _random_user_id(self):
-        return random.choice(SAMPLE_USER_IDS)
-    
-    def _user_headers(self, user_id=None):
-        return {"X-User-Id": user_id or self._random_user_id()}
     
     @task(2)
     @tag("health-check", "write")
@@ -259,6 +283,7 @@ class NotificationWriteUser(HttpUser):
         
         with self.client.post(
             "/api/notifications/process-health-check",
+            headers=self._auth_headers(),
             params={
                 "device_ip": device_ip,
                 "success": random.choice([True, True, True, False]),  # 75% success
@@ -281,12 +306,14 @@ class NotificationWriteUser(HttpUser):
         # Silence the device
         self.client.post(
             f"/api/notifications/silenced-devices/{device_ip}",
+            headers=self._auth_headers(),
             name="/api/notifications/silenced-devices/[ip] (silence)"
         )
         
         # Unsilence the device
         self.client.delete(
             f"/api/notifications/silenced-devices/{device_ip}",
+            headers=self._auth_headers(),
             name="/api/notifications/silenced-devices/[ip] (unsilence)"
         )
     
@@ -294,7 +321,7 @@ class NotificationWriteUser(HttpUser):
     @tag("scheduled", "write")
     def create_and_cancel_broadcast(self):
         """Create and immediately cancel a scheduled broadcast"""
-        headers = {"X-Username": "loadtest"}
+        headers = self._auth_headers()
         
         # Schedule for 1 hour from now
         scheduled_time = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
@@ -322,6 +349,7 @@ class NotificationWriteUser(HttpUser):
                 # Cancel the broadcast
                 cancel_response = self.client.post(
                     f"/api/notifications/scheduled/{broadcast_id}/cancel",
+                    headers=headers,
                     name="/api/notifications/scheduled/[id]/cancel",
                     catch_response=True
                 )
@@ -331,6 +359,7 @@ class NotificationWriteUser(HttpUser):
                 # Delete the broadcast
                 delete_response = self.client.delete(
                     f"/api/notifications/scheduled/{broadcast_id}",
+                    headers=headers,
                     name="/api/notifications/scheduled/[id] (delete)",
                     catch_response=True
                 )
@@ -341,44 +370,12 @@ class NotificationWriteUser(HttpUser):
                 create_response.success()
 
 
-class NotificationTestUser(HttpUser):
-    """
-    Load test user for testing notification delivery.
-    
-    WARNING: This may send actual notifications via email/Discord!
-    Use with caution and only in test environments.
-    
-    Run with:
-        locust -f locustfile_notification.py --host=http://localhost:8005 --tags test-notify
-    """
-    
-    wait_time = between(10, 30)  # Very slow - actual notifications
-    weight = 1  # Lowest weight
-    
-    def _user_headers(self):
-        return {"X-User-Id": random.choice(SAMPLE_USER_IDS)}
-    
-    @task(1)
-    @tag("test-notify", "write")
-    def send_test_notification(self):
-        """
-        Send a test notification.
-        
-        WARNING: This may send actual emails/Discord messages!
-        """
-        headers = self._user_headers()
-        channel = random.choice(["email", "discord"])
-        
-        with self.client.post(
-            "/api/notifications/test",
-            headers=headers,
-            json={
-                "channel": channel,
-            },
-            name="/api/notifications/test",
-            catch_response=True
-        ) as response:
-            # Various failures are acceptable
-            if response.status_code in [200, 400, 500, 503]:
-                response.success()
+# ==================== Event Hooks ====================
 
+@events.test_start.add_listener
+def on_test_start(environment, **kwargs):
+    print(f"\n{'='*60}")
+    print(f"  Notification Service Load Test")
+    print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Target: {environment.host}")
+    print(f"{'='*60}\n")

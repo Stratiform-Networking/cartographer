@@ -293,7 +293,7 @@
 											>
 												<svg viewBox="0 0 32 28" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
 													<path 
-														d="M 2 1 H 30 Q 31 1 31 2 V 19 Q 31 20 30 20 H 21 V 26 Q 21 27 20 27 H 12 Q 11 27 11 26 V 20 H 2 Q 1 20 1 19 V 2 Q 1 1 2 1 Z"
+														d="M 11 1 H 21 Q 22 1 22 2 V 6 H 30 Q 31 6 31 7 V 26 Q 31 27 30 27 H 2 Q 1 27 1 26 V 7 Q 1 6 2 6 H 10 V 2 Q 10 1 11 1 Z"
 														class="fill-amber-200 dark:fill-amber-800 stroke-amber-400 dark:stroke-amber-600"
 														stroke-width="1.5"
 													/>
@@ -425,7 +425,7 @@
 										>
 											<svg viewBox="0 0 32 28" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
 												<path 
-													d="M 2 1 H 30 Q 31 1 31 2 V 19 Q 31 20 30 20 H 21 V 26 Q 21 27 20 27 H 12 Q 11 27 11 26 V 20 H 2 Q 1 20 1 19 V 2 Q 1 1 2 1 Z"
+													d="M 11 1 H 21 Q 22 1 22 2 V 6 H 30 Q 31 6 31 7 V 26 Q 31 27 30 27 H 2 Q 1 27 1 26 V 7 Q 1 6 2 6 H 10 V 2 Q 10 1 11 1 Z"
 													:class="getRj45SvgClasses(port)"
 													stroke-width="2"
 												/>
@@ -1556,7 +1556,7 @@
 									<template v-if="port.type === 'rj45'">
 										<svg viewBox="0 0 32 28" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
 											<path 
-												d="M 2 1 H 30 Q 31 1 31 2 V 19 Q 31 20 30 20 H 21 V 26 Q 21 27 20 27 H 12 Q 11 27 11 26 V 20 H 2 Q 1 20 1 19 V 2 Q 1 1 2 1 Z"
+												d="M 11 1 H 21 Q 22 1 22 2 V 6 H 30 Q 31 6 31 7 V 26 Q 31 27 30 27 H 2 Q 1 27 1 26 V 7 Q 1 6 2 6 H 10 V 2 Q 10 1 11 1 Z"
 												:class="getRj45SvgClasses(port)"
 												stroke-width="1.5"
 											/>

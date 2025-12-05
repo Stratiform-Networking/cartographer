@@ -580,7 +580,7 @@
 												:class="[
 													'flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
 													broadcastPriority === priority
-														? 'border-amber-500 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+														? getBypassPriorityActiveClasses(priority)
 														: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
 												]"
 											>

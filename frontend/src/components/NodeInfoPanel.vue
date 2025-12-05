@@ -284,26 +284,32 @@
 											class="grid gap-1.5 gap-y-2.5"
 											:style="{ gridTemplateColumns: `repeat(${portGridCols}, minmax(20px, 1fr))` }"
 										>
-											<div 
-												v-for="n in portGridCols * portGridRows"
-												:key="n"
-												class="h-5 text-[9px] flex items-center justify-center font-mono border relative"
-												:class="defaultPortType === 'rj45' 
-													? 'bg-amber-200 dark:bg-amber-800 text-amber-800 dark:text-amber-200 border-amber-400 dark:border-amber-600 rounded-sm' 
-													: 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-600 rounded'"
-											>
-											<!-- RJ45 clip tab (sticks out at bottom) -->
+										<template v-for="n in portGridCols * portGridRows" :key="n">
+											<!-- RJ45 Port (SVG shape) -->
 											<div 
 												v-if="defaultPortType === 'rj45'"
-												class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-amber-200 dark:bg-amber-800 border border-t-0 border-amber-400 dark:border-amber-600 rounded-b-sm"
-											></div>
+												class="relative flex items-center justify-center"
+												style="width: 100%; aspect-ratio: 1.15;"
+											>
+												<svg viewBox="0 0 32 28" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+													<path 
+														d="M 2 1 H 30 Q 31 1 31 2 V 19 Q 31 20 30 20 H 21 V 26 Q 21 27 20 27 H 12 Q 11 27 11 26 V 20 H 2 Q 1 20 1 19 V 2 Q 1 1 2 1 Z"
+														class="fill-amber-200 dark:fill-amber-800 stroke-amber-400 dark:stroke-amber-600"
+														stroke-width="1.5"
+													/>
+												</svg>
+												<span class="relative z-10 text-[9px] font-mono text-amber-800 dark:text-amber-200">{{ n }}</span>
+											</div>
+											<!-- SFP Port -->
+											<div 
+												v-else
+												class="h-5 text-[9px] flex items-center justify-center font-mono border relative bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 border-cyan-400 dark:border-cyan-600 rounded"
+											>
 												<!-- SFP pull tab -->
-												<div 
-													v-if="defaultPortType !== 'rj45'"
-													class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
-												></div>
+												<div class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"></div>
 												<span class="relative z-10">{{ n }}</span>
 											</div>
+										</template>
 										</div>
 									</div>
 								</div>
@@ -410,23 +416,35 @@
 										isDragOverPort(port) && !isDraggedPort(port) ? 'ring-2 ring-cyan-400 ring-offset-2 scale-105' : ''
 									]"
 								>
-										<!-- Port Visual -->
+										<!-- Port Visual - RJ45 (SVG shape) -->
 										<div 
+											v-if="port.type === 'rj45'"
+											class="relative flex items-center justify-center transition-all"
+											style="width: 100%; height: 32px;"
+											:title="getPortTooltip(port)"
+										>
+											<svg viewBox="0 0 32 28" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+												<path 
+													d="M 2 1 H 30 Q 31 1 31 2 V 19 Q 31 20 30 20 H 21 V 26 Q 21 27 20 27 H 12 Q 11 27 11 26 V 20 H 2 Q 1 20 1 19 V 2 Q 1 1 2 1 Z"
+													:class="getRj45SvgClasses(port)"
+													stroke-width="2"
+												/>
+											</svg>
+											<span v-if="port.status !== 'blocked'" class="relative z-10 text-[10px] font-mono font-medium" :class="getRj45TextClasses(port)">
+												{{ getPortLabel(port) }}
+											</span>
+											<span v-else class="text-slate-400 dark:text-slate-600 relative z-10 text-[10px] font-mono">✕</span>
+										</div>
+										<!-- Port Visual - SFP/SFP+ -->
+										<div 
+											v-else
 											class="h-8 flex items-center justify-center text-[10px] font-mono font-medium border-2 transition-all relative"
 											:class="[getPortClasses(port), getPortShape(port)]"
 											:title="getPortTooltip(port)"
 										>
-											<!-- RJ45 clip tab (sticks out at bottom) -->
-											<div 
-												v-if="port.type === 'rj45' && port.status !== 'blocked'"
-												class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1/2 h-1.5 border-2 border-t-0 rounded-b-sm"
-												:class="port.status === 'active' 
-													? 'bg-amber-200 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600' 
-													: 'bg-slate-300 dark:bg-slate-700 border-slate-400 dark:border-slate-600'"
-											></div>
 											<!-- SFP handle/pull tab indicator -->
 											<div 
-												v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"
+												v-if="port.status !== 'blocked'"
 												class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-3 h-0.5 bg-current opacity-25 rounded-full"
 											></div>
 											<!-- Port Number/Label -->
@@ -1526,28 +1544,40 @@
 								class="grid gap-1.5 gap-y-2.5 min-w-fit"
 								:style="{ gridTemplateColumns: `repeat(${lanPortsConfig.cols}, minmax(24px, 1fr))` }"
 							>
+								<!-- RJ45 Port (SVG shape) -->
 								<div 
 									v-for="port in sortedPorts"
 									:key="`disabled-${port.row}-${port.col}`"
-									class="h-6 text-[9px] flex items-center justify-center font-mono border relative"
-									:class="[getPortClasses(port), getPortShape(port)]"
+									class="relative flex items-center justify-center"
+									:style="port.type === 'rj45' ? 'height: 24px;' : ''"
 									:title="getPortTooltip(port)"
 								>
-								<!-- RJ45 clip tab (sticks out at bottom) -->
-								<div 
-									v-if="port.type === 'rj45' && port.status !== 'blocked'"
-									class="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1/2 h-1 border border-t-0 rounded-b-sm"
-									:class="port.status === 'active' 
-										? 'bg-amber-200 dark:bg-amber-900/50 border-amber-400 dark:border-amber-600' 
-										: 'bg-slate-300 dark:bg-slate-700 border-slate-400 dark:border-slate-600'"
-								></div>
-									<!-- SFP pull tab -->
-									<div 
-										v-if="(port.type === 'sfp' || port.type === 'sfp+') && port.status !== 'blocked'"
-										class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
-									></div>
-									<span v-if="port.status !== 'blocked'" class="relative z-10">{{ getPortLabel(port) }}</span>
-									<span v-else class="text-slate-400 dark:text-slate-600 relative z-10">✕</span>
+									<!-- RJ45 SVG -->
+									<template v-if="port.type === 'rj45'">
+										<svg viewBox="0 0 32 28" class="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid meet">
+											<path 
+												d="M 2 1 H 30 Q 31 1 31 2 V 19 Q 31 20 30 20 H 21 V 26 Q 21 27 20 27 H 12 Q 11 27 11 26 V 20 H 2 Q 1 20 1 19 V 2 Q 1 1 2 1 Z"
+												:class="getRj45SvgClasses(port)"
+												stroke-width="1.5"
+											/>
+										</svg>
+										<span v-if="port.status !== 'blocked'" class="relative z-10 text-[9px] font-mono" :class="getRj45TextClasses(port)">{{ getPortLabel(port) }}</span>
+										<span v-else class="text-slate-400 dark:text-slate-600 relative z-10 text-[9px] font-mono">✕</span>
+									</template>
+									<!-- SFP/SFP+ -->
+									<template v-else>
+										<div 
+											class="h-6 w-full text-[9px] flex items-center justify-center font-mono border relative"
+											:class="[getPortClasses(port), getPortShape(port)]"
+										>
+											<div 
+												v-if="port.status !== 'blocked'"
+												class="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 bg-current opacity-25 rounded-full"
+											></div>
+											<span v-if="port.status !== 'blocked'" class="relative z-10">{{ getPortLabel(port) }}</span>
+											<span v-else class="text-slate-400 dark:text-slate-600 relative z-10">✕</span>
+										</div>
+									</template>
 								</div>
 							</div>
 						</div>
@@ -2716,6 +2746,31 @@ function getPortShape(port: LanPort): string {
 	} else {
 		// SFP/SFP+: Rectangular shape with slight rounding (not too pill-like)
 		return 'rounded';
+	}
+}
+
+function getRj45SvgClasses(port: LanPort): string {
+	if (port.status === 'blocked') {
+		return 'fill-slate-200 dark:fill-slate-800 stroke-slate-400 dark:stroke-slate-600 opacity-50';
+	} else if (port.status === 'unused') {
+		return 'fill-slate-300 dark:fill-slate-700 stroke-slate-500 dark:stroke-slate-500';
+	} else {
+		// Active
+		let classes = 'fill-amber-200 dark:fill-amber-900/50 stroke-amber-500 dark:stroke-amber-500';
+		if (port.connectedDeviceId) {
+			classes += ' [filter:drop-shadow(0_0_3px_rgb(52_211_153_/_0.5))]';
+		}
+		return classes;
+	}
+}
+
+function getRj45TextClasses(port: LanPort): string {
+	if (port.status === 'blocked') {
+		return 'text-slate-400 dark:text-slate-600';
+	} else if (port.status === 'unused') {
+		return 'text-slate-600 dark:text-slate-400';
+	} else {
+		return 'text-amber-800 dark:text-amber-200';
 	}
 }
 

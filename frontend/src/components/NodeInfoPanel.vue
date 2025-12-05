@@ -1393,7 +1393,8 @@
 						<!-- Run test button -->
 						<button
 							@click="runSpeedTest"
-							:disabled="speedTestRunning"
+							:disabled="!hasWritePermission || speedTestRunning"
+							:title="!hasWritePermission ? 'Write permission required' : ''"
 							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 						>
 							<svg 
@@ -1950,7 +1951,8 @@
 						<!-- Run test button -->
 						<button
 							@click="runSpeedTest"
-							:disabled="speedTestRunning"
+							:disabled="!hasWritePermission || speedTestRunning"
+							:title="!hasWritePermission ? 'Write permission required' : ''"
 							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 						>
 							<svg 

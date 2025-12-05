@@ -108,10 +108,16 @@ async function checkForUpdates(): Promise<void> {
 	lastError.value = null;
 
 	try {
-		const response = await fetch(GITHUB_RAW_URL, {
-			cache: "no-cache",
+		// Add cache-busting timestamp to bypass GitHub's CDN cache
+		const cacheBuster = Date.now();
+		const url = `${GITHUB_RAW_URL}?t=${cacheBuster}`;
+		
+		const response = await fetch(url, {
+			cache: "no-store", // Most aggressive - never use cache
 			headers: {
 				Accept: "text/plain",
+				"Cache-Control": "no-cache, no-store, must-revalidate",
+				Pragma: "no-cache",
 			},
 		});
 
@@ -124,7 +130,7 @@ async function checkForUpdates(): Promise<void> {
 		preferences.value.lastChecked = Date.now();
 		savePreferences();
 
-		console.log("[VersionCheck] Latest version:", latestVersion.value);
+		console.log("[VersionCheck] Latest version:", latestVersion.value, "(fetched fresh)");
 	} catch (e: any) {
 		lastError.value = e.message || "Failed to check for updates";
 		console.warn("[VersionCheck] Failed to fetch version:", e);

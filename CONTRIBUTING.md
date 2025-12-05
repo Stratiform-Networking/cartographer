@@ -148,9 +148,35 @@ chore(deps): upgrade Vue to 3.5.0
 
    This launches an interactive prompt that guides you through creating a properly formatted commit message.
 
-## Creating Releases
+## Automatic Releases
 
-Releases are managed using [standard-version](https://github.com/conventional-changelog/standard-version).
+**On the `main` branch**, a release is automatically created after each commit:
+- Version is bumped based on commit type (`feat` → minor, `fix` → patch)
+- `CHANGELOG.md` is updated with your changes
+- A git tag is created
+
+After committing on main, push the release:
+```bash
+git push --follow-tags origin main
+# Or use: npm run push:release
+```
+
+### Skip Auto-Release
+
+If you need to make a commit without triggering a release:
+```bash
+# Option 1: Environment variable
+SKIP_AUTO_RELEASE=1 git commit -m "chore: quick fix"
+
+# Option 2: npm script
+npm run commit:no-release
+```
+
+Release commits (those starting with `chore(release):`) automatically skip the auto-release to prevent infinite loops.
+
+## Manual Releases
+
+Releases can also be created manually using [standard-version](https://github.com/conventional-changelog/standard-version).
 
 ```bash
 # Preview what the next release would look like

@@ -176,7 +176,28 @@ npm install
 # The prepare script automatically sets up git hooks
 ```
 
-### Creating releases
+### Automatic releases
+
+Commits on the `main` branch automatically trigger a release:
+1. Version is bumped based on commit type (`feat` → minor, `fix` → patch)
+2. `CHANGELOG.md` is updated
+3. A git tag is created
+
+After committing, push the release:
+```bash
+git push --follow-tags origin main
+# Or use the helper script:
+npm run push:release
+```
+
+**Skip auto-release for a commit:**
+```bash
+SKIP_AUTO_RELEASE=1 git commit -m "chore: quick fix"
+# Or use the npm script:
+npm run commit:no-release
+```
+
+### Manual releases
 
 ```bash
 # Preview what the next release would look like

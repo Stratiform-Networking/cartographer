@@ -6,11 +6,14 @@
   "scripts": {
     "prepare": "husky",
     "commit": "cz",
+    "commit:no-release": "SKIP_AUTO_RELEASE=1 git commit",
     "release": "standard-version",
     "release:minor": "standard-version --release-as minor",
     "release:major": "standard-version --release-as major",
     "release:patch": "standard-version --release-as patch",
-    "release:dry-run": "standard-version --dry-run"
+    "release:dry-run": "standard-version --dry-run",
+    "release:first": "standard-version --first-release",
+    "push:release": "git push --follow-tags origin main"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.6.0",

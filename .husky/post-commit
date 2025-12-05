@@ -1,0 +1,45 @@
+#!/bin/sh
+# Post-commit hook: automatically run release after each commit
+# This updates the version, changelog, and creates a git tag
+
+# Skip if this is already a release commit (to prevent infinite loop)
+COMMIT_MSG=$(git log -1 --pretty=%B)
+if echo "$COMMIT_MSG" | grep -q "^chore(release):"; then
+    echo "⏭️  Skipping auto-release for release commit"
+    exit 0
+fi
+
+# Only run on main branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" != "main" ]; then
+    echo "⏭️  Skipping auto-release on branch: $BRANCH (only runs on main)"
+    exit 0
+fi
+
+# Check if AUTO_RELEASE is disabled
+if [ "$SKIP_AUTO_RELEASE" = "1" ] || [ "$SKIP_AUTO_RELEASE" = "true" ]; then
+    echo "⏭️  Auto-release skipped (SKIP_AUTO_RELEASE is set)"
+    exit 0
+fi
+
+echo ""
+echo "🚀 Running automatic release..."
+echo ""
+
+# Run standard-version to bump version, update changelog, and create tag
+npm run release --silent
+
+# Check if release was successful
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "✅ Release complete! Version updated and changelog generated."
+    echo ""
+    echo "📝 To push the release:"
+    echo "   git push --follow-tags origin main"
+    echo ""
+else
+    echo ""
+    echo "⚠️  Release failed. You can run manually with: npm run release"
+    echo ""
+fi
+

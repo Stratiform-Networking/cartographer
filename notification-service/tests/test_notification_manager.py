@@ -104,6 +104,55 @@ class TestPreferencesManagement:
         
         assert "user1" in users
         assert "user2" not in users
+    
+    def test_update_notification_type_priorities_reset(self, notification_manager_instance):
+        """Should replace notification_type_priorities entirely (not merge) to allow resetting to defaults"""
+        # Set up user with custom priorities
+        notification_manager_instance._preferences["test-user"] = NotificationPreferences(
+            user_id="test-user",
+            notification_type_priorities={
+                NotificationType.DEVICE_OFFLINE: NotificationPriority.LOW,
+                NotificationType.ANOMALY_DETECTED: NotificationPriority.CRITICAL,
+            }
+        )
+        
+        # Update with empty dict (simulating reset to defaults)
+        update = NotificationPreferencesUpdate(
+            notification_type_priorities={}
+        )
+        
+        with patch.object(notification_manager_instance, '_save_preferences'):
+            result = notification_manager_instance.update_preferences("test-user", update)
+        
+        # Should be empty, not merged with old values
+        assert result.notification_type_priorities == {}
+    
+    def test_update_notification_type_priorities_partial(self, notification_manager_instance):
+        """Should replace notification_type_priorities with partial update (not merge with existing)"""
+        # Set up user with custom priorities
+        notification_manager_instance._preferences["test-user"] = NotificationPreferences(
+            user_id="test-user",
+            notification_type_priorities={
+                NotificationType.DEVICE_OFFLINE: NotificationPriority.LOW,
+                NotificationType.ANOMALY_DETECTED: NotificationPriority.CRITICAL,
+            }
+        )
+        
+        # Update with only one priority (the other should be removed)
+        update = NotificationPreferencesUpdate(
+            notification_type_priorities={
+                NotificationType.DEVICE_OFFLINE: NotificationPriority.HIGH,
+            }
+        )
+        
+        with patch.object(notification_manager_instance, '_save_preferences'):
+            result = notification_manager_instance.update_preferences("test-user", update)
+        
+        # Should only have the new priority, anomaly_detected should be removed
+        assert result.notification_type_priorities == {
+            NotificationType.DEVICE_OFFLINE: NotificationPriority.HIGH,
+        }
+        assert NotificationType.ANOMALY_DETECTED not in result.notification_type_priorities
 
 
 class TestSilencedDevices:

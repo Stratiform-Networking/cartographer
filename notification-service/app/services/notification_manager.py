@@ -427,10 +427,17 @@ class NotificationManager:
         # Get update data (only fields that were set)
         update_data = update.model_dump(exclude_unset=True)
         
+        # Fields that should be replaced entirely, not merged
+        # (e.g., notification_type_priorities should be replaced so deleted keys are removed)
+        replace_fields = {'notification_type_priorities', 'enabled_notification_types'}
+        
         # Merge update into current data (handles nested models properly)
         for key, value in update_data.items():
             if value is not None:
-                if key in current_data and isinstance(current_data[key], dict) and isinstance(value, dict):
+                if key in replace_fields:
+                    # Replace these fields entirely (don't merge)
+                    current_data[key] = value
+                elif key in current_data and isinstance(current_data[key], dict) and isinstance(value, dict):
                     # Merge nested dicts (like email and discord configs)
                     current_data[key].update(value)
                 else:

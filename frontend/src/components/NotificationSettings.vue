@@ -916,7 +916,9 @@ async function savePreferences() {
 	if (!preferences.value) return;
 	
 	try {
-		await updatePreferences(preferences.value);
+		// Update local state with server response to stay in sync
+		const savedPrefs = await updatePreferences(preferences.value);
+		preferences.value = savedPrefs;
 	} catch (e) {
 		console.error("Failed to save preferences:", e);
 	}

@@ -68,6 +68,8 @@ if [ $? -eq 0 ]; then
     echo "📝 To push the release:"
     echo "   git push --follow-tags origin main"
     echo ""
+    echo "🏷️  This will also create a GitHub Release automatically!"
+    echo ""
 else
     echo ""
     echo "⚠️  Release failed. You can run manually with: npm run release:$RELEASE_TYPE"

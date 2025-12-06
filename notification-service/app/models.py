@@ -97,7 +97,7 @@ DEFAULT_NOTIFICATION_TYPE_PRIORITIES: Dict[NotificationType, NotificationPriorit
     NotificationType.SCHEDULED_MAINTENANCE: NotificationPriority.LOW,
     NotificationType.SYSTEM_STATUS: NotificationPriority.LOW,
     NotificationType.CARTOGRAPHER_DOWN: NotificationPriority.CRITICAL,
-    NotificationType.CARTOGRAPHER_UP: NotificationPriority.LOW,
+    NotificationType.CARTOGRAPHER_UP: NotificationPriority.MEDIUM,
 }
 
 

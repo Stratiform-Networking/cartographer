@@ -28,24 +28,37 @@ jobs:
           # Extract the changelog section for this version
           VERSION="${{ steps.version.outputs.VERSION }}"
           
-          # Get content between this version header and the next version header (or end of relevant content)
-          CHANGELOG_CONTENT=$(awk -v ver="$VERSION" '
-            BEGIN { found=0; content="" }
-            /^### \[/ {
-              if (found) exit
-              if (index($0, "[" ver "]") > 0) found=1
-            }
-            found { content = content $0 "\n" }
-            END { print content }
-          ' CHANGELOG.md)
+          echo "Extracting changelog for version: $VERSION"
           
-          # If no specific version found, use a default message
-          if [ -z "$CHANGELOG_CONTENT" ]; then
-            CHANGELOG_CONTENT="Release v$VERSION"
+          # Find the line number of this version's header
+          START_LINE=$(grep -n "^### \[$VERSION\]" CHANGELOG.md | head -1 | cut -d: -f1)
+          
+          if [ -z "$START_LINE" ]; then
+            echo "Version header not found, using default message"
+            echo "Release v$VERSION" > release_notes.md
+            exit 0
           fi
           
-          # Write to file for multi-line support
-          echo "$CHANGELOG_CONTENT" > release_notes.md
+          echo "Found version header at line: $START_LINE"
+          
+          # Find the next version header after this one
+          END_LINE=$(tail -n +$((START_LINE + 1)) CHANGELOG.md | grep -n "^### \[" | head -1 | cut -d: -f1)
+          
+          if [ -z "$END_LINE" ]; then
+            # No next version found, extract to end of file
+            echo "No next version found, extracting to end of file"
+            sed -n "${START_LINE},\$p" CHANGELOG.md > release_notes.md
+          else
+            # Calculate actual end line number (relative to original file)
+            ACTUAL_END=$((START_LINE + END_LINE - 1))
+            echo "Next version header at line: $ACTUAL_END"
+            sed -n "${START_LINE},$((ACTUAL_END - 1))p" CHANGELOG.md > release_notes.md
+          fi
+          
+          # Show what we extracted
+          echo "--- Extracted changelog content ---"
+          cat release_notes.md
+          echo "--- End of changelog content ---"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

@@ -56,6 +56,7 @@ export interface NotificationPreferences {
   quiet_hours_start?: string;
   quiet_hours_end?: string;
   quiet_hours_bypass_priority?: NotificationPriority | null; // Alerts at or above this priority bypass quiet hours
+  timezone?: string; // IANA timezone name (e.g., "America/New_York") for quiet hours
   max_notifications_per_hour: number;
   created_at: string;
   updated_at: string;

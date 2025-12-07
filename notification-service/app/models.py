@@ -154,6 +154,9 @@ class NotificationPreferences(BaseModel):
     # If set, notifications with this priority or higher will still be sent during quiet hours
     # None means no pass-through (all notifications blocked during quiet hours)
     quiet_hours_bypass_priority: Optional[NotificationPriority] = None
+    # User's timezone for quiet hours calculation (IANA timezone name, e.g., "America/New_York")
+    # If not set, falls back to server's local time (which may cause issues in Docker)
+    timezone: Optional[str] = None
     
     # Rate limiting
     max_notifications_per_hour: int = 10
@@ -184,6 +187,7 @@ class NotificationPreferencesUpdate(BaseModel):
     quiet_hours_start: Optional[str] = None
     quiet_hours_end: Optional[str] = None
     quiet_hours_bypass_priority: Optional[NotificationPriority] = None
+    timezone: Optional[str] = None
     max_notifications_per_hour: Optional[int] = None
 
 

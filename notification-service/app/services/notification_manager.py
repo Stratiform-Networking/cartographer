@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta
 from collections import deque
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import uuid
 
 from ..models import (
@@ -495,15 +496,21 @@ class NotificationManager:
         self._rate_limits[user_id].append(now)
     
     def _is_quiet_hours(self, prefs: NotificationPreferences) -> bool:
-        """Check if currently in quiet hours"""
+        """
+        Check if currently in quiet hours.
+        
+        Uses the user's configured timezone if available, otherwise falls back
+        to server's local time. This is important when running in Docker where
+        the container may be in UTC while the user is in a different timezone.
+        """
         if not prefs.quiet_hours_enabled:
             return False
         
         if not prefs.quiet_hours_start or not prefs.quiet_hours_end:
             return False
         
-        # Use local time since quiet hours are configured in user's local timezone
-        now = datetime.now()
+        # Get current time in user's timezone (or server local time as fallback)
+        now = self._get_current_time_for_user(prefs.timezone)
         current_time = now.strftime("%H:%M")
         
         start = prefs.quiet_hours_start
@@ -514,6 +521,31 @@ class NotificationManager:
             return current_time >= start or current_time <= end
         else:
             return start <= current_time <= end
+    
+    def _get_current_time_for_user(self, timezone_str: Optional[str]) -> datetime:
+        """
+        Get current time in the user's timezone.
+        
+        Args:
+            timezone_str: IANA timezone name (e.g., "America/New_York", "Europe/London")
+                         If None or invalid, falls back to server's local time.
+        
+        Returns:
+            datetime object representing current time in user's timezone
+        """
+        if timezone_str:
+            try:
+                user_tz = ZoneInfo(timezone_str)
+                # Get current UTC time and convert to user's timezone
+                utc_now = datetime.now(ZoneInfo("UTC"))
+                return utc_now.astimezone(user_tz)
+            except ZoneInfoNotFoundError:
+                logger.warning(f"Invalid timezone '{timezone_str}', falling back to server local time")
+            except Exception as e:
+                logger.warning(f"Error getting timezone '{timezone_str}': {e}, falling back to server local time")
+        
+        # Fallback to server's local time (works if Docker is configured with host timezone)
+        return datetime.now()
     
     # ==================== Notification Dispatch ====================
     

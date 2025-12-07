@@ -505,6 +505,47 @@
 												</template>
 											</p>
 										</div>
+
+										<!-- Timezone selector -->
+										<div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+											<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+												Timezone
+											</label>
+											<p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+												Select your timezone for accurate quiet hours
+											</p>
+											<div class="flex gap-2">
+												<select
+													v-model="preferences.timezone"
+													@change="savePreferences"
+													class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
+												>
+													<option :value="null">Use server time</option>
+													<option v-for="tz in COMMON_TIMEZONES" :key="tz.value" :value="tz.value">
+														{{ tz.label }}
+													</option>
+												</select>
+												<button
+													v-if="detectedTimezone"
+													@click="autoDetectTimezone"
+													class="px-3 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/30 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors whitespace-nowrap"
+													title="Use your browser's detected timezone"
+												>
+													Auto-detect
+												</button>
+											</div>
+											<p v-if="detectedTimezone" class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+												<template v-if="preferences.timezone === detectedTimezone">
+													✓ Using your detected timezone
+												</template>
+												<template v-else-if="!preferences.timezone">
+													⚠️ Using server time - click Auto-detect to use your timezone ({{ detectedTimezone }})
+												</template>
+												<template v-else>
+													Your browser detected: {{ detectedTimezone }}
+												</template>
+											</p>
+										</div>
 									</div>
 									</div>
 								</div>
@@ -805,6 +846,53 @@ import {
 } from "../composables/useNotifications";
 import { useAuth } from "../composables/useAuth";
 
+// Common timezones for quiet hours selection
+const COMMON_TIMEZONES = [
+	// Americas
+	{ value: "America/New_York", label: "Eastern Time (US & Canada)" },
+	{ value: "America/Chicago", label: "Central Time (US & Canada)" },
+	{ value: "America/Denver", label: "Mountain Time (US & Canada)" },
+	{ value: "America/Los_Angeles", label: "Pacific Time (US & Canada)" },
+	{ value: "America/Anchorage", label: "Alaska" },
+	{ value: "Pacific/Honolulu", label: "Hawaii" },
+	{ value: "America/Toronto", label: "Eastern Time (Canada)" },
+	{ value: "America/Vancouver", label: "Pacific Time (Canada)" },
+	{ value: "America/Mexico_City", label: "Mexico City" },
+	{ value: "America/Sao_Paulo", label: "São Paulo" },
+	{ value: "America/Buenos_Aires", label: "Buenos Aires" },
+	// Europe
+	{ value: "Europe/London", label: "London (GMT/BST)" },
+	{ value: "Europe/Paris", label: "Paris (CET/CEST)" },
+	{ value: "Europe/Berlin", label: "Berlin (CET/CEST)" },
+	{ value: "Europe/Amsterdam", label: "Amsterdam (CET/CEST)" },
+	{ value: "Europe/Rome", label: "Rome (CET/CEST)" },
+	{ value: "Europe/Madrid", label: "Madrid (CET/CEST)" },
+	{ value: "Europe/Moscow", label: "Moscow" },
+	// Asia & Pacific
+	{ value: "Asia/Dubai", label: "Dubai" },
+	{ value: "Asia/Kolkata", label: "India (IST)" },
+	{ value: "Asia/Singapore", label: "Singapore" },
+	{ value: "Asia/Hong_Kong", label: "Hong Kong" },
+	{ value: "Asia/Shanghai", label: "China (CST)" },
+	{ value: "Asia/Tokyo", label: "Tokyo (JST)" },
+	{ value: "Asia/Seoul", label: "Seoul (KST)" },
+	{ value: "Australia/Sydney", label: "Sydney (AEST/AEDT)" },
+	{ value: "Australia/Melbourne", label: "Melbourne (AEST/AEDT)" },
+	{ value: "Australia/Perth", label: "Perth (AWST)" },
+	{ value: "Pacific/Auckland", label: "Auckland (NZST/NZDT)" },
+	// UTC
+	{ value: "UTC", label: "UTC (Coordinated Universal Time)" },
+];
+
+// Detect user's timezone from browser
+const detectedTimezone = computed(() => {
+	try {
+		return Intl.DateTimeFormat().resolvedOptions().timeZone;
+	} catch {
+		return null;
+	}
+});
+
 defineEmits<{
 	(e: "close"): void;
 }>();
@@ -946,6 +1034,18 @@ async function toggleDiscord() {
 async function toggleQuietHours() {
 	if (!preferences.value) return;
 	preferences.value.quiet_hours_enabled = !preferences.value.quiet_hours_enabled;
+	
+	// Auto-detect timezone when first enabling quiet hours (if not already set)
+	if (preferences.value.quiet_hours_enabled && !preferences.value.timezone && detectedTimezone.value) {
+		preferences.value.timezone = detectedTimezone.value;
+	}
+	
+	await savePreferences();
+}
+
+async function autoDetectTimezone() {
+	if (!preferences.value || !detectedTimezone.value) return;
+	preferences.value.timezone = detectedTimezone.value;
 	await savePreferences();
 }
 

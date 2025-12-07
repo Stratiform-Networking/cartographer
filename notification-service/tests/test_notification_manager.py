@@ -465,6 +465,138 @@ class TestQuietHours:
             result = notification_manager_instance._is_quiet_hours(prefs)
         
         assert result is False, "07:01 should NOT be within quiet hours 22:00-07:00"
+    
+    def test_is_quiet_hours_with_user_timezone_est(self, notification_manager_instance):
+        """Should use user's timezone when set (EST user, 4am local = 9am UTC)"""
+        prefs = NotificationPreferences(
+            user_id="test",
+            quiet_hours_enabled=True,
+            quiet_hours_start="00:00",
+            quiet_hours_end="08:00",
+            timezone="America/New_York"  # EST/EDT
+        )
+        
+        # Simulate 9:00 AM UTC (which is 4:00 AM EST)
+        from zoneinfo import ZoneInfo
+        utc_time = datetime(2024, 1, 15, 9, 0, 0, tzinfo=ZoneInfo("UTC"))
+        
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.side_effect = lambda tz=None: utc_time if tz else utc_time.replace(tzinfo=None)
+            
+            result = notification_manager_instance._is_quiet_hours(prefs)
+        
+        # 4 AM EST should be IN quiet hours (00:00-08:00)
+        assert result is True, "4 AM EST should be within quiet hours 00:00-08:00 EST"
+    
+    def test_is_quiet_hours_with_user_timezone_outside_quiet_hours(self, notification_manager_instance):
+        """Should correctly detect when outside quiet hours using user's timezone"""
+        prefs = NotificationPreferences(
+            user_id="test",
+            quiet_hours_enabled=True,
+            quiet_hours_start="00:00",
+            quiet_hours_end="08:00",
+            timezone="America/New_York"  # EST/EDT
+        )
+        
+        # Simulate 3:00 PM UTC (which is 10:00 AM EST)
+        from zoneinfo import ZoneInfo
+        utc_time = datetime(2024, 1, 15, 15, 0, 0, tzinfo=ZoneInfo("UTC"))
+        
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.side_effect = lambda tz=None: utc_time if tz else utc_time.replace(tzinfo=None)
+            
+            result = notification_manager_instance._is_quiet_hours(prefs)
+        
+        # 10 AM EST should NOT be in quiet hours (00:00-08:00)
+        assert result is False, "10 AM EST should NOT be within quiet hours 00:00-08:00 EST"
+    
+    def test_is_quiet_hours_with_user_timezone_pst(self, notification_manager_instance):
+        """Should work with Pacific timezone user"""
+        prefs = NotificationPreferences(
+            user_id="test",
+            quiet_hours_enabled=True,
+            quiet_hours_start="22:00",
+            quiet_hours_end="07:00",
+            timezone="America/Los_Angeles"  # PST/PDT
+        )
+        
+        # Simulate 6:00 AM UTC (which is 10:00 PM PST previous day)
+        from zoneinfo import ZoneInfo
+        utc_time = datetime(2024, 1, 15, 6, 0, 0, tzinfo=ZoneInfo("UTC"))
+        
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.side_effect = lambda tz=None: utc_time if tz else utc_time.replace(tzinfo=None)
+            
+            result = notification_manager_instance._is_quiet_hours(prefs)
+        
+        # 10 PM PST should be IN quiet hours (22:00-07:00)
+        assert result is True, "10 PM PST should be within overnight quiet hours 22:00-07:00 PST"
+    
+    def test_is_quiet_hours_invalid_timezone_fallback(self, notification_manager_instance):
+        """Should fall back to server time when timezone is invalid"""
+        prefs = NotificationPreferences(
+            user_id="test",
+            quiet_hours_enabled=True,
+            quiet_hours_start="00:00",
+            quiet_hours_end="08:00",
+            timezone="Invalid/Timezone"  # Invalid timezone
+        )
+        
+        # Mock local time to 3 AM
+        mock_time = datetime(2024, 1, 15, 3, 0, 0)
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_time
+            
+            result = notification_manager_instance._is_quiet_hours(prefs)
+        
+        # Should fall back to server time (3 AM) and be in quiet hours
+        assert result is True, "Should fall back to server time when timezone is invalid"
+    
+    def test_is_quiet_hours_no_timezone_uses_server_time(self, notification_manager_instance):
+        """Should use server local time when no timezone is set"""
+        prefs = NotificationPreferences(
+            user_id="test",
+            quiet_hours_enabled=True,
+            quiet_hours_start="00:00",
+            quiet_hours_end="08:00",
+            timezone=None  # No timezone set
+        )
+        
+        # Mock local time to 5 AM
+        mock_time = datetime(2024, 1, 15, 5, 0, 0)
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_time
+            
+            result = notification_manager_instance._is_quiet_hours(prefs)
+        
+        # 5 AM server time should be in quiet hours
+        assert result is True, "5 AM should be within quiet hours 00:00-08:00 when no timezone set"
+    
+    def test_get_current_time_for_user_with_valid_timezone(self, notification_manager_instance):
+        """Should return correct time for user's timezone"""
+        from zoneinfo import ZoneInfo
+        
+        # Simulate 12:00 PM UTC
+        utc_time = datetime(2024, 1, 15, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+        
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.side_effect = lambda tz=None: utc_time if tz else utc_time.replace(tzinfo=None)
+            
+            result = notification_manager_instance._get_current_time_for_user("America/New_York")
+        
+        # 12:00 PM UTC should be 7:00 AM EST
+        assert result.hour == 7, "12:00 PM UTC should be 7:00 AM EST"
+    
+    def test_get_current_time_for_user_none_timezone(self, notification_manager_instance):
+        """Should return server local time when timezone is None"""
+        mock_time = datetime(2024, 1, 15, 14, 30, 0)
+        with patch('app.services.notification_manager.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_time
+            
+            result = notification_manager_instance._get_current_time_for_user(None)
+        
+        assert result.hour == 14
+        assert result.minute == 30
 
 
 class TestShouldNotify:

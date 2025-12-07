@@ -13,7 +13,7 @@ Cartographer is a self-hosted app that maps out your home or office network. It 
 ```mermaid
 flowchart TB
     subgraph Client["🖥️ Client"]
-        Browser["Browser<br/><b>Vue.js 3</b> + <b>TypeScript</b><br/>Vite • Pinia • Cytoscape.js"]
+        Browser["Browser<br/><b>Vue.js 3</b> + <b>TypeScript</b><br/>Vite • Pinia • D3.js"]
     end
 
     subgraph Gateway["🚪 API Gateway"]

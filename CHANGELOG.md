@@ -5,6 +5,25 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/devartech/cartographer/compare/v0.2.4...v0.3.0) (2025-12-08)
+
+
+### 📚 Documentation
+
+* add mermaid architecture diagram ([bffeb7b](https://github.com/devartech/cartographer/commit/bffeb7b42d09fd49e06a4102da59cf382c862a2b))
+* fix library ([e9ccdf8](https://github.com/devartech/cartographer/commit/e9ccdf8ab9862d596046f29b2cdcaa47f67e5512))
+* refined docs on architecture ([11e0006](https://github.com/devartech/cartographer/commit/11e0006fe2987db670c76ed91582c03a7c50a16a))
+
+
+### 🐛 Bug Fixes
+
+* add timezone selection for notifications ([a6f3a42](https://github.com/devartech/cartographer/commit/a6f3a4285a271ee9609c78c52cb01fd86ec6dd45))
+
+
+### ✨ Features
+
+* add endpoint tracking ([887e6b0](https://github.com/devartech/cartographer/commit/887e6b0bcfaa5c886a9c8093a6f1b3ac74f24573))
+
 ### [0.2.5](https://github.com/devartech/cartographer/compare/v0.2.4...v0.2.5) (2025-12-07)
 
 

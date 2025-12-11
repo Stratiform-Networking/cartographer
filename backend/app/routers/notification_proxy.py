@@ -18,8 +18,8 @@ from ..dependencies import (
     require_auth,
     require_write_access,
     require_owner,
-    get_db,
 )
+from ..database import get_db
 from ..services.http_client import http_pool
 from ..routers.networks import get_network_member_user_ids
 

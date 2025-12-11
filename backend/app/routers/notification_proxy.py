@@ -43,11 +43,83 @@ async def proxy_request(
             )
 
 
-# ==================== Preferences Endpoints ====================
+# ==================== Per-Network Preferences Endpoints ====================
+
+@router.get("/networks/{network_id}/preferences")
+async def get_network_preferences(network_id: int, user: AuthenticatedUser = Depends(require_auth)):
+    """Get notification preferences for a specific network."""
+    return await proxy_request(
+        "GET",
+        f"/networks/{network_id}/preferences",
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+@router.put("/networks/{network_id}/preferences")
+async def update_network_preferences(network_id: int, request: Request, user: AuthenticatedUser = Depends(require_auth)):
+    """Update notification preferences for a specific network."""
+    body = await request.json()
+    return await proxy_request(
+        "PUT",
+        f"/networks/{network_id}/preferences",
+        json_body=body,
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+@router.delete("/networks/{network_id}/preferences")
+async def delete_network_preferences(network_id: int, user: AuthenticatedUser = Depends(require_auth)):
+    """Delete notification preferences for a network (reset to defaults)."""
+    return await proxy_request(
+        "DELETE",
+        f"/networks/{network_id}/preferences",
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+@router.post("/networks/{network_id}/test")
+async def send_network_test_notification(network_id: int, request: Request, user: AuthenticatedUser = Depends(require_auth)):
+    """Send a test notification for a specific network."""
+    body = await request.json()
+    return await proxy_request(
+        "POST",
+        f"/networks/{network_id}/test",
+        json_body=body,
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+@router.get("/networks/{network_id}/history")
+async def get_network_notification_history(
+    network_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=100),
+    user: AuthenticatedUser = Depends(require_auth),
+):
+    """Get notification history for a specific network."""
+    return await proxy_request(
+        "GET",
+        f"/networks/{network_id}/history",
+        params={"page": page, "per_page": per_page},
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+@router.get("/networks/{network_id}/stats")
+async def get_network_notification_stats(network_id: int, user: AuthenticatedUser = Depends(require_auth)):
+    """Get notification statistics for a specific network."""
+    return await proxy_request(
+        "GET",
+        f"/networks/{network_id}/stats",
+        headers={"X-User-Id": user.user_id}
+    )
+
+
+# ==================== Legacy Preferences Endpoints (deprecated) ====================
 
 @router.get("/preferences")
 async def get_preferences(user: AuthenticatedUser = Depends(require_auth)):
-    """Get notification preferences for the current user."""
+    """DEPRECATED: Get notification preferences for the current user."""
     return await proxy_request(
         "GET",
         "/preferences",
@@ -57,7 +129,7 @@ async def get_preferences(user: AuthenticatedUser = Depends(require_auth)):
 
 @router.put("/preferences")
 async def update_preferences(request: Request, user: AuthenticatedUser = Depends(require_auth)):
-    """Update notification preferences for the current user."""
+    """DEPRECATED: Update notification preferences for the current user."""
     body = await request.json()
     return await proxy_request(
         "PUT",
@@ -69,7 +141,7 @@ async def update_preferences(request: Request, user: AuthenticatedUser = Depends
 
 @router.delete("/preferences")
 async def delete_preferences(user: AuthenticatedUser = Depends(require_auth)):
-    """Delete notification preferences (reset to defaults)."""
+    """DEPRECATED: Delete notification preferences (reset to defaults)."""
     return await proxy_request(
         "DELETE",
         "/preferences",

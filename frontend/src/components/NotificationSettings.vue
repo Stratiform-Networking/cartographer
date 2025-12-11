@@ -964,6 +964,14 @@ onMounted(async () => {
 			getServiceStatus(),
 		]);
 		
+		// Ensure email and discord configs have defaults
+		if (!prefs.email) {
+			prefs.email = { enabled: false, email_address: '' };
+		}
+		if (!prefs.discord) {
+			prefs.discord = { enabled: false, delivery_method: 'channel' };
+		}
+		
 		preferences.value = prefs;
 		serviceStatus.value = status;
 		
@@ -978,7 +986,7 @@ onMounted(async () => {
 				discordGuilds.value = guilds;
 				
 				// Restore selected guild/channel from preferences
-				if (prefs.discord.channel_config) {
+				if (prefs.discord?.channel_config) {
 					selectedGuildId.value = prefs.discord.channel_config.guild_id;
 					selectedChannelId.value = prefs.discord.channel_config.channel_id;
 					

@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         apt-get update && break || sleep 5; \
     done && \
     apt-get install -y --no-install-recommends \
-        curl \
+    curl \
         ca-certificates
 
 # Copy requirements first for better caching

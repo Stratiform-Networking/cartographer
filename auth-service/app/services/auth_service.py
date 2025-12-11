@@ -240,6 +240,13 @@ class AuthService:
         
         return [self._to_response(u) for u in self._users.values() if u.is_active]
     
+    def get_owner_user(self) -> Optional[UserInDB]:
+        """Get the owner user (for internal service use)"""
+        for user in self._users.values():
+            if user.role == UserRole.OWNER and user.is_active:
+                return user
+        return None
+    
     async def update_user(self, user_id: str, request: UserUpdate, updated_by: UserInDB) -> UserResponse:
         """Update a user"""
         user = self.get_user(user_id)

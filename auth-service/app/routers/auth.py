@@ -93,6 +93,21 @@ async def setup_owner(request: OwnerSetupRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ==================== Internal Endpoints (service-to-service) ====================
+
+@router.get("/internal/owner")
+async def get_owner_internal():
+    """
+    Get the owner user ID for internal service use.
+    This endpoint is only accessible on the internal service port (8002)
+    and is used by the migration script to assign ownership of migrated data.
+    """
+    owner = auth_service.get_owner_user()
+    if not owner:
+        raise HTTPException(status_code=404, detail="No owner user found")
+    return {"user_id": owner.id, "username": owner.username}
+
+
 # ==================== Authentication Endpoints ====================
 
 @router.post("/login", response_model=LoginResponse)

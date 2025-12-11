@@ -421,12 +421,12 @@ onMounted(async () => {
 			}
 		} else {
 			// Legacy: load from old endpoint
-			const response = await axios.get('/api/load-layout');
-			if (response.data.exists && response.data.layout) {
-				emit("applyLayout", response.data.layout);
-				emit("saved"); // Mark as saved since we just loaded the saved state
-				message.value = "Loaded saved map";
-				setTimeout(() => { message.value = ""; }, 3000);
+		const response = await axios.get('/api/load-layout');
+		if (response.data.exists && response.data.layout) {
+			emit("applyLayout", response.data.layout);
+			emit("saved"); // Mark as saved since we just loaded the saved state
+			message.value = "Loaded saved map";
+			setTimeout(() => { message.value = ""; }, 3000);
 			}
 		}
 	} catch (error) {
@@ -530,11 +530,11 @@ async function saveLayout() {
 			}
 		} else {
 			// Legacy: save to old endpoint
-			const response = await axios.post('/api/save-layout', layout);
-			if (response.data.success) {
-				message.value = "Map saved";
-				emit("saved");
-				setTimeout(() => { message.value = ""; }, 3000);
+		const response = await axios.post('/api/save-layout', layout);
+		if (response.data.success) {
+			message.value = "Map saved";
+			emit("saved");
+			setTimeout(() => { message.value = ""; }, 3000);
 			}
 		}
 	} catch (error: any) {

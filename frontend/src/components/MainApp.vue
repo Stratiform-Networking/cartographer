@@ -819,7 +819,7 @@ function triggerAutoSave() {
 					await axios.post(`/api/networks/${props.networkId}/layout`, { layout_data: layout });
 				} else {
 					// Legacy: save to old endpoint
-					await axios.post('/api/save-layout', layout);
+				await axios.post('/api/save-layout', layout);
 				}
 				savedStateHash.value = currentStateHash.value;
 				console.log('[Auto-save] Network map saved');

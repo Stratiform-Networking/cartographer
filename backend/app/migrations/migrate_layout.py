@@ -45,45 +45,76 @@ async def _get_owner_user_id() -> Optional[str]:
     auth_service_url = settings.auth_service_url
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Try to get users from auth service
-            response = await client.get(f"{auth_service_url}/api/auth/users")
-            if response.status_code == 200:
-                users = response.json()
-                # Find the first owner
-                for user in users:
-                    if user.get("role") == "owner":
-                        return user.get("user_id")
-            # If no owner found, try to get the setup user
-            response = await client.get(f"{auth_service_url}/api/auth/setup/status")
+            # Use internal endpoint that doesn't require auth
+            response = await client.get(f"{auth_service_url}/api/auth/internal/owner")
             if response.status_code == 200:
                 data = response.json()
-                # If setup is complete, there should be an owner
-                if data.get("is_setup_complete"):
-                    # Retry getting users
-                    response = await client.get(f"{auth_service_url}/api/auth/users")
-                    if response.status_code == 200:
-                        users = response.json()
-                        for user in users:
-                            if user.get("role") == "owner":
-                                return user.get("user_id")
+                owner_id = data.get("user_id")
+                if owner_id:
+                    logger.info(f"Found owner user: {data.get('username')} ({owner_id})")
+                    return owner_id
+            elif response.status_code == 404:
+                logger.warning("No owner user found in auth service (setup may not be complete)")
+            else:
+                logger.warning(f"Failed to get owner from auth service: {response.status_code}")
     except Exception as e:
-        logger.warning(f"Failed to get owner user from auth service: {e}")
+        logger.warning(f"Failed to connect to auth service: {e}")
     
     return None
+
+
+PLACEHOLDER_USER_ID = "00000000-0000-0000-0000-000000000000"
+
+
+async def _fix_placeholder_networks() -> bool:
+    """
+    Fix networks that were created with placeholder user IDs.
+    This happens when migration runs before setup is complete.
+    
+    Returns True if any networks were fixed.
+    """
+    owner_user_id = await _get_owner_user_id()
+    if not owner_user_id:
+        return False
+    
+    async with async_session_maker() as session:
+        # Find networks with placeholder user ID
+        result = await session.execute(
+            select(Network).where(Network.user_id == PLACEHOLDER_USER_ID)
+        )
+        placeholder_networks = result.scalars().all()
+        
+        if not placeholder_networks:
+            return False
+        
+        logger.info(f"Found {len(placeholder_networks)} networks with placeholder owner, updating to {owner_user_id}")
+        
+        for network in placeholder_networks:
+            network.user_id = owner_user_id
+            logger.info(f"Updated network '{network.name}' (ID: {network.id}) owner to {owner_user_id}")
+        
+        await session.commit()
+        return True
 
 
 async def migrate_layout_to_database() -> bool:
     """
     Migrate existing JSON layout to the database.
+    Also fixes any networks that were created with placeholder user IDs.
     
     Returns True if migration was performed, False if skipped.
     """
+    # First, try to fix any networks with placeholder user IDs
+    fixed = await _fix_placeholder_networks()
+    if fixed:
+        logger.info("Fixed placeholder networks")
+    
     layout_path = _get_layout_path()
     
     # Check if layout file exists
     if not layout_path.exists():
         logger.info(f"No existing layout file found at {layout_path}, skipping migration")
-        return False
+        return fixed  # Return True if we fixed placeholder networks
     
     logger.info(f"Found existing layout file at {layout_path}")
     
@@ -93,8 +124,8 @@ async def migrate_layout_to_database() -> bool:
         network_count = result.scalar()
         
         if network_count > 0:
-            logger.info(f"Database already has {network_count} networks, skipping migration")
-            return False
+            logger.info(f"Database already has {network_count} networks, skipping JSON migration")
+            return fixed  # Return True if we fixed placeholder networks
         
         # Load the layout data
         try:
@@ -102,14 +133,14 @@ async def migrate_layout_to_database() -> bool:
                 layout_data = json.load(f)
         except Exception as e:
             logger.error(f"Failed to load layout file: {e}")
-            return False
+            return fixed
         
         # Get owner user ID
         owner_user_id = await _get_owner_user_id()
         if not owner_user_id:
             logger.warning("No owner user found, using placeholder ID for migration")
             # Use a placeholder - the network can be claimed later
-            owner_user_id = "00000000-0000-0000-0000-000000000000"
+            owner_user_id = PLACEHOLDER_USER_ID
         
         logger.info(f"Migrating layout to database with owner: {owner_user_id}")
         

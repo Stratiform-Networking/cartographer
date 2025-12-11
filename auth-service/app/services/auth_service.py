@@ -247,6 +247,10 @@ class AuthService:
                 return user
         return None
     
+    def get_all_user_ids(self) -> List[str]:
+        """Get all active user IDs (for internal service use)"""
+        return [user.id for user in self._users.values() if user.is_active]
+    
     async def update_user(self, user_id: str, request: UserUpdate, updated_by: UserInDB) -> UserResponse:
         """Update a user"""
         user = self.get_user(user_id)

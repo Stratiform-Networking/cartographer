@@ -66,6 +66,66 @@ async def _get_owner_user_id() -> Optional[str]:
 PLACEHOLDER_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
+async def _get_all_user_ids() -> set[str]:
+    """
+    Get all valid user IDs from auth-service.
+    Returns empty set if auth service is unavailable.
+    """
+    auth_service_url = settings.auth_service_url
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(f"{auth_service_url}/api/auth/internal/users")
+            if response.status_code == 200:
+                users = response.json()
+                return {u.get("user_id") for u in users if u.get("user_id")}
+    except Exception as e:
+        logger.warning(f"Failed to get user list from auth service: {e}")
+    return set()
+
+
+async def _fix_orphaned_networks() -> bool:
+    """
+    Fix networks whose owner no longer exists (e.g., owner account was recreated).
+    Reassigns orphaned networks to the current owner.
+    
+    Returns True if any networks were fixed.
+    """
+    owner_user_id = await _get_owner_user_id()
+    if not owner_user_id:
+        logger.info("No owner found, skipping orphaned network check")
+        return False
+    
+    valid_user_ids = await _get_all_user_ids()
+    if not valid_user_ids:
+        logger.info("Could not get user list, skipping orphaned network check")
+        return False
+    
+    async with async_session_maker() as session:
+        # Get all networks
+        result = await session.execute(select(Network))
+        all_networks = result.scalars().all()
+        
+        orphaned_networks = []
+        for network in all_networks:
+            # Network is orphaned if its user_id is not in valid users
+            # (and it's not already owned by the current owner)
+            if network.user_id not in valid_user_ids and network.user_id != owner_user_id:
+                orphaned_networks.append(network)
+        
+        if not orphaned_networks:
+            return False
+        
+        logger.info(f"Found {len(orphaned_networks)} orphaned networks, reassigning to owner {owner_user_id}")
+        
+        for network in orphaned_networks:
+            old_owner = network.user_id
+            network.user_id = owner_user_id
+            logger.info(f"Reassigned network '{network.name}' (ID: {network.id}) from {old_owner} to {owner_user_id}")
+        
+        await session.commit()
+        return True
+
+
 async def _fix_placeholder_networks() -> bool:
     """
     Fix networks that were created with placeholder user IDs.
@@ -100,14 +160,22 @@ async def _fix_placeholder_networks() -> bool:
 async def migrate_layout_to_database() -> bool:
     """
     Migrate existing JSON layout to the database.
-    Also fixes any networks that were created with placeholder user IDs.
+    Also fixes any networks that were created with placeholder user IDs
+    or orphaned by owner account recreation.
     
     Returns True if migration was performed, False if skipped.
     """
     # First, try to fix any networks with placeholder user IDs
-    fixed = await _fix_placeholder_networks()
-    if fixed:
+    fixed_placeholder = await _fix_placeholder_networks()
+    if fixed_placeholder:
         logger.info("Fixed placeholder networks")
+    
+    # Then, fix any orphaned networks (owner account was recreated)
+    fixed_orphaned = await _fix_orphaned_networks()
+    if fixed_orphaned:
+        logger.info("Fixed orphaned networks")
+    
+    fixed = fixed_placeholder or fixed_orphaned
     
     layout_path = _get_layout_path()
     

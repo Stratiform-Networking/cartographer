@@ -108,6 +108,16 @@ async def get_owner_internal():
     return {"user_id": owner.id, "username": owner.username}
 
 
+@router.get("/internal/users")
+async def get_all_users_internal():
+    """
+    Get all user IDs for internal service use.
+    Used by the migration script to detect orphaned networks.
+    """
+    users = auth_service.get_all_user_ids()
+    return [{"user_id": uid} for uid in users]
+
+
 # ==================== Authentication Endpoints ====================
 
 @router.post("/login", response_model=LoginResponse)

@@ -271,21 +271,24 @@ async def send_network_notification(
     Send a notification to a specific network (for broadcasts).
     
     Expects JSON body with:
-    - event: NetworkEvent - The network event
+    - Either: event: NetworkEvent object
+    - Or: event fields directly (event_type, title, message, priority, etc.)
     - user_ids: Optional[List[str]] - List of user IDs who are network members
     
     If user_ids is provided, sends to those specific network members based on their preferences.
     Otherwise, sends to the network's configured notification channels.
     """
     body = await request.json()
-    event_data = body.get("event")
     user_ids = body.get("user_ids")
     
-    if not event_data:
-        raise HTTPException(status_code=400, detail="event is required in request body")
-    
-    # Parse the event
-    event = NetworkEvent(**event_data)
+    # Parse the event - support both formats
+    if "event" in body:
+        # Format 1: event object
+        event_data = body.get("event")
+        event = NetworkEvent(**event_data)
+    else:
+        # Format 2: event fields directly in body
+        event = NetworkEvent(**body)
     
     # Ensure event has the correct network_id
     event.network_id = network_id
@@ -611,11 +614,17 @@ async def send_version_notification():
         },
     )
     
+    # Version updates are network-scoped (not global)
+    # They go to all networks that have SYSTEM_STATUS notifications enabled
     results = await notification_manager.broadcast_notification(event)
+    
+    total_networks = len(results)
+    total_channels = sum(len(records) for records in results.values())
     
     return {
         "success": True,
-        "users_notified": len(results),
+        "networks_notified": total_networks,
+        "channels_notified": total_channels,
         "current_version": current_version,
         "latest_version": latest_version,
         "update_type": update_type,

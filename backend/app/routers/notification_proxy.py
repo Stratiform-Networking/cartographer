@@ -302,25 +302,21 @@ async def send_global_notification(
         raise HTTPException(status_code=500, detail=f"Failed to get network members: {str(e)}")
     
     # Build the network event for the notification service
-    event = {
-        "event_id": f"broadcast-{user.user_id}-{network_id}-{body.get('title', 'notification')[:20]}",
-        "event_type": body.get("event_type", "scheduled_maintenance"),
-        "priority": body.get("priority", "medium"),
-        "title": body.get("title", "System Notification"),
-        "message": body.get("message", ""),
-        "network_id": network_id,
-        "details": {
-            "sent_by": user.username,
-            "is_broadcast": True,
-        }
-    }
-    
-    # Send to all network members based on their notification preferences
+    # Send event fields directly (not wrapped in "event" key) along with user_ids
     return await proxy_request(
         "POST",
         f"/networks/{network_id}/send-notification",
         json_body={
-            **event,
+            "event_id": f"broadcast-{user.user_id}-{network_id}-{body.get('title', 'notification')[:20]}",
+            "event_type": body.get("event_type", "scheduled_maintenance"),
+            "priority": body.get("priority", "medium"),
+            "title": body.get("title", "System Notification"),
+            "message": body.get("message", ""),
+            "network_id": network_id,
+            "details": {
+                "sent_by": user.username,
+                "is_broadcast": True,
+            },
             "user_ids": user_ids,  # Pass list of network member user IDs
         },
     )

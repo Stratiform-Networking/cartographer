@@ -799,6 +799,13 @@ class NotificationManager:
             should_notify, reason = self._should_notify(prefs, event)
             if not should_notify:
                 logger.info(f"Skipping {event.event_type.value} notification for network {network_id}: {reason}")
+                logger.debug(
+                    f"  Network {network_id} prefs: enabled={prefs.enabled}, "
+                    f"email={prefs.email.enabled} ({prefs.email.email_address}), "
+                    f"discord={prefs.discord.enabled}, "
+                    f"enabled_types={[t.value for t in prefs.enabled_notification_types]}, "
+                    f"min_priority={prefs.minimum_priority.value}"
+                )
                 return records
         
         notification_id = str(uuid.uuid4())
@@ -1016,11 +1023,28 @@ class NotificationManager:
         """
         results = {}
         
-        for network_id in self.get_all_networks_with_notifications_enabled():
-            records = await self.send_notification(network_id, event)
+        enabled_networks = self.get_all_networks_with_notifications_enabled()
+        logger.info(f"Broadcasting {event.event_type.value} notification to {len(enabled_networks)} networks")
+        
+        if not enabled_networks:
+            logger.warning(f"No networks have notifications enabled for {event.event_type.value} notifications")
+            return results
+        
+        for network_id in enabled_networks:
+            # Create a copy of the event with the network_id set
+            # Use model_dump and recreate to avoid mutating the original event
+            event_dict = event.model_dump()
+            event_dict['network_id'] = network_id
+            event_copy = NetworkEvent(**event_dict)
+            
+            records = await self.send_notification(network_id, event_copy)
             if records:
                 results[str(network_id)] = records
+                logger.debug(f"Sent notification to network {network_id}: {len(records)} channels")
+            else:
+                logger.debug(f"No notifications sent to network {network_id} (filtered by preferences)")
         
+        logger.info(f"Broadcast complete: {len(results)} networks notified out of {len(enabled_networks)} enabled")
         return results
     
     async def broadcast_global_notification(self, event: NetworkEvent) -> Dict[str, List[NotificationRecord]]:
@@ -1252,14 +1276,25 @@ class NotificationManager:
             # Set network_id on the event
             event.network_id = network_id
             
+            logger.info(f"Processing health check for device {device_ip} in network {network_id}: event_type={event.event_type.value}, success={success}")
+            
             # Send notification only to the specific network
             records = await self.send_notification_to_network(network_id, event)
             if records:
-                logger.info(f"Sent notification to network {network_id} for device {device_ip}: {event.title}")
+                logger.info(f"✓ Sent notification to network {network_id} for device {device_ip}: {event.title} ({len(records)} channels)")
             else:
-                logger.debug(f"No notifications sent for network {network_id} (preferences may have filtered it out)")
+                # Get preferences to see why it was filtered
+                prefs = self.get_preferences(network_id)
+                should_notify, reason = self._should_notify(prefs, event)
+                logger.warning(
+                    f"✗ No notifications sent for network {network_id}, device {device_ip}, event {event.event_type.value}: {reason}. "
+                    f"Prefs: enabled={prefs.enabled}, email={prefs.email.enabled}, discord={prefs.discord.enabled}, "
+                    f"event_type_in_enabled={event.event_type in prefs.enabled_notification_types}"
+                )
         elif event and is_silenced:
             logger.debug(f"Skipping notification for silenced device {device_ip}: {event.title}")
+        elif not event:
+            logger.debug(f"No event created for device {device_ip} (network {network_id}) - likely not notification-worthy")
 
 
 # Singleton instance

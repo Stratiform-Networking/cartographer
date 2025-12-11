@@ -93,8 +93,8 @@ async def _send_cartographer_up_notification(previous_state: dict):
             },
         )
         
-        # Broadcast to all users who have this notification type enabled
-        results = await notification_manager.broadcast_notification(event)
+        # Broadcast to all users who have global Cartographer Up notifications enabled
+        results = await notification_manager.broadcast_global_notification(event)
         logger.info(f"Sent cartographer_up notification to {len(results)} users")
         
     except Exception as e:
@@ -116,8 +116,8 @@ async def _send_cartographer_down_notification():
             },
         )
         
-        # Broadcast to all users who have this notification type enabled
-        results = await notification_manager.broadcast_notification(event)
+        # Broadcast to all users who have global Cartographer Down notifications enabled
+        results = await notification_manager.broadcast_global_notification(event)
         logger.info(f"Sent cartographer_down notification to {len(results)} users")
         
     except Exception as e:

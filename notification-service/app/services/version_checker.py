@@ -235,14 +235,23 @@ class VersionChecker:
             },
         )
         
-        # Broadcast to all users subscribed to SYSTEM_STATUS
+        # Broadcast to all networks with SYSTEM_STATUS notifications enabled
+        # Note: This sends to network preferences, not global preferences
+        # Version updates are network-scoped notifications
         results = await notification_manager.broadcast_notification(event)
         
         if results:
-            logger.info(f"Sent version update notification to {len(results)} users")
+            total_networks = len(results)
+            total_channels = sum(len(records) for records in results.values())
+            logger.info(f"Sent version update notification to {total_networks} networks ({total_channels} channels)")
             self._last_notified_version = latest_version
         else:
-            logger.info("No users to notify about version update")
+            logger.warning(
+                f"No networks to notify about version update. "
+                f"Networks need to have notifications enabled with email or discord configured, "
+                f"and SYSTEM_STATUS must be in their enabled_notification_types. "
+                f"Current enabled networks: {notification_manager.get_all_networks_with_notifications_enabled()}"
+            )
         
         self._save_state()
     

@@ -408,19 +408,20 @@ class NotificationManager:
         logger.info(f"Scheduled broadcast deleted: {broadcast_id}")
         return True
     
-    # ==================== Preferences Management ====================
+    # ==================== Preferences Management (per-network) ====================
     
-    def get_preferences(self, user_id: str) -> NotificationPreferences:
-        """Get notification preferences for a user (creates default if not exists)"""
-        if user_id not in self._preferences:
-            self._preferences[user_id] = NotificationPreferences(user_id=user_id)
+    def get_preferences(self, network_id: int) -> NotificationPreferences:
+        """Get notification preferences for a network (creates default if not exists)"""
+        key = str(network_id)
+        if key not in self._preferences:
+            self._preferences[key] = NotificationPreferences(network_id=network_id)
             self._save_preferences()
         
-        return self._preferences[user_id]
+        return self._preferences[key]
     
-    def update_preferences(self, user_id: str, update: NotificationPreferencesUpdate) -> NotificationPreferences:
-        """Update notification preferences for a user"""
-        prefs = self.get_preferences(user_id)
+    def update_preferences(self, network_id: int, update: NotificationPreferencesUpdate) -> NotificationPreferences:
+        """Update notification preferences for a network"""
+        prefs = self.get_preferences(network_id)
         
         # Get current preferences as dict
         current_data = prefs.model_dump()
@@ -448,52 +449,56 @@ class NotificationManager:
         current_data['updated_at'] = datetime.utcnow()
         
         # Recreate the preferences model with validated data
-        self._preferences[user_id] = NotificationPreferences(**current_data)
+        key = str(network_id)
+        self._preferences[key] = NotificationPreferences(**current_data)
         self._save_preferences()
         
-        return self._preferences[user_id]
+        return self._preferences[key]
     
-    def delete_preferences(self, user_id: str) -> bool:
-        """Delete preferences for a user"""
-        if user_id in self._preferences:
-            del self._preferences[user_id]
+    def delete_preferences(self, network_id: int) -> bool:
+        """Delete preferences for a network"""
+        key = str(network_id)
+        if key in self._preferences:
+            del self._preferences[key]
             self._save_preferences()
             return True
         return False
     
-    def get_all_users_with_notifications_enabled(self) -> List[str]:
-        """Get list of user IDs with notifications enabled"""
+    def get_all_networks_with_notifications_enabled(self) -> List[int]:
+        """Get list of network IDs with notifications enabled"""
         return [
-            user_id for user_id, prefs in self._preferences.items()
+            int(network_id) for network_id, prefs in self._preferences.items()
             if prefs.enabled and (prefs.email.enabled or prefs.discord.enabled)
         ]
     
     # ==================== Rate Limiting ====================
     
-    def _check_rate_limit(self, user_id: str, prefs: NotificationPreferences) -> bool:
-        """Check if user is within rate limit. Returns True if allowed."""
+    def _check_rate_limit(self, network_id: int, prefs: NotificationPreferences) -> bool:
+        """Check if network is within rate limit. Returns True if allowed."""
         now = datetime.utcnow()
         hour_ago = now - timedelta(hours=1)
+        key = str(network_id)
         
-        if user_id not in self._rate_limits:
-            self._rate_limits[user_id] = deque(maxlen=prefs.max_notifications_per_hour)
+        if key not in self._rate_limits:
+            self._rate_limits[key] = deque(maxlen=prefs.max_notifications_per_hour)
         
         # Clean old entries
-        while self._rate_limits[user_id] and self._rate_limits[user_id][0] < hour_ago:
-            self._rate_limits[user_id].popleft()
+        while self._rate_limits[key] and self._rate_limits[key][0] < hour_ago:
+            self._rate_limits[key].popleft()
         
         # Check limit
-        if len(self._rate_limits[user_id]) >= prefs.max_notifications_per_hour:
+        if len(self._rate_limits[key]) >= prefs.max_notifications_per_hour:
             return False
         
         return True
     
-    def _record_rate_limit(self, user_id: str):
+    def _record_rate_limit(self, network_id: int):
         """Record a notification for rate limiting"""
         now = datetime.utcnow()
-        if user_id not in self._rate_limits:
-            self._rate_limits[user_id] = deque()
-        self._rate_limits[user_id].append(now)
+        key = str(network_id)
+        if key not in self._rate_limits:
+            self._rate_limits[key] = deque()
+        self._rate_limits[key].append(now)
     
     def _is_quiet_hours(self, prefs: NotificationPreferences) -> bool:
         """
@@ -596,7 +601,7 @@ class NotificationManager:
                 return False, "Currently in quiet hours"
         
         # Check rate limit
-        if not self._check_rate_limit(prefs.user_id, prefs):
+        if not self._check_rate_limit(prefs.network_id, prefs):
             return False, "Rate limit exceeded"
         
         return True, ""
@@ -678,11 +683,11 @@ class NotificationManager:
     
     async def send_test_notification(
         self,
-        user_id: str,
+        network_id: int,
         request: TestNotificationRequest,
     ) -> TestNotificationResponse:
         """Send a test notification via a specific channel"""
-        prefs = self.get_preferences(user_id)
+        prefs = self.get_preferences(network_id)
         
         if request.channel == NotificationChannel.EMAIL:
             if not prefs.email.email_address:
@@ -731,15 +736,15 @@ class NotificationManager:
     
     def get_history(
         self,
-        user_id: Optional[str] = None,
+        network_id: Optional[int] = None,
         page: int = 1,
         per_page: int = 50,
     ) -> NotificationHistoryResponse:
-        """Get notification history, optionally filtered by user"""
+        """Get notification history, optionally filtered by network"""
         records = list(self._history)
         
-        if user_id:
-            records = [r for r in records if r.user_id == user_id]
+        if network_id is not None:
+            records = [r for r in records if r.network_id == network_id]
         
         # Sort by timestamp descending
         records.sort(key=lambda r: r.timestamp, reverse=True)
@@ -755,7 +760,7 @@ class NotificationManager:
             per_page=per_page,
         )
     
-    def get_stats(self, user_id: Optional[str] = None) -> NotificationStatsResponse:
+    def get_stats(self, network_id: Optional[int] = None) -> NotificationStatsResponse:
         """Get notification statistics"""
         now = datetime.utcnow()
         day_ago = now - timedelta(days=1)
@@ -763,8 +768,8 @@ class NotificationManager:
         
         records = list(self._history)
         
-        if user_id:
-            records = [r for r in records if r.user_id == user_id]
+        if network_id is not None:
+            records = [r for r in records if r.network_id == network_id]
         
         records_24h = [r for r in records if r.timestamp > day_ago]
         records_7d = [r for r in records if r.timestamp > week_ago]

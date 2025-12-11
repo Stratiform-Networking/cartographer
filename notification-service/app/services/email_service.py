@@ -281,7 +281,7 @@ async def send_notification_email(
     record = NotificationRecord(
         notification_id=notification_id,
         event_id=event.event_id,
-        user_id="",  # Will be set by caller
+        network_id=event.network_id or 0,
         channel=NotificationChannel.EMAIL,
         title=event.title,
         message=event.message,

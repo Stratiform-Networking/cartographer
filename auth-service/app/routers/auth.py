@@ -62,14 +62,14 @@ async def require_owner(
     return user
 
 
-async def require_write_access(
+async def require_admin_access(
     user: UserInDB = Depends(require_auth)
 ) -> UserInDB:
-    """Require write access (owner or readwrite)"""
-    if user.role not in [UserRole.OWNER, UserRole.READ_WRITE]:
+    """Require admin access (owner or admin)"""
+    if user.role not in [UserRole.OWNER, UserRole.ADMIN]:
         raise HTTPException(
             status_code=403,
-            detail="Write access required"
+            detail="Admin access required"
         )
     return user
 

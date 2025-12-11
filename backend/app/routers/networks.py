@@ -9,7 +9,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models.network import Network, NetworkPermission, PermissionRole
+from ..models.network import Network, NetworkPermission, PermissionRole, NetworkNotificationSettings
 from ..schemas import (
     NetworkCreate,
     NetworkUpdate,
@@ -18,6 +18,8 @@ from ..schemas import (
     NetworkLayoutSave,
     PermissionCreate,
     PermissionResponse,
+    NetworkNotificationSettingsCreate,
+    NetworkNotificationSettingsResponse,
 )
 from ..dependencies.auth import AuthenticatedUser, require_auth, require_write_access
 
@@ -280,16 +282,16 @@ async def list_network_permissions(
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all permissions for a network. Only owner and admins can view."""
-    network, is_owner, permission = await get_network_with_access(
+    """List all permissions for a network. Only the owner can view."""
+    network, is_owner, _ = await get_network_with_access(
         network_id, current_user, db
     )
 
-    # Only owner and admins can view permissions
-    if not is_owner and permission != PermissionRole.ADMIN:
+    # Only owner can view permissions
+    if not is_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owners and admins can view permissions",
+            detail="Only the network owner can view sharing settings",
         )
 
     result = await db.execute(
@@ -313,23 +315,23 @@ async def create_permission(
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """Share a network with another user. Only owner and admins can share."""
-    network, is_owner, permission = await get_network_with_access(
+    """Share a network with another user. Only the owner can share."""
+    network, is_owner, _ = await get_network_with_access(
         network_id, current_user, db
     )
 
-    # Only owner and admins can share
-    if not is_owner and permission != PermissionRole.ADMIN:
+    # Only owner can share
+    if not is_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owners and admins can share networks",
+            detail="Only the network owner can share the network",
         )
 
-    # Can't grant ADMIN unless you're the owner
-    if perm_data.role == PermissionRole.ADMIN and not is_owner:
+    # Can't share with yourself
+    if perm_data.user_id == current_user.user_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owners can grant admin access",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot share a network with yourself",
         )
 
     # Check if permission already exists
@@ -367,16 +369,16 @@ async def delete_permission(
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a user's access to a network. Only owner and admins can remove."""
-    network, is_owner, permission = await get_network_with_access(
+    """Remove a user's access to a network. Only the owner can remove access."""
+    network, is_owner, _ = await get_network_with_access(
         network_id, current_user, db
     )
 
-    # Only owner and admins can remove access
-    if not is_owner and permission != PermissionRole.ADMIN:
+    # Only owner can remove access
+    if not is_owner:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owners and admins can remove access",
+            detail="Only the network owner can remove access",
         )
 
     # Find the permission to delete
@@ -394,13 +396,108 @@ async def delete_permission(
             detail="Permission not found",
         )
 
-    # Can't remove an admin's access unless you're the owner
-    if perm_to_delete.role == PermissionRole.ADMIN and not is_owner:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only owners can remove admin access",
-        )
-
     await db.delete(perm_to_delete)
     await db.commit()
+
+
+# ============================================================================
+# Network Notification Settings
+# ============================================================================
+
+
+@router.get("/{network_id}/notifications", response_model=NetworkNotificationSettingsResponse)
+async def get_network_notification_settings(
+    network_id: int,
+    current_user: AuthenticatedUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get notification settings for a network. Only owner and editors can view."""
+    network, is_owner, permission = await get_network_with_access(
+        network_id, current_user, db
+    )
+
+    # Owner and editors can view notification settings
+    if not is_owner and permission == PermissionRole.VIEWER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Viewers cannot access notification settings",
+        )
+
+    # Get or create notification settings
+    result = await db.execute(
+        select(NetworkNotificationSettings).where(
+            NetworkNotificationSettings.network_id == network_id
+        )
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        # Create default settings
+        settings = NetworkNotificationSettings(
+            network_id=network_id,
+            enabled=True,
+            email_enabled=False,
+            discord_enabled=False,
+        )
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
+
+    return NetworkNotificationSettingsResponse.model_validate(settings)
+
+
+@router.put("/{network_id}/notifications", response_model=NetworkNotificationSettingsResponse)
+async def update_network_notification_settings(
+    network_id: int,
+    settings_data: NetworkNotificationSettingsCreate,
+    current_user: AuthenticatedUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update notification settings for a network. Only owner and editors can update."""
+    network, is_owner, permission = await get_network_with_access(
+        network_id, current_user, db
+    )
+
+    # Owner and editors can update notification settings
+    if not is_owner and permission == PermissionRole.VIEWER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Viewers cannot modify notification settings",
+        )
+
+    # Get or create notification settings
+    result = await db.execute(
+        select(NetworkNotificationSettings).where(
+            NetworkNotificationSettings.network_id == network_id
+        )
+    )
+    settings = result.scalar_one_or_none()
+
+    if not settings:
+        settings = NetworkNotificationSettings(network_id=network_id)
+        db.add(settings)
+
+    # Update fields
+    settings.enabled = settings_data.enabled
+
+    if settings_data.email:
+        settings.email_enabled = settings_data.email.enabled
+        settings.email_address = settings_data.email.email_address
+
+    if settings_data.discord:
+        settings.discord_enabled = settings_data.discord.enabled
+        settings.discord_config = {
+            "delivery_method": settings_data.discord.delivery_method,
+            "discord_user_id": settings_data.discord.discord_user_id,
+            "guild_id": settings_data.discord.guild_id,
+            "channel_id": settings_data.discord.channel_id,
+        }
+
+    if settings_data.preferences:
+        settings.preferences = settings_data.preferences.model_dump()
+
+    await db.commit()
+    await db.refresh(settings)
+
+    return NetworkNotificationSettingsResponse.model_validate(settings)
 

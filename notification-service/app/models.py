@@ -109,8 +109,14 @@ def get_default_priority_for_type(notification_type: NotificationType) -> Notifi
 # ==================== User Notification Preferences ====================
 
 class NotificationPreferences(BaseModel):
-    """User's notification preferences"""
-    user_id: str
+    """Network's notification preferences (per-network settings)"""
+    # Network identification - notifications are scoped per-network
+    network_id: int
+    network_name: Optional[str] = None  # For display purposes
+    
+    # Owner's user_id for system-wide notifications (cartographer up/down)
+    owner_user_id: Optional[str] = None
+    
     enabled: bool = True  # Master switch for notifications
     
     # Channel configurations
@@ -200,6 +206,10 @@ class NetworkEvent(BaseModel):
     event_type: NotificationType
     priority: NotificationPriority = NotificationPriority.MEDIUM
     
+    # Network context - notifications are per-network
+    network_id: Optional[int] = None
+    network_name: Optional[str] = None
+    
     # Device information
     device_ip: Optional[str] = None
     device_name: Optional[str] = None
@@ -224,7 +234,7 @@ class NotificationRecord(BaseModel):
     """Record of a sent notification"""
     notification_id: str
     event_id: str
-    user_id: str
+    network_id: int  # Which network this notification was for
     channel: NotificationChannel
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     

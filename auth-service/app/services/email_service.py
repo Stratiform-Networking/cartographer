@@ -61,8 +61,8 @@ def send_invitation_email(
     
     # Role display name
     role_display = {
-        "readonly": "Read Only",
-        "readwrite": "Read & Write"
+        "member": "Member",
+        "admin": "Admin"
     }.get(role, role)
     
     # HTML email template

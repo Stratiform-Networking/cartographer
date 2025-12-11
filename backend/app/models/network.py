@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 import enum
 
-from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, JSON, Integer
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -17,10 +17,13 @@ from ..database import Base
 
 
 class PermissionRole(str, enum.Enum):
-    """Permission roles for network access."""
-    VIEWER = "viewer"
-    EDITOR = "editor"
-    ADMIN = "admin"
+    """
+    Permission roles for network sharing.
+    Note: The network creator is the owner (stored in Network.user_id).
+    These roles are for users the owner shares the network with.
+    """
+    VIEWER = "viewer"   # Can view the network map
+    EDITOR = "editor"   # Can view and modify the network map
 
 
 class Network(Base):
@@ -63,6 +66,9 @@ class Network(Base):
     permissions: Mapped[list["NetworkPermission"]] = relationship(
         back_populates="network", cascade="all, delete-orphan"
     )
+    notification_settings: Mapped[Optional["NetworkNotificationSettings"]] = relationship(
+        back_populates="network", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class NetworkPermission(Base):
@@ -88,4 +94,43 @@ class NetworkPermission(Base):
 
     # Relationships
     network: Mapped["Network"] = relationship(back_populates="permissions")
+
+
+class NetworkNotificationSettings(Base):
+    """
+    Per-network notification settings.
+    Each network can have its own notification configuration.
+    """
+    __tablename__ = "network_notification_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    network_id: Mapped[int] = mapped_column(
+        ForeignKey("networks.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    
+    # Master switch for this network's notifications
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Email configuration (stored as JSON)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    
+    # Discord configuration (stored as JSON for flexibility)
+    discord_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    discord_config: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Notification preferences (stored as JSON)
+    # Contains: enabled_types, minimum_priority, quiet_hours, etc.
+    preferences: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    
+    # Relationships
+    network: Mapped["Network"] = relationship(back_populates="notification_settings")
 

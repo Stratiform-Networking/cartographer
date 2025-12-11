@@ -38,32 +38,45 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ==================== Preferences ====================
+# ==================== Preferences (per-network) ====================
 
-@router.get("/preferences", response_model=NotificationPreferences)
-async def get_preferences(
+@router.get("/networks/{network_id}/preferences", response_model=NotificationPreferences)
+async def get_network_preferences(
+    network_id: int,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
-    """Get notification preferences for the current user"""
-    return notification_manager.get_preferences(x_user_id)
+    """Get notification preferences for a specific network"""
+    return notification_manager.get_preferences(network_id)
 
 
-@router.put("/preferences", response_model=NotificationPreferences)
-async def update_preferences(
+@router.put("/networks/{network_id}/preferences", response_model=NotificationPreferences)
+async def update_network_preferences(
+    network_id: int,
     update: NotificationPreferencesUpdate,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
-    """Update notification preferences for the current user"""
-    return notification_manager.update_preferences(x_user_id, update)
+    """Update notification preferences for a specific network"""
+    return notification_manager.update_preferences(network_id, update)
 
 
-@router.delete("/preferences")
-async def delete_preferences(
+@router.delete("/networks/{network_id}/preferences")
+async def delete_network_preferences(
+    network_id: int,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
-    """Delete notification preferences (reset to defaults)"""
-    success = notification_manager.delete_preferences(x_user_id)
+    """Delete notification preferences for a network (reset to defaults)"""
+    success = notification_manager.delete_preferences(network_id)
     return {"success": success}
+
+
+# Legacy endpoints (for backwards compatibility during migration)
+@router.get("/preferences", response_model=NotificationPreferences, deprecated=True)
+async def get_preferences_legacy(
+    x_user_id: str = Header(..., description="User ID from auth service"),
+):
+    """DEPRECATED: Use /networks/{network_id}/preferences instead"""
+    # Return default preferences for backwards compatibility
+    return NotificationPreferences(network_id=0, owner_user_id=x_user_id)
 
 
 # ==================== Service Status ====================
@@ -120,33 +133,36 @@ async def get_discord_invite_url():
 
 # ==================== Testing ====================
 
-@router.post("/test", response_model=TestNotificationResponse)
+@router.post("/networks/{network_id}/test", response_model=TestNotificationResponse)
 async def send_test_notification(
+    network_id: int,
     request: TestNotificationRequest,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
-    """Send a test notification via a specific channel"""
-    return await notification_manager.send_test_notification(x_user_id, request)
+    """Send a test notification for a specific network"""
+    return await notification_manager.send_test_notification(network_id, request)
 
 
-# ==================== History & Stats ====================
+# ==================== History & Stats (per-network) ====================
 
-@router.get("/history", response_model=NotificationHistoryResponse)
-async def get_notification_history(
+@router.get("/networks/{network_id}/history", response_model=NotificationHistoryResponse)
+async def get_network_notification_history(
+    network_id: int,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
-    """Get notification history for the current user"""
-    return notification_manager.get_history(user_id=x_user_id, page=page, per_page=per_page)
+    """Get notification history for a specific network"""
+    return notification_manager.get_history(network_id=network_id, page=page, per_page=per_page)
 
 
-@router.get("/stats", response_model=NotificationStatsResponse)
-async def get_notification_stats(
+@router.get("/networks/{network_id}/stats", response_model=NotificationStatsResponse)
+async def get_network_notification_stats(
+    network_id: int,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
-    """Get notification statistics for the current user"""
-    return notification_manager.get_stats(user_id=x_user_id)
+    """Get notification statistics for a specific network"""
+    return notification_manager.get_stats(network_id=network_id)
 
 
 # ==================== Anomaly Detection ====================

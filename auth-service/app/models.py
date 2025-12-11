@@ -6,10 +6,10 @@ import re
 
 
 class UserRole(str, Enum):
-    """User permission levels"""
-    OWNER = "owner"          # Full access - can manage users, read/write map
-    READ_WRITE = "readwrite" # Can read and modify the network map
-    READ_ONLY = "readonly"   # Can only view the network map
+    """App-level user permission levels"""
+    OWNER = "owner"    # Full access - can manage all users and app settings
+    ADMIN = "admin"    # Can manage users (except owner) and invite new users
+    MEMBER = "member"  # Basic user - can create and manage their own networks
 
 
 class UserBase(BaseModel):
@@ -30,7 +30,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Request to create a new user"""
     password: str = Field(..., min_length=8)
-    role: UserRole = UserRole.READ_ONLY
+    role: UserRole = UserRole.MEMBER
     
     @field_validator('password')
     @classmethod
@@ -159,7 +159,7 @@ class InviteStatus(str, Enum):
 class InviteCreate(BaseModel):
     """Request to create an invitation"""
     email: EmailStr
-    role: UserRole = UserRole.READ_ONLY
+    role: UserRole = UserRole.MEMBER
     
     @field_validator('role')
     @classmethod

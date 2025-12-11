@@ -434,22 +434,22 @@ class AuthService:
     
     def get_permissions(self, role: UserRole) -> List[str]:
         """Get list of permission strings for a role"""
-        permissions = ["read:map", "read:health"]
+        # All users can create and manage their own networks
+        permissions = ["read:own_networks", "write:own_networks", "create:networks"]
         
-        if role in [UserRole.READ_WRITE, UserRole.OWNER]:
-            permissions.extend([
-                "write:map",
-                "write:nodes",
-                "write:layout"
-            ])
-        
-        if role == UserRole.OWNER:
+        if role in [UserRole.ADMIN, UserRole.OWNER]:
             permissions.extend([
                 "manage:users",
                 "read:users",
                 "write:users",
+                "invite:users"
+            ])
+        
+        if role == UserRole.OWNER:
+            permissions.extend([
                 "delete:users",
-                "admin:settings"
+                "admin:settings",
+                "manage:all"
             ])
         
         return permissions

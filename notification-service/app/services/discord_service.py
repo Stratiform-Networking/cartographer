@@ -283,13 +283,12 @@ class DiscordNotificationService:
         config: DiscordConfig,
         event: NetworkEvent,
         notification_id: str,
-        user_id: str = "",
     ) -> NotificationRecord:
         """Send a notification via Discord"""
         record = NotificationRecord(
             notification_id=notification_id,
             event_id=event.event_id,
-            user_id=user_id,
+            network_id=event.network_id or 0,
             channel=NotificationChannel.DISCORD,
             title=event.title,
             message=event.message,

@@ -1,15 +1,30 @@
 <template>
 	<header class="flex items-center h-14 px-4 border-b border-slate-200 dark:border-slate-700/80 bg-white dark:bg-slate-900">
-		<!-- Left: Branding -->
+		<!-- Left: Branding + Network Name -->
 		<div class="flex items-center gap-3 mr-6">
+			<!-- Back button (when viewing a specific network) -->
+			<router-link
+				v-if="networkId"
+				to="/"
+				class="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+				title="Back to Networks"
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-600 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+				</svg>
+			</router-link>
 			<div class="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-cyan-600 shadow-sm">
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
 				</svg>
 			</div>
 			<div class="flex flex-col">
-				<span class="text-sm font-semibold text-slate-800 dark:text-white tracking-tight">Cartographer</span>
-				<span class="text-[10px] text-slate-400 dark:text-slate-500 -mt-0.5">Network Mapper</span>
+				<span class="text-sm font-semibold text-slate-800 dark:text-white tracking-tight">
+					{{ networkName || 'Cartographer' }}
+				</span>
+				<span class="text-[10px] text-slate-400 dark:text-slate-500 -mt-0.5">
+					{{ networkId ? 'Network Map' : 'Network Mapper' }}
+				</span>
 			</div>
 		</div>
 
@@ -318,6 +333,8 @@ const props = defineProps<{
 	root: TreeNode;
 	hasUnsavedChanges?: boolean;
 	canEdit?: boolean;
+	networkId?: number;
+	networkName?: string;
 }>();
 
 const emit = defineEmits<{
@@ -393,12 +410,24 @@ onMounted(async () => {
 
 	// Try to load saved layout from server
 	try {
-		const response = await axios.get('/api/load-layout');
-		if (response.data.exists && response.data.layout) {
-			emit("applyLayout", response.data.layout);
-			emit("saved"); // Mark as saved since we just loaded the saved state
-			message.value = "Loaded saved map";
-			setTimeout(() => { message.value = ""; }, 3000);
+		if (props.networkId) {
+			// Load from network-specific endpoint
+			const response = await axios.get(`/api/networks/${props.networkId}/layout`);
+			if (response.data.layout_data) {
+				emit("applyLayout", response.data.layout_data);
+				emit("saved"); // Mark as saved since we just loaded the saved state
+				message.value = "Loaded saved map";
+				setTimeout(() => { message.value = ""; }, 3000);
+			}
+		} else {
+			// Legacy: load from old endpoint
+			const response = await axios.get('/api/load-layout');
+			if (response.data.exists && response.data.layout) {
+				emit("applyLayout", response.data.layout);
+				emit("saved"); // Mark as saved since we just loaded the saved state
+				message.value = "Loaded saved map";
+				setTimeout(() => { message.value = ""; }, 3000);
+			}
 		}
 	} catch (error) {
 		console.error("Failed to load saved layout:", error);
@@ -488,11 +517,25 @@ async function saveLayout() {
 	saving.value = true;
 	try {
 		const layout = exportLayout(props.root);
-		const response = await axios.post('/api/save-layout', layout);
-		if (response.data.success) {
-			message.value = "Map saved";
-			emit("saved");
-			setTimeout(() => { message.value = ""; }, 3000);
+		
+		if (props.networkId) {
+			// Save to network-specific endpoint
+			const response = await axios.post(`/api/networks/${props.networkId}/layout`, {
+				layout_data: layout
+			});
+			if (response.data) {
+				message.value = "Map saved";
+				emit("saved");
+				setTimeout(() => { message.value = ""; }, 3000);
+			}
+		} else {
+			// Legacy: save to old endpoint
+			const response = await axios.post('/api/save-layout', layout);
+			if (response.data.success) {
+				message.value = "Map saved";
+				emit("saved");
+				setTimeout(() => { message.value = ""; }, 3000);
+			}
 		}
 	} catch (error: any) {
 		message.value = "Failed to save";

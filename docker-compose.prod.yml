@@ -6,6 +6,25 @@
 version: "3.8"
 
 services:
+  # PostgreSQL database for network data
+  postgres:
+    image: postgres:16-alpine
+    container_name: cartographer-postgres
+    network_mode: host
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cartographer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartographer_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-cartographer}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cartographer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # Redis for metrics pub/sub
   redis:
     image: redis:7-alpine
@@ -33,6 +52,8 @@ services:
       - cartographer-data:/app/data
     environment:
       - FRONTEND_DIST=/app/frontend/dist
+      # Database connection (PostgreSQL)
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer_user}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
       # Health service is on localhost when using host network
       - HEALTH_SERVICE_URL=http://localhost:8001
       # Auth service is on localhost when using host network
@@ -46,6 +67,8 @@ services:
       - NET_RAW
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
       health:
         condition: service_healthy
       auth:
@@ -163,6 +186,8 @@ services:
       start_period: 10s
 
 volumes:
+  postgres-data:
+    driver: local
   cartographer-data:
     driver: local
   health-data:

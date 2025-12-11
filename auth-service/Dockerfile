@@ -2,19 +2,22 @@
 # Cartographer Auth Service
 # User authentication and authorization microservice
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim-bullseye
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System packages (minimal for auth service)
-RUN apt-get update && \
+# System packages (minimal for auth service, with retry for transient network issues)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    for i in 1 2 3; do \
+        apt-get update && break || sleep 5; \
+    done && \
     apt-get install -y --no-install-recommends \
         curl \
-        ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+        ca-certificates
 
 # Python dependencies
 COPY requirements.txt /app/requirements.txt

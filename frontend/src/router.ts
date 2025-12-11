@@ -1,13 +1,20 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import MainApp from './components/MainApp.vue';
+import HomePage from './components/HomePage.vue';
+import NetworkView from './components/NetworkView.vue';
 import EmbedView from './components/EmbedView.vue';
 import AcceptInvite from './components/AcceptInvite.vue';
 
 const routes = [
 	{
 		path: '/',
-		name: 'main',
-		component: MainApp
+		name: 'home',
+		component: HomePage
+	},
+	{
+		path: '/network/:id',
+		name: 'network',
+		component: NetworkView,
+		props: true
 	},
 	{
 		path: '/embed/:embedId',

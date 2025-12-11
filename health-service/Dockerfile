@@ -2,15 +2,19 @@
 # Cartographer Health Monitoring Service
 # Independent microservice for network device health monitoring
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim-bullseye
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System packages for network diagnostics
-RUN apt-get update && \
+# System packages for network diagnostics (with retry for transient network issues)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    for i in 1 2 3; do \
+        apt-get update && break || sleep 5; \
+    done && \
     apt-get install -y --no-install-recommends \
         iputils-ping \
         dnsutils \
@@ -18,8 +22,7 @@ RUN apt-get update && \
         iproute2 \
         traceroute \
         curl \
-        ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+        ca-certificates
 
 # Python dependencies
 COPY requirements.txt /app/requirements.txt

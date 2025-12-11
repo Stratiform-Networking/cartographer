@@ -12,8 +12,11 @@ from .routers.auth_proxy import router as auth_proxy_router
 from .routers.metrics_proxy import router as metrics_proxy_router
 from .routers.assistant_proxy import router as assistant_proxy_router
 from .routers.notification_proxy import router as notification_proxy_router
+from .routers.networks import router as networks_router
 from .services.http_client import http_pool
 from .services.usage_middleware import UsageTrackingMiddleware
+from .database import init_db
+from .migrations.migrate_layout import migrate_layout_to_database
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +31,21 @@ async def lifespan(app: FastAPI):
     Application lifespan manager.
     Handles startup and shutdown tasks including HTTP client pool warm-up.
     """
-    # Startup: Initialize and warm up HTTP client pool
-    logger.info("Starting application - initializing HTTP client pool...")
+    # Startup: Initialize database
+    logger.info("Starting application - initializing database...")
+    await init_db()
+    logger.info("Database initialized")
+    
+    # Run migration for existing layouts
+    try:
+        migrated = await migrate_layout_to_database()
+        if migrated:
+            logger.info("Layout migration completed")
+    except Exception as e:
+        logger.warning(f"Layout migration failed (non-fatal): {e}")
+    
+    # Initialize and warm up HTTP client pool
+    logger.info("Initializing HTTP client pool...")
     await http_pool.initialize_all()
     
     # Warm up connections to reduce cold start latency
@@ -70,6 +86,7 @@ def create_app() -> FastAPI:
 	app.include_router(metrics_proxy_router, prefix="/api")
 	app.include_router(assistant_proxy_router, prefix="/api")
 	app.include_router(notification_proxy_router, prefix="/api")
+	app.include_router(networks_router, prefix="/api")
 
 	# Internal health check endpoint for load balancers and warm-up
 	@app.get("/healthz", tags=["internal"])

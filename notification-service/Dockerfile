@@ -2,14 +2,19 @@
 # Cartographer Notification Service
 # Handles email, Discord, and other notification channels
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies (with retry for transient network issues)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    for i in 1 2 3; do \
+        apt-get update && break || sleep 5; \
+    done && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates
 
 # Copy requirements first for better caching
 COPY requirements.txt .

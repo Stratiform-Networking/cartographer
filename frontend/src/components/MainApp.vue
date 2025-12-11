@@ -1,6 +1,6 @@
 <template>
-	<!-- Loading State -->
-	<div v-if="authLoading" class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+	<!-- Loading State (only when not in network mode) -->
+	<div v-if="!isNetworkMode && authLoading" class="h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
 		<div class="text-center">
 			<svg class="animate-spin h-12 w-12 text-cyan-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -10,11 +10,11 @@
 		</div>
 	</div>
 
-	<!-- Setup Wizard (First Run) -->
-	<SetupWizard v-else-if="needsSetup" @complete="onSetupComplete" />
+	<!-- Setup Wizard (First Run, only when not in network mode) -->
+	<SetupWizard v-else-if="!isNetworkMode && needsSetup" @complete="onSetupComplete" />
 
-	<!-- Login Screen -->
-	<LoginScreen v-else-if="!isAuthenticated" @success="onLoginSuccess" />
+	<!-- Login Screen (only when not in network mode) -->
+	<LoginScreen v-else-if="!isNetworkMode && !isAuthenticated" @success="onLoginSuccess" />
 
 	<!-- Main Application -->
 	<div v-else class="h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
@@ -24,7 +24,9 @@
 		<MapControls
 			:root="parsed?.root || emptyRoot"
 			:hasUnsavedChanges="hasUnsavedChanges"
-			:canEdit="canWrite"
+			:canEdit="effectiveCanWrite"
+			:networkId="networkId"
+			:networkName="networkName"
 			@updateMap="onUpdateMap"
 			@applyLayout="onApplyLayout"
 			@log="onLog"
@@ -130,11 +132,11 @@
 									mode === 'edit' 
 										? 'bg-cyan-500 text-white shadow-sm' 
 										: 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200',
-									!canWrite ? 'opacity-40 cursor-not-allowed' : ''
+									!effectiveCanWrite ? 'opacity-40 cursor-not-allowed' : ''
 								]"
-								@click="canWrite && (mode = 'edit')"
-								:disabled="!canWrite"
-								:title="canWrite ? 'Edit mode - drag nodes to reposition' : 'Edit mode requires write permissions'"
+								@click="effectiveCanWrite && (mode = 'edit')"
+								:disabled="!effectiveCanWrite"
+								:title="effectiveCanWrite ? 'Edit mode - drag nodes to reposition' : 'Edit mode requires write permissions'"
 							>
 								<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -423,7 +425,7 @@
 			<NodeInfoPanel
 				v-if="showNodeInfoPanel && selectedNode"
 				:node="selectedNode"
-				:canEdit="canWrite"
+				:canEdit="effectiveCanWrite"
 				:allDevices="allNetworkDevices"
 				@close="closeNodeInfoPanel"
 				@toggleMonitoring="onToggleNodeMonitoring"
@@ -524,6 +526,13 @@ import { useHealthMonitoring } from "../composables/useHealthMonitoring";
 import { useAuth } from "../composables/useAuth";
 import { useNotifications } from "../composables/useNotifications";
 
+// Props for network-specific view
+const props = defineProps<{
+	networkId?: number;
+	networkName?: string;
+	canWriteNetwork?: boolean;
+}>();
+
 // Auth state
 const { isAuthenticated, canWrite, checkSetupStatus, verifySession } = useAuth();
 const authLoading = ref(true);
@@ -532,6 +541,23 @@ const showUserManagement = ref(false);
 const showAssistant = ref(false);
 const showNotificationSettings = ref(false);
 const showUpdateSettings = ref(false);
+
+// Network context (from props or defaults)
+const networkId = computed(() => props.networkId);
+const networkName = computed(() => props.networkName || 'Cartographer');
+
+// Effective write permission - use prop if provided, otherwise use auth state
+const effectiveCanWrite = computed(() => {
+	if (props.networkId !== undefined) {
+		// When viewing a specific network, use the network-specific permission
+		return props.canWriteNetwork ?? false;
+	}
+	// Legacy mode: use auth service permission
+	return canWrite.value;
+});
+
+// Whether we're in network-specific mode (skip auth wrapper)
+const isNetworkMode = computed(() => props.networkId !== undefined);
 
 // Check auth status on mount
 async function initAuth() {
@@ -626,8 +652,8 @@ const logs = ref<string[]>([]);
 const running = ref(false);
 const mode = ref<'pan' | 'edit'>('pan'); // interaction mode
 
-// Watch canWrite and reset mode if user becomes readonly
-watch(canWrite, (canEdit) => {
+// Watch effectiveCanWrite and reset mode if user becomes readonly
+watch(effectiveCanWrite, (canEdit) => {
 	if (!canEdit && mode.value === 'edit') {
 		mode.value = 'pan';
 	}
@@ -788,7 +814,13 @@ function triggerAutoSave() {
 		if (parsed.value && hasUnsavedChanges.value) {
 			try {
 				const layout = exportLayout(parsed.value.root);
-				await axios.post('/api/save-layout', layout);
+				if (props.networkId) {
+					// Save to network-specific endpoint
+					await axios.post(`/api/networks/${props.networkId}/layout`, { layout_data: layout });
+				} else {
+					// Legacy: save to old endpoint
+					await axios.post('/api/save-layout', layout);
+				}
 				savedStateHash.value = currentStateHash.value;
 				console.log('[Auto-save] Network map saved');
 			} catch (error) {
@@ -1091,7 +1123,7 @@ function closeNodeInfoPanel() {
 }
 
 async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
-	if (!canWrite.value) return; // Permission check
+	if (!effectiveCanWrite.value) return; // Permission check
 	if (!parsed.value?.root) return;
 	
 	// Find the node and update its monitoringEnabled property
@@ -1145,7 +1177,7 @@ async function onToggleNodeMonitoring(nodeId: string, enabled: boolean) {
 }
 
 function onUpdateNodeNotes(nodeId: string, notes: string) {
-	if (!canWrite.value) return; // Permission check
+	if (!effectiveCanWrite.value) return; // Permission check
 	if (!parsed.value?.root) return;
 	
 	const node = findNodeById(parsed.value.root, nodeId);
@@ -1169,7 +1201,7 @@ function onUpdateNodeNotes(nodeId: string, notes: string) {
 }
 
 function onUpdateLanPorts(nodeId: string, lanPorts: LanPortsConfig | null) {
-	if (!canWrite.value) return; // Permission check
+	if (!effectiveCanWrite.value) return; // Permission check
 	if (!parsed.value?.root) return;
 	
 	const node = findNodeById(parsed.value.root, nodeId);

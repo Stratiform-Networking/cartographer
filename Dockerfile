@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1: Build frontend (Vue 3 + Vite)
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:20-bullseye AS frontend-builder
+FROM node:20-bookworm AS frontend-builder
 WORKDIR /app
 
 # Install dependencies and build
@@ -14,14 +14,18 @@ RUN npm run build
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2: Backend runtime with network tooling
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim-bullseye AS backend
+FROM python:3.12-slim-bookworm AS backend
 ENV PYTHONDONTWRITEBYTECODE=1 \
 	PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# System packages for network mapping
-RUN apt-get update && \
+# System packages for network mapping (with retry for transient network issues)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+	--mount=type=cache,target=/var/lib/apt,sharing=locked \
+	for i in 1 2 3; do \
+		apt-get update && break || sleep 5; \
+	done && \
 	apt-get install -y --no-install-recommends \
 		arp-scan \
 		nmap \
@@ -38,8 +42,7 @@ RUN apt-get update && \
 		ca-certificates \
 		procps \
 		samba-client && \
-	echo "mibs :" > /etc/snmp/snmp.conf && \
-	rm -rf /var/lib/apt/lists/*
+	echo "mibs :" > /etc/snmp/snmp.conf
 
 # Python deps
 COPY backend/requirements.txt /app/backend/requirements.txt

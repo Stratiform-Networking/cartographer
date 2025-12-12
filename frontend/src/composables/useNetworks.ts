@@ -36,27 +36,22 @@ const networks = ref<Network[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-// Check for logout flag on module load - ensures networks are cleared after logout
-if (typeof sessionStorage !== "undefined") {
-	const logoutFlag = sessionStorage.getItem("cartographer_logout");
-	if (logoutFlag) {
-		sessionStorage.removeItem("cartographer_logout");
-		networks.value = [];
-		console.log("[Networks] Cleared networks after logout");
-	}
-}
-
 export function useNetworks() {
 	// Clear networks state (call when switching accounts)
+	// Sets loading to true to show loading state instead of "no networks"
 	function clearNetworks(): void {
 		networks.value = [];
 		error.value = null;
-		loading.value = false;
+		loading.value = true;
 	}
 
 	async function fetchNetworks(): Promise<void> {
 		loading.value = true;
 		error.value = null;
+
+		// Log the current auth header for debugging
+		const authHeader = axios.defaults.headers.common["Authorization"];
+		console.log("[Networks] Fetching networks, auth header present:", !!authHeader);
 
 		try {
 			// Add cache-busting to ensure fresh data after login/logout
@@ -69,8 +64,10 @@ export function useNetworks() {
 					_t: Date.now(), // Cache buster
 				},
 			});
+			console.log("[Networks] Fetched", response.data.length, "networks");
 			networks.value = response.data;
 		} catch (e: any) {
+			console.error("[Networks] Fetch failed:", e.response?.status, e.message);
 			error.value = e.response?.data?.detail || e.message || "Failed to fetch networks";
 			const err = new Error(error.value!) as Error & { status?: number };
 			err.status = e.response?.status;

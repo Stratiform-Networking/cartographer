@@ -355,7 +355,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useNetworks, type Network } from "../composables/useNetworks";
@@ -420,13 +420,12 @@ function onSetupComplete() {
 }
 
 async function onLoginSuccess() {
-	console.log("[HomePage] Login successful");
-	await loadNetworks();
+	// This is called when LoginScreen emits success
+	// The watcher on isAuthenticated will handle loading networks
+	console.log("[HomePage] Login success event received");
 }
 
 function onLogout() {
-	// Set flag before reload so networks are cleared on next page load
-	sessionStorage.setItem("cartographer_logout", "true");
 	clearNetworks();
 	window.location.reload();
 }
@@ -547,11 +546,42 @@ function toggleDarkMode() {
 	}
 }
 
+// Watch for authentication state changes to reload networks
+// This handles the case when user logs in/out without page reload
+watch(isAuthenticated, async (newValue, oldValue) => {
+	console.log("[HomePage] Auth state changed:", oldValue, "->", newValue);
+	if (newValue && !oldValue) {
+		// User just became authenticated - clear and load fresh networks
+		console.log("[HomePage] User authenticated, loading networks...");
+		clearNetworks();
+		await nextTick();
+		try {
+			await fetchNetworks();
+			console.log("[HomePage] Networks loaded:", networks.value.length);
+		} catch (e) {
+			console.error("[HomePage] Failed to load networks:", e);
+		}
+	} else if (!newValue && oldValue) {
+		// User just logged out - clear networks
+		console.log("[HomePage] User logged out, clearing networks");
+		clearNetworks();
+	}
+});
+
 onMounted(async () => {
 	initDarkMode();
 	await initAuth();
+	// If already authenticated on mount, load networks
+	// (The watcher won't fire for the initial value)
 	if (isAuthenticated.value) {
-		await loadNetworks();
+		console.log("[HomePage] Already authenticated on mount, loading networks...");
+		clearNetworks();
+		try {
+			await fetchNetworks();
+			console.log("[HomePage] Networks loaded:", networks.value.length);
+		} catch (e) {
+			console.error("[HomePage] Failed to load networks:", e);
+		}
 	}
 });
 </script>

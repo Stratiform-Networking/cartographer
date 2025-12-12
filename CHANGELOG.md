@@ -5,6 +5,13 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.7.1](https://github.com/devartech/cartographer/compare/v0.7.0...v0.7.1) (2025-12-12)
+
+
+### 🐛 Bug Fixes
+
+* resolve auth error on app reboot ([876975c](https://github.com/devartech/cartographer/commit/876975c57a039401104dc6ba33b9d361262518e4))
+
 ## [0.7.0](https://github.com/devartech/cartographer/compare/v0.6.11...v0.7.0) (2025-12-12)
 
 

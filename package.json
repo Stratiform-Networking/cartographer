@@ -1,6 +1,6 @@
 {
   "name": "cartographer",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "description": "Network cartography and monitoring platform",
   "private": true,
   "scripts": {

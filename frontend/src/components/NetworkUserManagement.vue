@@ -186,7 +186,7 @@
 									<!-- Add dropdown -->
 									<div class="relative" :ref="el => setDropdownRef(user.id, el)">
 										<button
-											@click="toggleDropdown(user.id)"
+											@click="toggleDropdown(user.id, $event)"
 											class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 text-white text-sm rounded-lg hover:bg-cyan-700 transition-colors"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,27 +197,6 @@
 												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
 											</svg>
 										</button>
-										
-										<!-- Dropdown menu (opens upward to avoid overflow clipping) -->
-										<div
-											v-if="openDropdown === user.id"
-											class="absolute right-0 bottom-full mb-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-10"
-										>
-											<button
-												@click="onAddUser(user, 'viewer')"
-												class="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-											>
-												<div class="font-medium">Viewer</div>
-												<div class="text-xs text-slate-500">Can view the network</div>
-											</button>
-											<button
-												@click="onAddUser(user, 'editor')"
-												class="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-											>
-												<div class="font-medium">Editor</div>
-												<div class="text-xs text-slate-500">Can view and modify</div>
-											</button>
-										</div>
 									</div>
 								</div>
 
@@ -261,6 +240,28 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Teleported dropdown menu (rendered outside overflow container) -->
+		<div
+			v-if="openDropdown && dropdownPosition"
+			class="fixed w-40 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-[70]"
+			:style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }"
+		>
+			<button
+				@click="onAddUserFromDropdown('viewer')"
+				class="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+			>
+				<div class="font-medium">Viewer</div>
+				<div class="text-xs text-slate-500">Can view the network</div>
+			</button>
+			<button
+				@click="onAddUserFromDropdown('editor')"
+				class="w-full px-4 py-2 text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+			>
+				<div class="font-medium">Editor</div>
+				<div class="text-xs text-slate-500">Can view and modify</div>
+			</button>
+		</div>
 	</Teleport>
 </template>
 
@@ -289,6 +290,8 @@ const isSubmitting = ref(false);
 const permissions = ref<NetworkPermission[]>([]);
 const allUsers = ref<User[]>([]);
 const openDropdown = ref<string | null>(null);
+const dropdownPosition = ref<{ top: number; left: number } | null>(null);
+const selectedDropdownUser = ref<User | null>(null);
 const removingMember = ref<{ user: User; permission: NetworkPermission } | null>(null);
 const dropdownRefs = ref<Record<string, HTMLElement | null>>({});
 
@@ -317,7 +320,7 @@ const availableUsers = computed(() => {
 });
 
 // Store dropdown refs
-function setDropdownRef(userId: string, el: HTMLElement | null | Element) {
+function setDropdownRef(userId: string, el: unknown) {
 	dropdownRefs.value[userId] = el as HTMLElement | null;
 }
 
@@ -351,19 +354,41 @@ onBeforeUnmount(() => {
 function handleClickOutside(e: MouseEvent) {
 	if (openDropdown.value) {
 		const dropdownEl = dropdownRefs.value[openDropdown.value];
-		if (dropdownEl && !dropdownEl.contains(e.target as Node)) {
+		const target = e.target as HTMLElement;
+		// Check if click is inside the button container or the teleported dropdown menu
+		const isInsideButton = dropdownEl && dropdownEl.contains(target);
+		const isInsideDropdown = target.closest('.fixed.w-40'); // The teleported dropdown
+		
+		if (!isInsideButton && !isInsideDropdown) {
 			openDropdown.value = null;
+			dropdownPosition.value = null;
+			selectedDropdownUser.value = null;
 		}
 	}
 }
 
-function toggleDropdown(userId: string) {
-	openDropdown.value = openDropdown.value === userId ? null : userId;
+function toggleDropdown(userId: string, event: MouseEvent) {
+	if (openDropdown.value === userId) {
+		openDropdown.value = null;
+		dropdownPosition.value = null;
+		selectedDropdownUser.value = null;
+	} else {
+		const button = event.currentTarget as HTMLElement;
+		const rect = button.getBoundingClientRect();
+		dropdownPosition.value = {
+			top: rect.bottom + 4,
+			left: rect.right - 160 // 160px = w-40 dropdown width
+		};
+		openDropdown.value = userId;
+		selectedDropdownUser.value = availableUsers.value.find(u => u.id === userId) || null;
+	}
 }
 
 // Add user to network
 async function onAddUser(user: User, role: NetworkPermissionRole) {
 	openDropdown.value = null;
+	dropdownPosition.value = null;
+	selectedDropdownUser.value = null;
 	isSubmitting.value = true;
 	
 	try {
@@ -377,6 +402,12 @@ async function onAddUser(user: User, role: NetworkPermissionRole) {
 	} finally {
 		isSubmitting.value = false;
 	}
+}
+
+// Add user from teleported dropdown
+async function onAddUserFromDropdown(role: NetworkPermissionRole) {
+	if (!selectedDropdownUser.value) return;
+	await onAddUser(selectedDropdownUser.value, role);
 }
 
 // Change user role

@@ -25,6 +25,42 @@
 					</button>
 				</div>
 
+				<!-- Tab Navigation -->
+				<div class="flex border-b border-slate-200 dark:border-slate-700 px-6">
+					<button
+						@click="activeTab = 'network'"
+						:class="[
+							'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+							activeTab === 'network'
+								? 'border-violet-500 text-violet-600 dark:text-violet-400'
+								: 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+						]"
+					>
+						<span class="flex items-center gap-2">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+							</svg>
+							Network
+						</span>
+					</button>
+					<button
+						@click="activeTab = 'global'"
+						:class="[
+							'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+							activeTab === 'global'
+								? 'border-blue-500 text-blue-600 dark:text-blue-400'
+								: 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+						]"
+					>
+						<span class="flex items-center gap-2">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							Global
+						</span>
+					</button>
+				</div>
+
 				<!-- Content -->
 				<div class="flex-1 overflow-auto p-6 space-y-6">
 					<!-- Loading State -->
@@ -36,8 +72,10 @@
 					</div>
 
 					<template v-else-if="preferences">
-						<!-- Cartographer Status Notifications (Separate Section) -->
-						<div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-700/30 mb-6">
+						<!-- ==================== GLOBAL TAB ==================== -->
+						<template v-if="activeTab === 'global'">
+							<!-- Cartographer Status Notifications -->
+							<div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-2 border-blue-200 dark:border-blue-700/30">
 							<div class="flex items-center gap-3 mb-4">
 								<div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
 									<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -148,6 +186,139 @@
 							</template>
 						</div>
 
+							<!-- Global Email/Discord Enable -->
+							<div class="space-y-4">
+								<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+									</svg>
+									Delivery Channels
+								</h3>
+								<p class="text-sm text-slate-500 dark:text-slate-400">
+									Choose how you want to receive global notifications. Your account email will be used for email notifications.
+								</p>
+
+								<div class="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4">
+									<!-- Email Toggle -->
+									<div class="flex items-center justify-between">
+										<div>
+											<p class="font-medium text-slate-900 dark:text-white">Email</p>
+											<p class="text-sm text-slate-500 dark:text-slate-400">
+												{{ serviceStatus?.email_configured ? 'Receive via email' : 'Email service not configured' }}
+											</p>
+										</div>
+										<button 
+											@click="toggleGlobalEmail"
+											:disabled="!serviceStatus?.email_configured"
+											class="relative w-12 h-7 rounded-full transition-colors disabled:opacity-50"
+											:class="globalPrefs.email_enabled && serviceStatus?.email_configured ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'"
+										>
+											<span 
+												class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+												:class="globalPrefs.email_enabled && serviceStatus?.email_configured ? 'translate-x-5' : ''"
+											></span>
+										</button>
+									</div>
+
+									<!-- Discord Toggle -->
+									<div class="flex items-center justify-between">
+										<div>
+											<p class="font-medium text-slate-900 dark:text-white">Discord</p>
+											<p class="text-sm text-slate-500 dark:text-slate-400">
+												{{ serviceStatus?.discord_configured ? 'Receive via Discord DM' : 'Discord not configured' }}
+											</p>
+										</div>
+										<button 
+											@click="toggleGlobalDiscord"
+											:disabled="!serviceStatus?.discord_configured"
+											class="relative w-12 h-7 rounded-full transition-colors disabled:opacity-50"
+											:class="globalPrefs.discord_enabled && serviceStatus?.discord_configured ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'"
+										>
+											<span 
+												class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+												:class="globalPrefs.discord_enabled && serviceStatus?.discord_configured ? 'translate-x-5' : ''"
+											></span>
+										</button>
+									</div>
+								</div>
+							</div>
+
+							<!-- Global Filters & Limits -->
+							<div class="space-y-4">
+								<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+									</svg>
+									Filters & Limits
+								</h3>
+
+								<div class="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4">
+									<!-- Minimum Priority for Global -->
+									<div>
+										<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+											Minimum Priority
+										</label>
+										<div class="flex gap-2">
+											<button
+												v-for="(info, priority) in PRIORITY_INFO"
+												:key="priority"
+												@click="setGlobalPriority(priority)"
+												:class="[
+													'flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-colors',
+													globalPrefs.minimum_priority === priority
+														? getBypassPriorityActiveClasses(priority)
+														: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+												]"
+											>
+												{{ info.label }}
+											</button>
+										</div>
+										<p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+											Only receive global notifications of this priority or higher
+										</p>
+									</div>
+
+									<!-- Quiet Hours for Global -->
+									<div class="space-y-3">
+										<div class="flex items-center justify-between">
+											<div>
+												<p class="font-medium text-slate-900 dark:text-white">Quiet Hours</p>
+												<p class="text-sm text-slate-500 dark:text-slate-400">Don't send global notifications during these hours</p>
+											</div>
+											<button 
+												@click="toggleGlobalQuietHours"
+												class="relative w-12 h-7 rounded-full transition-colors"
+												:class="globalPrefs.quiet_hours_enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'"
+											>
+												<span 
+													class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
+													:class="globalPrefs.quiet_hours_enabled ? 'translate-x-5' : ''"
+												></span>
+											</button>
+										</div>
+
+										<div v-if="globalPrefs.quiet_hours_enabled" class="flex items-center gap-3">
+											<input
+												v-model="globalPrefs.quiet_hours_start"
+												type="time"
+												class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+												@change="saveGlobalPrefs"
+											/>
+											<span class="text-slate-500">to</span>
+											<input
+												v-model="globalPrefs.quiet_hours_end"
+												type="time"
+												class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+												@change="saveGlobalPrefs"
+											/>
+										</div>
+									</div>
+								</div>
+							</div>
+						</template>
+
+						<!-- ==================== NETWORK TAB ==================== -->
+						<template v-if="activeTab === 'network'">
 						<!-- Master Toggle -->
 						<div class="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
 							<div class="flex items-center justify-between">
@@ -447,7 +618,7 @@
 
 								<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
 									<div
-										v-for="(info, type) in NOTIFICATION_TYPE_INFO"
+										v-for="(info, type) in networkNotificationTypes"
 										:key="type"
 										:class="[
 											'p-3 rounded-lg border text-left transition-colors',
@@ -909,6 +1080,7 @@
 								</div>
 							</div>
 						</template>
+						</template>
 					</template>
 
 					<!-- Error State -->
@@ -1032,11 +1204,24 @@ const {
 	cancelScheduledBroadcast,
 } = useNotifications(props.networkId);
 
+// Tab state
+const activeTab = ref<'network' | 'global'>('network');
+
 // Cartographer Status subscription state
 const cartographerStatus = ref<any>(null);
 const cartographerStatusLoading = ref(false);
 const cartographerStatusEmail = ref("");
 const savingCartographerStatus = ref(false);
+
+// Global notification preferences state
+const globalPrefs = ref({
+	email_enabled: false,
+	discord_enabled: false,
+	minimum_priority: 'medium' as NotificationPriority,
+	quiet_hours_enabled: false,
+	quiet_hours_start: '22:00',
+	quiet_hours_end: '08:00',
+});
 
 // State
 const preferences = ref<NotificationPreferences | null>(null);
@@ -1072,6 +1257,14 @@ const minScheduleDateTime = computed(() => {
 	const now = new Date();
 	now.setMinutes(now.getMinutes() + 5);
 	return now.toISOString().slice(0, 16);
+});
+
+// Computed: network-specific notification types (excluding cartographer up/down)
+const networkNotificationTypes = computed(() => {
+	const excluded = ['cartographer_up', 'cartographer_down'];
+	return Object.fromEntries(
+		Object.entries(NOTIFICATION_TYPE_INFO).filter(([type]) => !excluded.includes(type))
+	) as typeof NOTIFICATION_TYPE_INFO;
 });
 
 // Load data
@@ -1181,6 +1374,47 @@ async function autoDetectTimezone() {
 	if (!preferences.value || !detectedTimezone.value) return;
 	preferences.value.timezone = detectedTimezone.value;
 	await savePreferences();
+}
+
+// Global preference toggles
+async function toggleGlobalEmail() {
+	if (!serviceStatus.value?.email_configured) return;
+	globalPrefs.value.email_enabled = !globalPrefs.value.email_enabled;
+	await saveGlobalPrefs();
+}
+
+async function toggleGlobalDiscord() {
+	if (!serviceStatus.value?.discord_configured) return;
+	globalPrefs.value.discord_enabled = !globalPrefs.value.discord_enabled;
+	await saveGlobalPrefs();
+}
+
+async function setGlobalPriority(priority: NotificationPriority) {
+	globalPrefs.value.minimum_priority = priority;
+	await saveGlobalPrefs();
+}
+
+async function toggleGlobalQuietHours() {
+	globalPrefs.value.quiet_hours_enabled = !globalPrefs.value.quiet_hours_enabled;
+	await saveGlobalPrefs();
+}
+
+async function saveGlobalPrefs() {
+	// Save global preferences to the Cartographer status subscription
+	if (!cartographerStatus.value?.subscribed) return;
+	
+	try {
+		await axios.put("/api/notifications/cartographer-status/subscription", {
+			email_enabled: globalPrefs.value.email_enabled,
+			discord_enabled: globalPrefs.value.discord_enabled,
+			minimum_priority: globalPrefs.value.minimum_priority,
+			quiet_hours_enabled: globalPrefs.value.quiet_hours_enabled,
+			quiet_hours_start: globalPrefs.value.quiet_hours_start,
+			quiet_hours_end: globalPrefs.value.quiet_hours_end,
+		});
+	} catch (e: any) {
+		console.error("Failed to save global preferences:", e);
+	}
 }
 
 async function setBypassPriority(priority: NotificationPriority | null) {
@@ -1501,6 +1735,15 @@ async function loadCartographerStatus() {
 		cartographerStatus.value = response.data;
 		if (response.data.email_address) {
 			cartographerStatusEmail.value = response.data.email_address;
+		}
+		// Load global prefs from subscription
+		if (response.data.subscribed) {
+			globalPrefs.value.email_enabled = response.data.email_enabled ?? true;
+			globalPrefs.value.discord_enabled = response.data.discord_enabled ?? false;
+			globalPrefs.value.minimum_priority = response.data.minimum_priority ?? 'medium';
+			globalPrefs.value.quiet_hours_enabled = response.data.quiet_hours_enabled ?? false;
+			globalPrefs.value.quiet_hours_start = response.data.quiet_hours_start ?? '22:00';
+			globalPrefs.value.quiet_hours_end = response.data.quiet_hours_end ?? '08:00';
 		}
 	} catch (e: any) {
 		if (e.response?.status === 404) {

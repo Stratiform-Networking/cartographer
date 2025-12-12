@@ -42,6 +42,12 @@ async def get_cartographer_status_subscription(
             "email_address": None,
             "cartographer_up_enabled": False,
             "cartographer_down_enabled": False,
+            "email_enabled": True,
+            "discord_enabled": False,
+            "minimum_priority": "medium",
+            "quiet_hours_enabled": False,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "08:00",
             "subscribed": False,
         }
     
@@ -50,21 +56,38 @@ async def get_cartographer_status_subscription(
         "email_address": subscription.email_address,
         "cartographer_up_enabled": subscription.cartographer_up_enabled,
         "cartographer_down_enabled": subscription.cartographer_down_enabled,
+        "email_enabled": subscription.email_enabled,
+        "discord_enabled": subscription.discord_enabled,
+        "minimum_priority": subscription.minimum_priority,
+        "quiet_hours_enabled": subscription.quiet_hours_enabled,
+        "quiet_hours_start": subscription.quiet_hours_start,
+        "quiet_hours_end": subscription.quiet_hours_end,
         "subscribed": True,
         "created_at": subscription.created_at.isoformat(),
         "updated_at": subscription.updated_at.isoformat(),
     }
 
 
+class CreateSubscriptionRequest(BaseModel):
+    """Request model for creating a subscription"""
+    email_address: str
+    cartographer_up_enabled: bool = True
+    cartographer_down_enabled: bool = True
+    email_enabled: bool = True
+    discord_enabled: bool = False
+    minimum_priority: str = "medium"
+    quiet_hours_enabled: bool = False
+    quiet_hours_start: str = "22:00"
+    quiet_hours_end: str = "08:00"
+
+
 @router.post("/subscription")
 async def create_cartographer_status_subscription(
-    email_address: str,
-    cartographer_up_enabled: bool = True,
-    cartographer_down_enabled: bool = True,
+    request: CreateSubscriptionRequest,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
     """Create or update Cartographer status subscription"""
-    if not email_address:
+    if not request.email_address:
         raise HTTPException(status_code=400, detail="email_address is required")
     
     if not is_email_configured():
@@ -75,9 +98,15 @@ async def create_cartographer_status_subscription(
     
     subscription = cartographer_status_service.create_or_update_subscription(
         user_id=x_user_id,
-        email_address=email_address,
-        cartographer_up_enabled=cartographer_up_enabled,
-        cartographer_down_enabled=cartographer_down_enabled,
+        email_address=request.email_address,
+        cartographer_up_enabled=request.cartographer_up_enabled,
+        cartographer_down_enabled=request.cartographer_down_enabled,
+        email_enabled=request.email_enabled,
+        discord_enabled=request.discord_enabled,
+        minimum_priority=request.minimum_priority,
+        quiet_hours_enabled=request.quiet_hours_enabled,
+        quiet_hours_start=request.quiet_hours_start,
+        quiet_hours_end=request.quiet_hours_end,
     )
     
     return {
@@ -85,17 +114,34 @@ async def create_cartographer_status_subscription(
         "email_address": subscription.email_address,
         "cartographer_up_enabled": subscription.cartographer_up_enabled,
         "cartographer_down_enabled": subscription.cartographer_down_enabled,
+        "email_enabled": subscription.email_enabled,
+        "discord_enabled": subscription.discord_enabled,
+        "minimum_priority": subscription.minimum_priority,
+        "quiet_hours_enabled": subscription.quiet_hours_enabled,
+        "quiet_hours_start": subscription.quiet_hours_start,
+        "quiet_hours_end": subscription.quiet_hours_end,
         "subscribed": True,
         "created_at": subscription.created_at.isoformat(),
         "updated_at": subscription.updated_at.isoformat(),
     }
 
 
+class UpdateSubscriptionRequest(BaseModel):
+    """Request model for updating a subscription"""
+    email_address: Optional[str] = None
+    cartographer_up_enabled: Optional[bool] = None
+    cartographer_down_enabled: Optional[bool] = None
+    email_enabled: Optional[bool] = None
+    discord_enabled: Optional[bool] = None
+    minimum_priority: Optional[str] = None
+    quiet_hours_enabled: Optional[bool] = None
+    quiet_hours_start: Optional[str] = None
+    quiet_hours_end: Optional[str] = None
+
+
 @router.put("/subscription")
 async def update_cartographer_status_subscription(
-    email_address: Optional[str] = None,
-    cartographer_up_enabled: Optional[bool] = None,
-    cartographer_down_enabled: Optional[bool] = None,
+    request: UpdateSubscriptionRequest,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
     """Update Cartographer status subscription"""
@@ -104,19 +150,21 @@ async def update_cartographer_status_subscription(
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found. Create one first with POST /subscription")
     
-    # Update fields if provided
-    new_email = email_address if email_address is not None else subscription.email_address
-    new_up_enabled = cartographer_up_enabled if cartographer_up_enabled is not None else subscription.cartographer_up_enabled
-    new_down_enabled = cartographer_down_enabled if cartographer_down_enabled is not None else subscription.cartographer_down_enabled
-    
-    if not new_email:
+    # Validate email if provided
+    if request.email_address is not None and not request.email_address:
         raise HTTPException(status_code=400, detail="email_address cannot be empty")
     
     updated = cartographer_status_service.create_or_update_subscription(
         user_id=x_user_id,
-        email_address=new_email,
-        cartographer_up_enabled=new_up_enabled,
-        cartographer_down_enabled=new_down_enabled,
+        email_address=request.email_address,
+        cartographer_up_enabled=request.cartographer_up_enabled,
+        cartographer_down_enabled=request.cartographer_down_enabled,
+        email_enabled=request.email_enabled,
+        discord_enabled=request.discord_enabled,
+        minimum_priority=request.minimum_priority,
+        quiet_hours_enabled=request.quiet_hours_enabled,
+        quiet_hours_start=request.quiet_hours_start,
+        quiet_hours_end=request.quiet_hours_end,
     )
     
     return {
@@ -124,6 +172,12 @@ async def update_cartographer_status_subscription(
         "email_address": updated.email_address,
         "cartographer_up_enabled": updated.cartographer_up_enabled,
         "cartographer_down_enabled": updated.cartographer_down_enabled,
+        "email_enabled": updated.email_enabled,
+        "discord_enabled": updated.discord_enabled,
+        "minimum_priority": updated.minimum_priority,
+        "quiet_hours_enabled": updated.quiet_hours_enabled,
+        "quiet_hours_start": updated.quiet_hours_start,
+        "quiet_hours_end": updated.quiet_hours_end,
         "subscribed": True,
         "created_at": updated.created_at.isoformat(),
         "updated_at": updated.updated_at.isoformat(),

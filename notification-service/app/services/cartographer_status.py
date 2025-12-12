@@ -37,11 +37,23 @@ class CartographerStatusSubscription:
         email_address: str,
         cartographer_up_enabled: bool = True,
         cartographer_down_enabled: bool = True,
+        email_enabled: bool = True,
+        discord_enabled: bool = False,
+        minimum_priority: str = "medium",
+        quiet_hours_enabled: bool = False,
+        quiet_hours_start: str = "22:00",
+        quiet_hours_end: str = "08:00",
     ):
         self.user_id = user_id
         self.email_address = email_address
         self.cartographer_up_enabled = cartographer_up_enabled
         self.cartographer_down_enabled = cartographer_down_enabled
+        self.email_enabled = email_enabled
+        self.discord_enabled = discord_enabled
+        self.minimum_priority = minimum_priority
+        self.quiet_hours_enabled = quiet_hours_enabled
+        self.quiet_hours_start = quiet_hours_start
+        self.quiet_hours_end = quiet_hours_end
         self.created_at = datetime.utcnow()
         self.updated_at = datetime.utcnow()
     
@@ -52,6 +64,12 @@ class CartographerStatusSubscription:
             "email_address": self.email_address,
             "cartographer_up_enabled": self.cartographer_up_enabled,
             "cartographer_down_enabled": self.cartographer_down_enabled,
+            "email_enabled": self.email_enabled,
+            "discord_enabled": self.discord_enabled,
+            "minimum_priority": self.minimum_priority,
+            "quiet_hours_enabled": self.quiet_hours_enabled,
+            "quiet_hours_start": self.quiet_hours_start,
+            "quiet_hours_end": self.quiet_hours_end,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -64,6 +82,12 @@ class CartographerStatusSubscription:
             email_address=data["email_address"],
             cartographer_up_enabled=data.get("cartographer_up_enabled", True),
             cartographer_down_enabled=data.get("cartographer_down_enabled", True),
+            email_enabled=data.get("email_enabled", True),
+            discord_enabled=data.get("discord_enabled", False),
+            minimum_priority=data.get("minimum_priority", "medium"),
+            quiet_hours_enabled=data.get("quiet_hours_enabled", False),
+            quiet_hours_start=data.get("quiet_hours_start", "22:00"),
+            quiet_hours_end=data.get("quiet_hours_end", "08:00"),
         )
         if "created_at" in data and isinstance(data["created_at"], str):
             sub.created_at = datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
@@ -128,25 +152,54 @@ class CartographerStatusService:
     def create_or_update_subscription(
         self,
         user_id: str,
-        email_address: str,
-        cartographer_up_enabled: bool = True,
-        cartographer_down_enabled: bool = True,
+        email_address: Optional[str] = None,
+        cartographer_up_enabled: Optional[bool] = None,
+        cartographer_down_enabled: Optional[bool] = None,
+        email_enabled: Optional[bool] = None,
+        discord_enabled: Optional[bool] = None,
+        minimum_priority: Optional[str] = None,
+        quiet_hours_enabled: Optional[bool] = None,
+        quiet_hours_start: Optional[str] = None,
+        quiet_hours_end: Optional[str] = None,
     ) -> CartographerStatusSubscription:
         """Create or update a subscription"""
         if user_id in self._subscriptions:
-            # Update existing
+            # Update existing - only update fields that are provided
             sub = self._subscriptions[user_id]
-            sub.email_address = email_address
-            sub.cartographer_up_enabled = cartographer_up_enabled
-            sub.cartographer_down_enabled = cartographer_down_enabled
+            if email_address is not None:
+                sub.email_address = email_address
+            if cartographer_up_enabled is not None:
+                sub.cartographer_up_enabled = cartographer_up_enabled
+            if cartographer_down_enabled is not None:
+                sub.cartographer_down_enabled = cartographer_down_enabled
+            if email_enabled is not None:
+                sub.email_enabled = email_enabled
+            if discord_enabled is not None:
+                sub.discord_enabled = discord_enabled
+            if minimum_priority is not None:
+                sub.minimum_priority = minimum_priority
+            if quiet_hours_enabled is not None:
+                sub.quiet_hours_enabled = quiet_hours_enabled
+            if quiet_hours_start is not None:
+                sub.quiet_hours_start = quiet_hours_start
+            if quiet_hours_end is not None:
+                sub.quiet_hours_end = quiet_hours_end
             sub.updated_at = datetime.utcnow()
         else:
-            # Create new
+            # Create new - require email_address for new subscriptions
+            if not email_address:
+                raise ValueError("email_address is required for new subscriptions")
             sub = CartographerStatusSubscription(
                 user_id=user_id,
                 email_address=email_address,
-                cartographer_up_enabled=cartographer_up_enabled,
-                cartographer_down_enabled=cartographer_down_enabled,
+                cartographer_up_enabled=cartographer_up_enabled if cartographer_up_enabled is not None else True,
+                cartographer_down_enabled=cartographer_down_enabled if cartographer_down_enabled is not None else True,
+                email_enabled=email_enabled if email_enabled is not None else True,
+                discord_enabled=discord_enabled if discord_enabled is not None else False,
+                minimum_priority=minimum_priority if minimum_priority is not None else "medium",
+                quiet_hours_enabled=quiet_hours_enabled if quiet_hours_enabled is not None else False,
+                quiet_hours_start=quiet_hours_start if quiet_hours_start is not None else "22:00",
+                quiet_hours_end=quiet_hours_end if quiet_hours_end is not None else "08:00",
             )
             self._subscriptions[user_id] = sub
         

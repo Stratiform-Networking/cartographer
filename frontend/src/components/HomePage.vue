@@ -419,10 +419,10 @@ function onSetupComplete() {
 	needsSetup.value = false;
 }
 
-function onLoginSuccess() {
+async function onLoginSuccess() {
 	console.log("[HomePage] Login successful");
 	clearNetworks();
-	loadNetworks();
+	await loadNetworks();
 }
 
 function onLogout() {

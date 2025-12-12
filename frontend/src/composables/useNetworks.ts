@@ -38,9 +38,11 @@ const error = ref<string | null>(null);
 
 export function useNetworks() {
 	// Clear networks state (call when switching accounts)
+	// Sets loading to true to show loading state instead of "no networks"
 	function clearNetworks(): void {
 		networks.value = [];
 		error.value = null;
+		loading.value = true;
 	}
 
 	async function fetchNetworks(): Promise<void> {
@@ -48,7 +50,16 @@ export function useNetworks() {
 		error.value = null;
 
 		try {
-			const response = await axios.get<Network[]>("/api/networks");
+			// Add cache-busting to ensure fresh data after login/logout
+			const response = await axios.get<Network[]>("/api/networks", {
+				headers: {
+					"Cache-Control": "no-cache, no-store, must-revalidate",
+					"Pragma": "no-cache",
+				},
+				params: {
+					_t: Date.now(), // Cache buster
+				},
+			});
 			networks.value = response.data;
 		} catch (e: any) {
 			error.value = e.response?.data?.detail || e.message || "Failed to fetch networks";

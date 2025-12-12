@@ -923,18 +923,18 @@ class NotificationManager:
                 self._history.append(record)
             else:
                 logger.info(f"Attempting to send email notification to {prefs.email.email_address} for network {network_id}")
-            record = await send_notification_email(
-                to_email=prefs.email.email_address,
-                event=event,
-                notification_id=notification_id,
-            )
+                record = await send_notification_email(
+                    to_email=prefs.email.email_address,
+                    event=event,
+                    notification_id=notification_id,
+                )
                 record.network_id = network_id
                 if record.success:
                     logger.info(f"✓ Email notification sent successfully to {prefs.email.email_address} for network {network_id}")
                 else:
                     logger.error(f"✗ Email notification failed for network {network_id}: {record.error_message}")
-            records.append(record)
-            self._history.append(record)
+                records.append(record)
+                self._history.append(record)
         else:
             logger.debug(f"Email notifications not enabled for network {network_id} (enabled={prefs.email.enabled}, address={'SET' if prefs.email.email_address else 'NOT SET'})")
         

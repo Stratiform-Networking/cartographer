@@ -325,7 +325,7 @@ async def send_notification_email(
         email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
         
         if email_id:
-        record.success = True
+            record.success = True
             logger.info(f"✓ Notification email sent successfully to {to_email} (Resend ID: {email_id}) - {event.title}")
         else:
             record.error_message = "Resend API returned no email ID"

@@ -45,6 +45,8 @@ class CartographerStatusSubscription:
         quiet_hours_enabled: bool = False,
         quiet_hours_start: str = "22:00",
         quiet_hours_end: str = "08:00",
+        quiet_hours_bypass_priority: Optional[str] = None,
+        timezone: Optional[str] = None,
     ):
         self.user_id = user_id
         self.email_address = email_address
@@ -58,6 +60,8 @@ class CartographerStatusSubscription:
         self.quiet_hours_enabled = quiet_hours_enabled
         self.quiet_hours_start = quiet_hours_start
         self.quiet_hours_end = quiet_hours_end
+        self.quiet_hours_bypass_priority = quiet_hours_bypass_priority
+        self.timezone = timezone
         self.created_at = datetime.utcnow()
         self.updated_at = datetime.utcnow()
     
@@ -76,6 +80,8 @@ class CartographerStatusSubscription:
             "quiet_hours_enabled": self.quiet_hours_enabled,
             "quiet_hours_start": self.quiet_hours_start,
             "quiet_hours_end": self.quiet_hours_end,
+            "quiet_hours_bypass_priority": self.quiet_hours_bypass_priority,
+            "timezone": self.timezone,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
@@ -96,6 +102,8 @@ class CartographerStatusSubscription:
             quiet_hours_enabled=data.get("quiet_hours_enabled", False),
             quiet_hours_start=data.get("quiet_hours_start", "22:00"),
             quiet_hours_end=data.get("quiet_hours_end", "08:00"),
+            quiet_hours_bypass_priority=data.get("quiet_hours_bypass_priority"),
+            timezone=data.get("timezone"),
         )
         if "created_at" in data and isinstance(data["created_at"], str):
             sub.created_at = datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
@@ -171,6 +179,11 @@ class CartographerStatusService:
         quiet_hours_enabled: Optional[bool] = None,
         quiet_hours_start: Optional[str] = None,
         quiet_hours_end: Optional[str] = None,
+        quiet_hours_bypass_priority: Optional[str] = None,
+        timezone: Optional[str] = None,
+        # Use sentinel value to distinguish between "not provided" and "set to None"
+        _bypass_priority_provided: bool = False,
+        _timezone_provided: bool = False,
     ) -> CartographerStatusSubscription:
         """Create or update a subscription"""
         if user_id in self._subscriptions:
@@ -198,6 +211,10 @@ class CartographerStatusService:
                 sub.quiet_hours_start = quiet_hours_start
             if quiet_hours_end is not None:
                 sub.quiet_hours_end = quiet_hours_end
+            if _bypass_priority_provided:
+                sub.quiet_hours_bypass_priority = quiet_hours_bypass_priority
+            if _timezone_provided:
+                sub.timezone = timezone
             sub.updated_at = datetime.utcnow()
         else:
             # Create new - require email_address for new subscriptions
@@ -216,6 +233,8 @@ class CartographerStatusService:
                 quiet_hours_enabled=quiet_hours_enabled if quiet_hours_enabled is not None else False,
                 quiet_hours_start=quiet_hours_start if quiet_hours_start is not None else "22:00",
                 quiet_hours_end=quiet_hours_end if quiet_hours_end is not None else "08:00",
+                quiet_hours_bypass_priority=quiet_hours_bypass_priority,
+                timezone=timezone,
             )
             self._subscriptions[user_id] = sub
         

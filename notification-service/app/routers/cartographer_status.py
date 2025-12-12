@@ -50,6 +50,8 @@ async def get_cartographer_status_subscription(
             "quiet_hours_enabled": False,
             "quiet_hours_start": "22:00",
             "quiet_hours_end": "08:00",
+            "quiet_hours_bypass_priority": None,
+            "timezone": None,
             "subscribed": False,
         }
     
@@ -66,6 +68,8 @@ async def get_cartographer_status_subscription(
         "quiet_hours_enabled": subscription.quiet_hours_enabled,
         "quiet_hours_start": subscription.quiet_hours_start,
         "quiet_hours_end": subscription.quiet_hours_end,
+        "quiet_hours_bypass_priority": subscription.quiet_hours_bypass_priority,
+        "timezone": subscription.timezone,
         "subscribed": True,
         "created_at": subscription.created_at.isoformat(),
         "updated_at": subscription.updated_at.isoformat(),
@@ -85,6 +89,8 @@ class CreateSubscriptionRequest(BaseModel):
     quiet_hours_enabled: bool = False
     quiet_hours_start: str = "22:00"
     quiet_hours_end: str = "08:00"
+    quiet_hours_bypass_priority: Optional[str] = None
+    timezone: Optional[str] = None
 
 
 @router.post("/subscription")
@@ -115,6 +121,10 @@ async def create_cartographer_status_subscription(
         quiet_hours_enabled=request.quiet_hours_enabled,
         quiet_hours_start=request.quiet_hours_start,
         quiet_hours_end=request.quiet_hours_end,
+        quiet_hours_bypass_priority=request.quiet_hours_bypass_priority,
+        timezone=request.timezone,
+        _bypass_priority_provided=True,
+        _timezone_provided=True,
     )
     
     return {
@@ -130,6 +140,8 @@ async def create_cartographer_status_subscription(
         "quiet_hours_enabled": subscription.quiet_hours_enabled,
         "quiet_hours_start": subscription.quiet_hours_start,
         "quiet_hours_end": subscription.quiet_hours_end,
+        "quiet_hours_bypass_priority": subscription.quiet_hours_bypass_priority,
+        "timezone": subscription.timezone,
         "subscribed": True,
         "created_at": subscription.created_at.isoformat(),
         "updated_at": subscription.updated_at.isoformat(),
@@ -149,6 +161,8 @@ class UpdateSubscriptionRequest(BaseModel):
     quiet_hours_enabled: Optional[bool] = None
     quiet_hours_start: Optional[str] = None
     quiet_hours_end: Optional[str] = None
+    quiet_hours_bypass_priority: Optional[str] = None
+    timezone: Optional[str] = None
 
 
 @router.put("/subscription")
@@ -166,6 +180,11 @@ async def update_cartographer_status_subscription(
     if request.email_address is not None and not request.email_address:
         raise HTTPException(status_code=400, detail="email_address cannot be empty")
     
+    # Check if bypass_priority or timezone were explicitly provided in the request
+    request_dict = request.model_dump(exclude_unset=True)
+    bypass_provided = "quiet_hours_bypass_priority" in request_dict
+    timezone_provided = "timezone" in request_dict
+    
     updated = cartographer_status_service.create_or_update_subscription(
         user_id=x_user_id,
         email_address=request.email_address,
@@ -179,6 +198,10 @@ async def update_cartographer_status_subscription(
         quiet_hours_enabled=request.quiet_hours_enabled,
         quiet_hours_start=request.quiet_hours_start,
         quiet_hours_end=request.quiet_hours_end,
+        quiet_hours_bypass_priority=request.quiet_hours_bypass_priority,
+        timezone=request.timezone,
+        _bypass_priority_provided=bypass_provided,
+        _timezone_provided=timezone_provided,
     )
     
     return {
@@ -194,6 +217,8 @@ async def update_cartographer_status_subscription(
         "quiet_hours_enabled": updated.quiet_hours_enabled,
         "quiet_hours_start": updated.quiet_hours_start,
         "quiet_hours_end": updated.quiet_hours_end,
+        "quiet_hours_bypass_priority": updated.quiet_hours_bypass_priority,
+        "timezone": updated.timezone,
         "subscribed": True,
         "created_at": updated.created_at.isoformat(),
         "updated_at": updated.updated_at.isoformat(),

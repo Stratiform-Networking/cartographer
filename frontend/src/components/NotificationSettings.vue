@@ -137,93 +137,69 @@
 									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
 									</svg>
-									Cartographer Status
+									Notification Types
 								</h3>
-								<p class="text-sm text-slate-500 dark:text-slate-400">
-									Get notified when Cartographer itself goes up or down.
+								<p class="text-xs text-slate-500 dark:text-slate-400">
+									Enable/disable notification types and customize their priority. Click the priority badge to change it.
 								</p>
 
-								<div class="space-y-3">
+								<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
 									<!-- Cartographer Up -->
-									<div class="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-										<div class="flex items-center justify-between">
-											<div class="flex items-center gap-3">
-												<span class="text-xl">✅</span>
-												<div>
-													<p class="font-medium text-slate-900 dark:text-white">Cartographer Up</p>
-													<p class="text-xs text-slate-500 dark:text-slate-400">When Cartographer comes back online</p>
-												</div>
-											</div>
-											<button 
+									<div
+										:class="[
+											'p-3 rounded-lg border text-left transition-colors',
+											globalPrefs.cartographer_up_enabled
+												? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+												: 'border-slate-200 dark:border-slate-700'
+										]"
+									>
+										<div class="flex items-center justify-between gap-2">
+											<button
 												@click="toggleGlobalCartographerUp"
-												class="relative w-12 h-7 rounded-full transition-colors"
-												:class="globalPrefs.cartographer_up_enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'"
+												class="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
 											>
-												<span 
-													class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
-													:class="globalPrefs.cartographer_up_enabled ? 'translate-x-5' : ''"
-												></span>
+												<span class="text-lg">✅</span>
+												<span class="font-medium text-slate-900 dark:text-white text-sm">Cartographer Up</span>
+											</button>
+											<button
+												@click.stop="cycleGlobalCartographerUpPriority"
+												class="px-2 py-0.5 rounded text-xs font-medium transition-colors"
+												:class="getPriorityBadgeClasses(globalPrefs.cartographer_up_priority)"
+												:title="`Priority: ${globalPrefs.cartographer_up_priority} - Click to change`"
+											>
+												{{ PRIORITY_INFO[globalPrefs.cartographer_up_priority].label }}
 											</button>
 										</div>
-										<div v-if="globalPrefs.cartographer_up_enabled" class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-											<label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Priority</label>
-											<div class="flex gap-1">
-												<button
-													v-for="(info, priority) in PRIORITY_INFO"
-													:key="priority"
-													@click="setGlobalCartographerUpPriority(priority)"
-													:class="[
-														'flex-1 px-2 py-1 rounded text-xs font-medium transition-colors',
-														globalPrefs.cartographer_up_priority === priority
-															? getBypassPriorityActiveClasses(priority)
-															: 'border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-													]"
-												>
-													{{ info.label }}
-												</button>
-											</div>
-										</div>
+										<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">When Cartographer comes back online</p>
 									</div>
 
 									<!-- Cartographer Down -->
-									<div class="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-										<div class="flex items-center justify-between">
-											<div class="flex items-center gap-3">
-												<span class="text-xl">🚨</span>
-												<div>
-													<p class="font-medium text-slate-900 dark:text-white">Cartographer Down</p>
-													<p class="text-xs text-slate-500 dark:text-slate-400">When Cartographer goes offline</p>
-												</div>
-											</div>
-											<button 
+									<div
+										:class="[
+											'p-3 rounded-lg border text-left transition-colors',
+											globalPrefs.cartographer_down_enabled
+												? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+												: 'border-slate-200 dark:border-slate-700'
+										]"
+									>
+										<div class="flex items-center justify-between gap-2">
+											<button
 												@click="toggleGlobalCartographerDown"
-												class="relative w-12 h-7 rounded-full transition-colors"
-												:class="globalPrefs.cartographer_down_enabled ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'"
+												class="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
 											>
-												<span 
-													class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform" 
-													:class="globalPrefs.cartographer_down_enabled ? 'translate-x-5' : ''"
-												></span>
+												<span class="text-lg">🚨</span>
+												<span class="font-medium text-slate-900 dark:text-white text-sm">Cartographer Down</span>
+											</button>
+											<button
+												@click.stop="cycleGlobalCartographerDownPriority"
+												class="px-2 py-0.5 rounded text-xs font-medium transition-colors"
+												:class="getPriorityBadgeClasses(globalPrefs.cartographer_down_priority)"
+												:title="`Priority: ${globalPrefs.cartographer_down_priority} - Click to change`"
+											>
+												{{ PRIORITY_INFO[globalPrefs.cartographer_down_priority].label }}
 											</button>
 										</div>
-										<div v-if="globalPrefs.cartographer_down_enabled" class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-											<label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Priority</label>
-											<div class="flex gap-1">
-												<button
-													v-for="(info, priority) in PRIORITY_INFO"
-													:key="priority"
-													@click="setGlobalCartographerDownPriority(priority)"
-													:class="[
-														'flex-1 px-2 py-1 rounded text-xs font-medium transition-colors',
-														globalPrefs.cartographer_down_priority === priority
-															? getBypassPriorityActiveClasses(priority)
-															: 'border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-300'
-													]"
-												>
-													{{ info.label }}
-												</button>
-											</div>
-										</div>
+										<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">When Cartographer goes offline</p>
 									</div>
 								</div>
 							</div>
@@ -282,20 +258,107 @@
 											</button>
 										</div>
 
-										<div v-if="globalPrefs.quiet_hours_enabled" class="flex items-center gap-3">
-											<input
-												v-model="globalPrefs.quiet_hours_start"
-												type="time"
-												class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-												@change="saveGlobalPrefs"
-											/>
-											<span class="text-slate-500">to</span>
-											<input
-												v-model="globalPrefs.quiet_hours_end"
-												type="time"
-												class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-												@change="saveGlobalPrefs"
-											/>
+										<div v-if="globalPrefs.quiet_hours_enabled" class="space-y-3">
+											<div class="flex items-center gap-3">
+												<input
+													v-model="globalPrefs.quiet_hours_start"
+													type="time"
+													class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+													@change="saveGlobalPrefs"
+												/>
+												<span class="text-slate-500">to</span>
+												<input
+													v-model="globalPrefs.quiet_hours_end"
+													type="time"
+													class="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+													@change="saveGlobalPrefs"
+												/>
+											</div>
+
+											<!-- Pass-through alerts -->
+											<div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+												<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+													Pass-through Alerts
+												</label>
+												<p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+													Allow high-priority alerts to bypass quiet hours
+												</p>
+												<div class="flex flex-wrap gap-2">
+													<button
+														@click="setGlobalBypassPriority(null)"
+														:class="[
+															'px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors',
+															globalPrefs.quiet_hours_bypass_priority === null || globalPrefs.quiet_hours_bypass_priority === undefined
+																? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
+																: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+														]"
+													>
+														None
+													</button>
+													<button
+														v-for="(info, priority) in PRIORITY_INFO"
+														:key="priority"
+														@click="setGlobalBypassPriority(priority)"
+														:class="[
+															'px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors',
+															globalPrefs.quiet_hours_bypass_priority === priority
+																? getBypassPriorityActiveClasses(priority)
+																: 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-500'
+														]"
+													>
+														{{ info.label }}+
+													</button>
+												</div>
+												<p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+													<template v-if="globalPrefs.quiet_hours_bypass_priority">
+														<span class="font-medium">{{ PRIORITY_INFO[globalPrefs.quiet_hours_bypass_priority].label }}</span> and higher alerts will still be delivered during quiet hours
+													</template>
+													<template v-else>
+														All notifications will be blocked during quiet hours
+													</template>
+												</p>
+											</div>
+
+											<!-- Timezone selector -->
+											<div class="pt-2 border-t border-slate-200 dark:border-slate-700">
+												<label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+													Timezone
+												</label>
+												<p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+													Select your timezone for accurate quiet hours
+												</p>
+												<div class="flex gap-2">
+													<select
+														v-model="globalPrefs.timezone"
+														@change="saveGlobalPrefs"
+														class="flex-1 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+													>
+														<option :value="null">Use server time</option>
+														<option v-for="tz in COMMON_TIMEZONES" :key="tz.value" :value="tz.value">
+															{{ tz.label }}
+														</option>
+													</select>
+													<button
+														v-if="detectedTimezone"
+														@click="autoDetectGlobalTimezone"
+														class="px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/30 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors whitespace-nowrap"
+														title="Use your browser's detected timezone"
+													>
+														Auto-detect
+													</button>
+												</div>
+												<p v-if="detectedTimezone" class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+													<template v-if="globalPrefs.timezone === detectedTimezone">
+														✓ Using your detected timezone
+													</template>
+													<template v-else-if="!globalPrefs.timezone">
+														⚠️ Using server time - click Auto-detect to use your timezone ({{ detectedTimezone }})
+													</template>
+													<template v-else>
+														Your browser detected: {{ detectedTimezone }}
+													</template>
+												</p>
+											</div>
 										</div>
 									</div>
 								</div>
@@ -1210,6 +1273,8 @@ const globalPrefs = ref({
 	quiet_hours_enabled: false,
 	quiet_hours_start: '22:00',
 	quiet_hours_end: '08:00',
+	quiet_hours_bypass_priority: null as NotificationPriority | null,
+	timezone: null as string | null,
 });
 
 // State
@@ -1408,6 +1473,31 @@ async function setGlobalCartographerDownPriority(priority: NotificationPriority)
 	await saveGlobalPrefs();
 }
 
+async function cycleGlobalCartographerUpPriority() {
+	const currentIndex = PRIORITY_ORDER.indexOf(globalPrefs.value.cartographer_up_priority);
+	const nextIndex = (currentIndex + 1) % PRIORITY_ORDER.length;
+	globalPrefs.value.cartographer_up_priority = PRIORITY_ORDER[nextIndex];
+	await saveGlobalPrefs();
+}
+
+async function cycleGlobalCartographerDownPriority() {
+	const currentIndex = PRIORITY_ORDER.indexOf(globalPrefs.value.cartographer_down_priority);
+	const nextIndex = (currentIndex + 1) % PRIORITY_ORDER.length;
+	globalPrefs.value.cartographer_down_priority = PRIORITY_ORDER[nextIndex];
+	await saveGlobalPrefs();
+}
+
+async function setGlobalBypassPriority(priority: NotificationPriority | null) {
+	globalPrefs.value.quiet_hours_bypass_priority = priority;
+	await saveGlobalPrefs();
+}
+
+async function autoDetectGlobalTimezone() {
+	if (!detectedTimezone.value) return;
+	globalPrefs.value.timezone = detectedTimezone.value;
+	await saveGlobalPrefs();
+}
+
 async function saveGlobalPrefs() {
 	try {
 		await axios.put("/api/notifications/cartographer-status/subscription", {
@@ -1421,6 +1511,8 @@ async function saveGlobalPrefs() {
 			quiet_hours_enabled: globalPrefs.value.quiet_hours_enabled,
 			quiet_hours_start: globalPrefs.value.quiet_hours_start,
 			quiet_hours_end: globalPrefs.value.quiet_hours_end,
+			quiet_hours_bypass_priority: globalPrefs.value.quiet_hours_bypass_priority,
+			timezone: globalPrefs.value.timezone,
 		});
 	} catch (e: any) {
 		console.error("Failed to save global preferences:", e);
@@ -1757,6 +1849,8 @@ async function loadCartographerStatus() {
 		globalPrefs.value.quiet_hours_enabled = response.data.quiet_hours_enabled ?? false;
 		globalPrefs.value.quiet_hours_start = response.data.quiet_hours_start ?? '22:00';
 		globalPrefs.value.quiet_hours_end = response.data.quiet_hours_end ?? '08:00';
+		globalPrefs.value.quiet_hours_bypass_priority = response.data.quiet_hours_bypass_priority ?? null;
+		globalPrefs.value.timezone = response.data.timezone ?? null;
 	} catch (e: any) {
 		if (e.response?.status === 404) {
 			cartographerStatus.value = { subscribed: false };

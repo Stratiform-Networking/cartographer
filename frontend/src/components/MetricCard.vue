@@ -1,5 +1,5 @@
 <template>
-	<div class="bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+	<div class="bg-white dark:bg-slate-800/60 rounded-lg p-3 border border-slate-200/80 dark:border-slate-700/50">
 		<div class="flex items-start justify-between">
 			<div>
 				<p class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ label }}</p>

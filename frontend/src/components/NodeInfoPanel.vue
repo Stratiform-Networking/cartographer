@@ -1,9 +1,9 @@
 <template>
 	<aside 
-		class="w-96 border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex flex-col overflow-hidden"
+		class="w-96 border-l border-slate-200 dark:border-slate-800/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm flex flex-col overflow-hidden"
 	>
 		<!-- Header -->
-		<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+		<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50">
 			<div class="flex items-center gap-2 min-w-0">
 				<span class="text-lg">{{ roleIcon(node?.role) }}</span>
 				<div class="min-w-0">
@@ -13,7 +13,7 @@
 			</div>
 			<button 
 				@click="$emit('close')"
-				class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex-shrink-0"
+				class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex-shrink-0"
 				title="Close panel"
 			>
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -26,8 +26,8 @@
 		<div class="flex-1 overflow-auto">
 			<!-- Health Status Banner -->
 			<div 
-				class="px-4 py-3 border-b border-slate-200 dark:border-slate-700"
-				:class="monitoringEnabled ? statusBannerClass : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400'"
+				class="px-4 py-3 border-b border-slate-200 dark:border-slate-800/80"
+				:class="monitoringEnabled ? statusBannerClass : 'bg-slate-100 dark:bg-slate-950/50 text-slate-600 dark:text-slate-400'"
 			>
 				<div class="flex items-center justify-between">
 					<div class="flex items-center gap-2">
@@ -87,12 +87,12 @@
 			<!-- Metrics Content (also shown when offline or monitoring disabled) -->
 			<div v-if="monitoringEnabled && (metrics || isOffline)" class="p-4 space-y-4">
 				<!-- Readonly notice -->
-				<div v-if="!hasWritePermission" class="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-500 dark:text-slate-400 text-center">
+				<div v-if="!hasWritePermission" class="bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50/50 rounded-lg p-2 text-xs text-slate-500 dark:text-slate-400 text-center">
 					View only mode
 				</div>
 
 				<!-- Offline Notice -->
-				<div v-if="isOffline" class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+				<div v-if="isOffline" class="bg-red-50 dark:bg-red-900/15 border border-red-200 dark:border-red-800/50 rounded-lg p-3">
 					<div class="flex items-start gap-2">
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 							<path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
@@ -112,7 +112,7 @@
 						</svg>
 						Connectivity
 					</h3>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-2">
 						<div class="grid grid-cols-2 gap-3">
 							<MetricCard 
 								label="Latency" 
@@ -128,7 +128,7 @@
 								:status="getPacketLossStatus(metrics.ping.packet_loss_percent)"
 							/>
 						</div>
-						<div v-if="metrics.ping.jitter_ms != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+						<div v-if="metrics.ping.jitter_ms != null" class="pt-2 border-t border-slate-200 dark:border-slate-700/50">
 							<div class="flex items-center justify-between">
 								<span class="text-xs text-slate-500 dark:text-slate-400">Jitter</span>
 								<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ metrics.ping.jitter_ms.toFixed(2) }} ms</span>
@@ -145,7 +145,7 @@
 						</svg>
 						24h Uptime
 					</h3>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-3">
 						<!-- Uptime percentage and timeline -->
 						<div class="space-y-2">
 							<div class="flex items-center justify-between">
@@ -183,7 +183,7 @@
 								<span>Now</span>
 							</div>
 						</div>
-						<div v-if="metrics?.avg_latency_24h_ms != null" class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+						<div v-if="metrics?.avg_latency_24h_ms != null" class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700/50">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Avg Latency (24h)</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ metrics.avg_latency_24h_ms.toFixed(1) }} ms</span>
 						</div>
@@ -209,7 +209,7 @@
 						</h3>
 						<button
 							@click="lanPortsExpanded = !lanPortsExpanded"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -224,7 +224,7 @@
 
 					<div v-show="lanPortsExpanded" class="space-y-3">
 						<!-- Grid Configuration (if no ports configured) -->
-						<div v-if="!lanPortsConfig || lanPortsConfig.ports.length === 0" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4">
+						<div v-if="!lanPortsConfig || lanPortsConfig.ports.length === 0" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4">
 							<div v-if="hasWritePermission && !showPortGridSetup" class="text-center">
 								<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 									<path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -251,7 +251,7 @@
 											v-model.number="portGridCols"
 											min="1" 
 											max="48"
-											class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+											class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 										/>
 									</div>
 									<div>
@@ -261,7 +261,7 @@
 											v-model.number="portGridRows"
 											min="1" 
 											max="8"
-											class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+											class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 										/>
 									</div>
 								</div>
@@ -269,7 +269,7 @@
 									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">Default Port Type</label>
 									<select 
 										v-model="defaultPortType"
-										class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+										class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									>
 										<option value="rj45">RJ45 (Copper)</option>
 										<option value="sfp">SFP (1G Fiber)</option>
@@ -316,7 +316,7 @@
 								<div class="flex justify-end gap-2 pt-2">
 									<button
 										@click="showPortGridSetup = false"
-										class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+										class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
 									>
 										Cancel
 									</button>
@@ -361,7 +361,7 @@
 										class="flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors"
 										:class="portEditMode 
 											? 'bg-amber-500 text-white' 
-											: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										:title="portEditMode ? 'Exit edit mode' : 'Enter edit mode to configure ports'"
 									>
 										<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -393,7 +393,7 @@
 							<!-- Visual Port Grid -->
 							<div 
 								class="rounded-lg p-3 pb-4 overflow-x-auto transition-colors"
-								:class="portEditMode ? 'bg-amber-50 dark:bg-amber-900/10 ring-2 ring-amber-400/50' : 'bg-slate-100 dark:bg-slate-900'"
+								:class="portEditMode ? 'bg-amber-50 dark:bg-amber-900/10 ring-2 ring-amber-400/50' : 'bg-slate-100 dark:bg-slate-900/50'"
 							>
 								<div 
 									class="grid gap-2 gap-y-3 min-w-fit"
@@ -503,11 +503,11 @@
 									<span>SFP/SFP+</span>
 								</div>
 								<div class="flex items-center gap-1">
-									<div class="w-3 h-3 rounded bg-slate-300 dark:bg-slate-700 border border-slate-400 dark:border-slate-600"></div>
+									<div class="w-3 h-3 rounded bg-slate-300 dark:bg-slate-700 border border-slate-400 dark:border-slate-700"></div>
 									<span>Unused</span>
 								</div>
 								<div class="flex items-center gap-1">
-									<div class="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800 border border-dashed border-slate-400 dark:border-slate-600"></div>
+									<div class="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800 border border-dashed border-slate-400 dark:border-slate-700"></div>
 									<span>Blocked</span>
 								</div>
 								<div class="flex items-center gap-1">
@@ -582,7 +582,7 @@
 						</svg>
 						DNS
 					</h3>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-2">
 						<div v-if="metrics.dns.reverse_dns" class="flex items-start justify-between gap-2">
 							<span class="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">Reverse DNS</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300 text-right break-all">{{ metrics.dns.reverse_dns }}</span>
@@ -609,11 +609,11 @@
 						</svg>
 						Open Ports
 					</h3>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg overflow-hidden">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg overflow-hidden">
 						<div 
 							v-for="port in metrics.open_ports" 
 							:key="port.port"
-							class="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-700 last:border-b-0"
+							class="flex items-center justify-between px-3 py-2 border-b border-slate-200 dark:border-slate-700/50 last:border-b-0"
 						>
 							<div class="flex items-center gap-2">
 								<span class="w-2 h-2 rounded-full bg-emerald-400"></span>
@@ -635,7 +635,7 @@
 						</svg>
 						Device Info
 					</h3>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-2">
 						<div class="flex items-center justify-between">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Role</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">{{ node?.role?.replace('/', ' / ') || 'Unknown' }}</span>
@@ -653,13 +653,13 @@
 							<span class="text-sm font-medium text-red-600 dark:text-red-400">{{ metrics.consecutive_failures }}</span>
 						</div>
 						<!-- Monitoring Toggle -->
-						<div v-if="node?.ip" class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+						<div v-if="node?.ip" class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700/50">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Health Monitoring</span>
 							<button 
 								@click="toggleMonitoring"
 								class="relative w-11 h-6 rounded-full transition-colors"
 								:class="[
-									monitoringEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+									monitoringEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700',
 									!hasWritePermission ? 'opacity-50 cursor-not-allowed' : ''
 								]"
 								:disabled="!hasWritePermission"
@@ -686,7 +686,7 @@
 						<button
 							v-if="hasWritePermission && !editingNotes && notesText"
 							@click="editingNotes = true"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 							title="Edit notes"
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -694,7 +694,7 @@
 							</svg>
 						</button>
 					</div>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3">
 						<!-- Editing mode (only for users with write permission) -->
 						<div v-if="hasWritePermission && (editingNotes || !notesText)">
 							<textarea
@@ -702,7 +702,7 @@
 								@input="onNotesInput"
 								@blur="onNotesBlur"
 								@focus="editingNotes = true"
-								class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+								class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
 								:class="{ 'min-h-[80px]': editingNotes, 'min-h-[40px]': !editingNotes }"
 								placeholder="Add notes about this device..."
 								rows="3"
@@ -736,7 +736,7 @@
 						@click.self="closePortEditor"
 					>
 						<div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-80 max-h-[80vh] overflow-auto">
-							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20">
+							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700/50 flex items-center justify-between bg-amber-50 dark:bg-amber-900/20">
 								<h4 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
 									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -758,21 +758,21 @@
 										<button
 											@click="editingPort.status = 'active'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.status === 'active' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.status === 'active' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											Active
 										</button>
 										<button
 											@click="editingPort.status = 'unused'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.status === 'unused' ? 'bg-slate-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.status === 'unused' ? 'bg-slate-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											Unused
 										</button>
 										<button
 											@click="editingPort.status = 'blocked'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.status === 'blocked' ? 'bg-red-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.status === 'blocked' ? 'bg-red-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											Blocked
 										</button>
@@ -786,21 +786,21 @@
 										<button
 											@click="editingPort.type = 'rj45'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.type === 'rj45' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.type === 'rj45' ? 'bg-amber-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											RJ45
 										</button>
 										<button
 											@click="editingPort.type = 'sfp'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.type === 'sfp' ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.type === 'sfp' ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											SFP
 										</button>
 										<button
 											@click="editingPort.type = 'sfp+'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.type === 'sfp+' ? 'bg-cyan-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.type === 'sfp+' ? 'bg-cyan-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											SFP+
 										</button>
@@ -812,7 +812,7 @@
 									<label class="text-xs text-slate-500 dark:text-slate-400 mb-1.5 block font-medium">Speed</label>
 									<select 
 										v-model="editingPort.speed"
-										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									>
 										<option value="">Auto-negotiate</option>
 										<option value="10M">10 Mbps</option>
@@ -834,14 +834,14 @@
 										<button
 											@click="editingPort.poe = 'off'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="(!editingPort.poe || editingPort.poe === 'off') ? 'bg-slate-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="(!editingPort.poe || editingPort.poe === 'off') ? 'bg-slate-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 										>
 											Off
 										</button>
 										<button
 											@click="editingPort.poe = 'poe'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.poe === 'poe' ? 'bg-yellow-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.poe === 'poe' ? 'bg-yellow-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 											title="802.3af - 15W"
 										>
 											PoE
@@ -849,7 +849,7 @@
 										<button
 											@click="editingPort.poe = 'poe+'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.poe === 'poe+' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.poe === 'poe+' ? 'bg-orange-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 											title="802.3at - 30W"
 										>
 											PoE+
@@ -857,7 +857,7 @@
 										<button
 											@click="editingPort.poe = 'poe++'"
 											class="px-2 py-1.5 text-xs rounded transition-colors"
-											:class="editingPort.poe === 'poe++' ? 'bg-red-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'"
+											:class="editingPort.poe === 'poe++' ? 'bg-red-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'"
 											title="802.3bt - 60W+"
 										>
 											PoE++
@@ -868,10 +868,10 @@
 									</p>
 								</div>
 							</div>
-							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-2">
+							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-2">
 								<button
 									@click="closePortEditor"
-									class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+									class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
 								>
 									Cancel
 								</button>
@@ -894,7 +894,7 @@
 						@click.self="closePortEditor"
 					>
 						<div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-80 max-h-[80vh] overflow-auto">
-							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+							<div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700/50 flex items-center justify-between">
 								<h4 class="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
 									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 										<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -909,7 +909,7 @@
 							</div>
 
 							<!-- Port Info Summary -->
-							<div class="px-4 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
+							<div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-700/50">
 								<div class="flex items-center gap-3 text-xs">
 									<span 
 										class="px-1.5 py-0.5 rounded"
@@ -948,7 +948,7 @@
 									<select 
 										v-model="editingPort.connectedDeviceId"
 										@change="onConnectedDeviceChange"
-										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									>
 										<option value="">Not connected / Unknown</option>
 										<option 
@@ -971,7 +971,7 @@
 										type="text"
 										v-model="editingPort.connectionLabel"
 										placeholder="e.g., Uplink to Core Switch"
-										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									/>
 								</div>
 
@@ -983,7 +983,7 @@
 									</label>
 									<select 
 										v-model="editingPort.negotiatedSpeed"
-										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+										class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-cyan-500"
 									>
 										<option value="">Same as configured</option>
 										<option value="10M">10 Mbps</option>
@@ -998,7 +998,7 @@
 									</select>
 								</div>
 							</div>
-							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+							<div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700/50 flex justify-between items-center">
 								<button
 									@click="portEditMode = true"
 									class="text-xs text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
@@ -1011,7 +1011,7 @@
 								<div class="flex gap-2">
 									<button
 										@click="closePortEditor"
-										class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+										class="px-3 py-1.5 text-sm rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
 									>
 										Cancel
 									</button>
@@ -1038,7 +1038,7 @@
 						</h3>
 						<button
 							@click="testIPsExpanded = !testIPsExpanded"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1063,7 +1063,7 @@
 							<div 
 								v-for="tip in testIPs" 
 								:key="tip.ip"
-								class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3"
+								class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3"
 							>
 								<!-- Test IP header -->
 								<div class="flex items-center justify-between mb-2">
@@ -1136,7 +1136,7 @@
 										</div>
 
 										<!-- 24h Uptime -->
-										<div v-if="getTestIPMetrics(tip.ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+										<div v-if="getTestIPMetrics(tip.ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700/50">
 											<div class="flex items-center justify-between text-xs mb-1">
 												<span class="text-slate-500 dark:text-slate-400">24h Uptime</span>
 												<span 
@@ -1194,7 +1194,7 @@
 						</div>
 
 						<!-- Empty state -->
-						<div v-else-if="!testIPsLoading" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 text-center">
+						<div v-else-if="!testIPsLoading" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4 text-center">
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 							</svg>
@@ -1212,27 +1212,27 @@
 								v-for="preset in presetTestIPs.filter(p => !testIPs.some(t => t.ip === p.ip))"
 								:key="preset.ip"
 								@click="addPresetTestIP(preset)"
-								class="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+								class="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
 								:title="`Add ${preset.label}`"
 							>
 								+ {{ preset.label }}
 							</button>
 							<button
 								@click="showAddTestIP = true"
-								class="px-2 py-1 text-xs rounded border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+								class="px-2 py-1 text-xs rounded border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
 							>
 								+ Custom IP
 							</button>
 						</div>
 
 						<!-- Add custom test IP form (only for users with write permission) -->
-						<div v-if="hasWritePermission && showAddTestIP" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+						<div v-if="hasWritePermission && showAddTestIP" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-2">
 							<div class="flex gap-2">
 								<input
 									v-model="newTestIP"
 									type="text"
 									placeholder="IP address (e.g., 8.8.8.8)"
-									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 									@keyup.enter="addTestIP"
 								/>
 							</div>
@@ -1241,14 +1241,14 @@
 									v-model="newTestIPLabel"
 									type="text"
 									placeholder="Label (optional, e.g., Google DNS)"
-									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 									@keyup.enter="addTestIP"
 								/>
 							</div>
 							<div class="flex justify-end gap-2">
 								<button
 									@click="showAddTestIP = false; newTestIP = ''; newTestIPLabel = ''; testIPsError = null"
-									class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+									class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
 								>
 									Cancel
 								</button>
@@ -1267,7 +1267,7 @@
 							v-if="testIPs.length > 0"
 							@click="checkTestIPsNow"
 							:disabled="testIPsLoading"
-							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1293,7 +1293,7 @@
 						</h3>
 						<button
 							@click="speedTestExpanded = !speedTestExpanded"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1314,7 +1314,7 @@
 						</div>
 
 						<!-- Speed test results -->
-						<div v-if="speedTestResult && speedTestResult.success" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
+						<div v-if="speedTestResult && speedTestResult.success" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-3">
 							<!-- Download/Upload speeds -->
 							<div class="grid grid-cols-2 gap-3">
 								<div class="text-center p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
@@ -1338,7 +1338,7 @@
 							</div>
 
 							<!-- Server info -->
-							<div v-if="speedTestResult.server_name || speedTestResult.server_location" class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
+							<div v-if="speedTestResult.server_name || speedTestResult.server_location" class="pt-2 border-t border-slate-200 dark:border-slate-700/50 space-y-1">
 								<div v-if="speedTestResult.server_sponsor" class="flex items-center justify-between text-xs">
 									<span class="text-slate-500 dark:text-slate-400">Server</span>
 									<span class="font-medium text-slate-700 dark:text-slate-300">{{ speedTestResult.server_sponsor }}</span>
@@ -1356,7 +1356,7 @@
 							</div>
 
 							<!-- Test info -->
-							<div class="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+							<div class="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-700/50">
 								<span class="text-slate-500 dark:text-slate-400">Tested</span>
 								<span class="text-slate-500 dark:text-slate-400">
 									{{ formatTimestamp(speedTestResult.timestamp) }}
@@ -1366,7 +1366,7 @@
 						</div>
 
 						<!-- No results yet / empty state -->
-						<div v-else-if="!speedTestRunning" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 text-center">
+						<div v-else-if="!speedTestRunning" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4 text-center">
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
 							</svg>
@@ -1379,7 +1379,7 @@
 						</div>
 
 						<!-- Running state -->
-						<div v-if="speedTestRunning" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4">
+						<div v-if="speedTestRunning" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4">
 							<div class="flex flex-col items-center">
 								<svg class="animate-spin h-8 w-8 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1395,7 +1395,7 @@
 							@click="runSpeedTest"
 							:disabled="!hasWritePermission || speedTestRunning"
 							:title="!hasWritePermission ? 'Write permission required' : ''"
-							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1414,7 +1414,7 @@
 			<!-- Device Info Only (when monitoring disabled) -->
 			<div v-else-if="!monitoringEnabled && node?.ip" class="p-4 space-y-4">
 				<!-- Readonly notice -->
-				<div v-if="!hasWritePermission" class="bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs text-slate-500 dark:text-slate-400 text-center">
+				<div v-if="!hasWritePermission" class="bg-slate-100 dark:bg-slate-900/50/50 border border-slate-200 dark:border-slate-700/50 rounded-lg p-2 text-xs text-slate-500 dark:text-slate-400 text-center">
 					View only mode
 				</div>
 
@@ -1425,7 +1425,7 @@
 						</svg>
 						Device Info
 					</h3>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-2">
 						<div class="flex items-center justify-between">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Role</span>
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">{{ node?.role?.replace('/', ' / ') || 'Unknown' }}</span>
@@ -1435,13 +1435,13 @@
 							<span class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ node.connectionSpeed }}</span>
 						</div>
 						<!-- Monitoring Toggle -->
-						<div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
+						<div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700/50">
 							<span class="text-xs text-slate-500 dark:text-slate-400">Health Monitoring</span>
 							<button 
 								@click="toggleMonitoring"
 								class="relative w-11 h-6 rounded-full transition-colors"
 								:class="[
-									monitoringEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600',
+									monitoringEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700',
 									!hasWritePermission ? 'opacity-50 cursor-not-allowed' : ''
 								]"
 								:disabled="!hasWritePermission"
@@ -1468,7 +1468,7 @@
 						<button
 							v-if="hasWritePermission && !editingNotes && notesText"
 							@click="editingNotes = true"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 							title="Edit notes"
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1476,7 +1476,7 @@
 							</svg>
 						</button>
 					</div>
-					<div class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3">
+					<div class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3">
 						<!-- Editing mode (only for users with write permission) -->
 						<div v-if="hasWritePermission && (editingNotes || !notesText)">
 							<textarea
@@ -1484,7 +1484,7 @@
 								@input="onNotesInput"
 								@blur="onNotesBlur"
 								@focus="editingNotes = true"
-								class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+								class="w-full px-2 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
 								:class="{ 'min-h-[80px]': editingNotes, 'min-h-[40px]': !editingNotes }"
 								placeholder="Add notes about this device..."
 								rows="3"
@@ -1521,7 +1521,7 @@
 						</h3>
 						<button
 							@click="lanPortsExpanded = !lanPortsExpanded"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1535,12 +1535,12 @@
 					</div>
 					<div v-show="lanPortsExpanded">
 						<!-- Simple view showing configured ports or setup prompt -->
-						<div v-if="!lanPortsConfig || lanPortsConfig.ports.length === 0" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 text-center">
+						<div v-if="!lanPortsConfig || lanPortsConfig.ports.length === 0" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 text-center">
 							<p class="text-xs text-slate-500 dark:text-slate-400">
 								{{ hasWritePermission ? 'Enable monitoring to configure LAN ports' : 'No ports configured' }}
 							</p>
 						</div>
-						<div v-else class="bg-slate-100 dark:bg-slate-900 rounded-lg p-2 pb-3 overflow-x-auto">
+						<div v-else class="bg-slate-100 dark:bg-slate-900/50 rounded-lg p-2 pb-3 overflow-x-auto">
 							<div 
 								class="grid gap-1.5 gap-y-2.5 min-w-fit"
 								:style="{ gridTemplateColumns: `repeat(${lanPortsConfig.cols}, minmax(24px, 1fr))` }"
@@ -1596,7 +1596,7 @@
 						</h3>
 						<button
 							@click="testIPsExpanded = !testIPsExpanded"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1621,7 +1621,7 @@
 							<div 
 								v-for="tip in testIPs" 
 								:key="tip.ip"
-								class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3"
+								class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3"
 							>
 								<!-- Test IP header -->
 								<div class="flex items-center justify-between mb-2">
@@ -1694,7 +1694,7 @@
 										</div>
 
 										<!-- 24h Uptime -->
-										<div v-if="getTestIPMetrics(tip.ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700">
+										<div v-if="getTestIPMetrics(tip.ip)?.uptime_percent_24h != null" class="pt-2 border-t border-slate-200 dark:border-slate-700/50">
 											<div class="flex items-center justify-between text-xs mb-1">
 												<span class="text-slate-500 dark:text-slate-400">24h Uptime</span>
 												<span 
@@ -1752,7 +1752,7 @@
 						</div>
 
 						<!-- Empty state -->
-						<div v-else-if="!testIPsLoading" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 text-center">
+						<div v-else-if="!testIPsLoading" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4 text-center">
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 							</svg>
@@ -1770,27 +1770,27 @@
 								v-for="preset in presetTestIPs.filter(p => !testIPs.some(t => t.ip === p.ip))"
 								:key="preset.ip"
 								@click="addPresetTestIP(preset)"
-								class="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+								class="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
 								:title="`Add ${preset.label}`"
 							>
 								+ {{ preset.label }}
 							</button>
 							<button
 								@click="showAddTestIP = true"
-								class="px-2 py-1 text-xs rounded border border-dashed border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+								class="px-2 py-1 text-xs rounded border border-dashed border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-400 dark:hover:border-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
 							>
 								+ Custom IP
 							</button>
 						</div>
 
 						<!-- Add custom test IP form (only for users with write permission) -->
-						<div v-if="hasWritePermission && showAddTestIP" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-2">
+						<div v-if="hasWritePermission && showAddTestIP" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-2">
 							<div class="flex gap-2">
 								<input
 									v-model="newTestIP"
 									type="text"
 									placeholder="IP address (e.g., 8.8.8.8)"
-									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 									@keyup.enter="addTestIP"
 								/>
 							</div>
@@ -1799,14 +1799,14 @@
 									v-model="newTestIPLabel"
 									type="text"
 									placeholder="Label (optional, e.g., Google DNS)"
-									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+									class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
 									@keyup.enter="addTestIP"
 								/>
 							</div>
 							<div class="flex justify-end gap-2">
 								<button
 									@click="showAddTestIP = false; newTestIP = ''; newTestIPLabel = ''; testIPsError = null"
-									class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+									class="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
 								>
 									Cancel
 								</button>
@@ -1825,7 +1825,7 @@
 							v-if="testIPs.length > 0"
 							@click="checkTestIPsNow"
 							:disabled="testIPsLoading"
-							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1851,7 +1851,7 @@
 						</h3>
 						<button
 							@click="speedTestExpanded = !speedTestExpanded"
-							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400"
+							class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1872,7 +1872,7 @@
 						</div>
 
 						<!-- Speed test results -->
-						<div v-if="speedTestResult && speedTestResult.success" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 space-y-3">
+						<div v-if="speedTestResult && speedTestResult.success" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-3 space-y-3">
 							<!-- Download/Upload speeds -->
 							<div class="grid grid-cols-2 gap-3">
 								<div class="text-center p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
@@ -1896,7 +1896,7 @@
 							</div>
 
 							<!-- Server info -->
-							<div v-if="speedTestResult.server_name || speedTestResult.server_location" class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
+							<div v-if="speedTestResult.server_name || speedTestResult.server_location" class="pt-2 border-t border-slate-200 dark:border-slate-700/50 space-y-1">
 								<div v-if="speedTestResult.server_sponsor" class="flex items-center justify-between text-xs">
 									<span class="text-slate-500 dark:text-slate-400">Server</span>
 									<span class="font-medium text-slate-700 dark:text-slate-300">{{ speedTestResult.server_sponsor }}</span>
@@ -1914,7 +1914,7 @@
 							</div>
 
 							<!-- Test info -->
-							<div class="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
+							<div class="flex items-center justify-between text-xs pt-2 border-t border-slate-200 dark:border-slate-700/50">
 								<span class="text-slate-500 dark:text-slate-400">Tested</span>
 								<span class="text-slate-500 dark:text-slate-400">
 									{{ formatTimestamp(speedTestResult.timestamp) }}
@@ -1924,7 +1924,7 @@
 						</div>
 
 						<!-- No results yet / empty state -->
-						<div v-else-if="!speedTestRunning" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4 text-center">
+						<div v-else-if="!speedTestRunning" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4 text-center">
 							<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
 								<path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
 							</svg>
@@ -1937,7 +1937,7 @@
 						</div>
 
 						<!-- Running state -->
-						<div v-if="speedTestRunning" class="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-4">
+						<div v-if="speedTestRunning" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4">
 							<div class="flex flex-col items-center">
 								<svg class="animate-spin h-8 w-8 text-blue-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
 									<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1953,7 +1953,7 @@
 							@click="runSpeedTest"
 							:disabled="!hasWritePermission || speedTestRunning"
 							:title="!hasWritePermission ? 'Write permission required' : ''"
-							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+							class="w-full px-3 py-2 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-400 dark:hover:border-blue-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 						>
 							<svg 
 								xmlns="http://www.w3.org/2000/svg" 
@@ -1980,11 +1980,11 @@
 		</div>
 
 		<!-- Scan Ports Button (only when monitoring enabled) -->
-		<div v-if="monitoringEnabled && node?.ip && metrics && !metrics.open_ports?.length" class="p-3 border-t border-slate-200 dark:border-slate-700">
+		<div v-if="monitoringEnabled && node?.ip && metrics && !metrics.open_ports?.length" class="p-3 border-t border-slate-200 dark:border-slate-700/50">
 			<button
 				@click="scanPorts"
 				:disabled="scanningPorts"
-				class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+				class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
 			>
 				<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="{ 'animate-spin': scanningPorts }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -2144,13 +2144,13 @@ const statusLabel = computed(() => {
 
 const statusBannerClass = computed(() => {
 	if (isOffline.value) return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200';
-	if (!metrics.value) return 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400';
+	if (!metrics.value) return 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400';
 	const status = metrics.value.status;
 	switch (status) {
 		case 'healthy': return 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200';
 		case 'degraded': return 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200';
 		case 'unhealthy': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200';
-		default: return 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400';
+		default: return 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400';
 	}
 });
 
@@ -2713,9 +2713,9 @@ function getPortClasses(port: LanPort): string {
 	const classes: string[] = [];
 	
 	if (port.status === 'blocked') {
-		classes.push('bg-slate-200 dark:bg-slate-800 border-dashed border-slate-400 dark:border-slate-600 opacity-50');
+		classes.push('bg-slate-200 dark:bg-slate-800 border-dashed border-slate-400 dark:border-slate-700 opacity-50');
 	} else if (port.status === 'unused') {
-		classes.push('bg-slate-300 dark:bg-slate-700 border-slate-400 dark:border-slate-600');
+		classes.push('bg-slate-300 dark:bg-slate-700 border-slate-400 dark:border-slate-700');
 	} else {
 		// Active port
 		if (port.type === 'rj45') {
@@ -2815,7 +2815,7 @@ function formatSpeedShort(speed?: PortSpeed): string {
 }
 
 function getSpeedBadgeClass(speed?: PortSpeed): string {
-	if (!speed) return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400';
+	if (!speed) return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
 	
 	// Color code by speed tier
 	if (speed.includes('100G') || speed.includes('40G')) {
@@ -2830,7 +2830,7 @@ function getSpeedBadgeClass(speed?: PortSpeed): string {
 	if (speed.includes('100M')) {
 		return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400';
 	}
-	return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400';
+	return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
 }
 
 function onPortClick(port: LanPort) {

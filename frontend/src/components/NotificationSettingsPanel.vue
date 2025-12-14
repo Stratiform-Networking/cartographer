@@ -236,18 +236,21 @@ async function handleLinkDiscord() {
 			return;
 		}
 		
+		let linkCompleted = false;
+		
 		// Listen for message from popup
-		const messageHandler = (event: MessageEvent) => {
+		const messageHandler = async (event: MessageEvent) => {
 			if (event.origin !== window.location.origin) {
 				return;
 			}
 			
 			if (event.data && event.data.type === 'discord_oauth_callback') {
 				window.removeEventListener('message', messageHandler);
+				linkCompleted = true;
 				
 				if (event.data.status === 'success') {
-					// Reload Discord link status
-					loadData();
+					// Reload all data once
+					await loadData();
 				} else {
 					alert('Discord linking failed: ' + (event.data.message || 'Unknown error'));
 				}
@@ -256,33 +259,22 @@ async function handleLinkDiscord() {
 		
 		window.addEventListener('message', messageHandler);
 		
-		// Fallback: Poll for Discord link completion (in case postMessage doesn't work)
-		const pollInterval = setInterval(async () => {
-			try {
-				// Check if popup is still open
-				if (popup.closed) {
-					clearInterval(pollInterval);
-					window.removeEventListener('message', messageHandler);
-					// Reload to check if link was successful
-					await loadData();
-					return;
-				}
+		// Fallback: Check when popup closes (instead of aggressive polling)
+		const checkPopupClosed = setInterval(async () => {
+			if (popup.closed) {
+				clearInterval(checkPopupClosed);
+				window.removeEventListener('message', messageHandler);
 				
-				const link = await getDiscordLink();
-				if (link.linked) {
-					clearInterval(pollInterval);
-					window.removeEventListener('message', messageHandler);
-					discordLink.value = link;
-					await loadData(); // Reload to get updated preferences
+				// Only reload if we haven't already handled via postMessage
+				if (!linkCompleted) {
+					await loadData();
 				}
-			} catch (e) {
-				// Ignore polling errors
 			}
-		}, 2000);
+		}, 500);
 		
-		// Stop polling after 5 minutes
+		// Stop checking after 5 minutes
 		setTimeout(() => {
-			clearInterval(pollInterval);
+			clearInterval(checkPopupClosed);
 			window.removeEventListener('message', messageHandler);
 		}, 300000);
 	} catch (e: any) {
@@ -297,8 +289,8 @@ async function handleUnlinkDiscord() {
 	
 	try {
 		await unlinkDiscord();
-		discordLink.value = { linked: false };
-		await loadData(); // Reload to get updated preferences
+		// Reload all data to get updated preferences and discord link status
+		await loadData();
 	} catch (e: any) {
 		alert('Failed to unlink Discord: ' + (e.message || 'Unknown error'));
 	}

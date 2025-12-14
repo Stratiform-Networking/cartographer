@@ -162,8 +162,8 @@ class NetworkAnomalyDetector:
         
         # Check for time-based anomaly
         hour_avail = stats.get_hourly_availability(check_time.hour)
-        if hour_avail is not None and stats.total_checks >= 50:
-            if not success and hour_avail > 95:
+        if hour_avail is not None and stats.total_checks >= 30:  # Lowered from 50
+            if not success and hour_avail > 80:  # Lowered from 95
                 score = min(hour_avail / 100.0, 0.7)
                 
                 if score > max_anomaly_score:
@@ -174,7 +174,14 @@ class NetworkAnomalyDetector:
                     f"Device is {hour_avail:.1f}% available at this hour but is currently offline"
                 )
         
-        is_anomaly = max_anomaly_score >= 0.5
+        # Lowered threshold from 0.5 to 0.3 for more sensitive detection
+        is_anomaly = max_anomaly_score >= 0.3
+        
+        if is_anomaly:
+            logger.info(
+                f"[Network {self.network_id}] Anomaly detected for {device_ip}: "
+                f"type={detected_type}, score={max_anomaly_score:.2f}, factors={contributing_factors}"
+            )
         
         if is_anomaly:
             self._anomalies_detected += 1
@@ -209,9 +216,12 @@ class NetworkAnomalyDetector:
         device_name: Optional[str] = None,
         previous_state: Optional[str] = None,
     ) -> Optional[NetworkEvent]:
-        """Create a network event if notification-worthy (same logic as global detector)"""
-        # Import the create_network_event logic from the original detector
-        # For now, use simplified version - can be enhanced later
+        """
+        Create a network event if notification-worthy.
+        
+        Uses ML-based anomaly detection combined with state tracking to determine
+        when to send notifications.
+        """
         check_time = datetime.utcnow()
         
         # Train first
@@ -223,32 +233,141 @@ class NetworkAnomalyDetector:
         stats = self._device_stats.get(device_ip)
         current_state = "online" if success else "offline"
         
-        # Simplified event creation - can be enhanced with full logic from original
         should_notify = False
         event_type = NotificationType.DEVICE_OFFLINE
         priority = NotificationPriority.MEDIUM
         title = ""
         message = ""
         
+        # Determine effective previous state if not provided
+        effective_previous_state = previous_state
+        if effective_previous_state is None and stats:
+            # Infer previous state from consecutive counters
+            # Stats were just updated by train(), so we need to check:
+            # - If consecutive_successes > 1 (multiple successes), device was online
+            # - If consecutive_failures > 1 (multiple failures), device was offline
+            # - For first transition, check history
+            if stats.consecutive_successes > 1:
+                effective_previous_state = "online"
+            elif stats.consecutive_failures > 1:
+                effective_previous_state = "offline"
+            elif stats.consecutive_successes == 1 and stats.failed_checks >= 3:
+                # First success after failures - recovery
+                if not stats.is_stable_offline():
+                    effective_previous_state = "offline"
+            elif stats.consecutive_failures == 1 and stats.successful_checks >= 3:
+                # First failure after successes - outage
+                if not stats.is_stable_online():
+                    effective_previous_state = "online"
+        
+        # Check for stable offline device (don't notify if this is normal behavior)
+        is_stable_offline_device = stats and stats.is_stable_offline()
+        
+        # Determine if this is a genuine state transition
+        state_changed = effective_previous_state and effective_previous_state != current_state
+        
+        # Check for genuine offline transition (first failure after being online)
+        just_went_offline = (
+            not success and 
+            stats and 
+            stats.consecutive_failures == 1 and 
+            stats.successful_checks >= 3 and
+            not stats.is_stable_online()  # Stable online devices with occasional failures shouldn't alert
+        )
+        
+        # Check for genuine recovery (first success after being offline)
+        just_came_online = (
+            success and
+            stats and
+            stats.consecutive_successes == 1 and
+            stats.failed_checks >= 3 and
+            not stats.is_stable_offline()  # Stable offline devices with occasional successes shouldn't alert
+        )
+        
         if not success:
-            # Device went offline
-            if device_ip in self._notified_offline or previous_state == "online":
+            # Device is offline
+            if is_stable_offline_device:
+                # This device is normally offline - don't notify
+                logger.debug(
+                    f"[Network {self.network_id}] Skipping notification for stable offline device {device_ip} "
+                    f"(availability: {stats.availability:.1f}%)"
+                )
+                should_notify = False
+            elif (device_ip in self._notified_offline or 
+                  state_changed or 
+                  just_went_offline or
+                  effective_previous_state == "online" or
+                  result.is_anomaly):
+                # Device went offline - send notification
                 should_notify = True
                 event_type = NotificationType.DEVICE_OFFLINE
                 priority = NotificationPriority.HIGH if result.is_anomaly else NotificationPriority.MEDIUM
-                title = f"Device Offline: {device_name or device_ip}"
-                message = f"The device at {device_ip} has gone offline."
+                
+                if result.is_anomaly:
+                    title = f"Device Offline: {device_name or device_ip} (Unexpected)"
+                    message = f"The device at {device_ip} has gone offline unexpectedly. {result.reason}"
+                else:
+                    title = f"Device Offline: {device_name or device_ip}"
+                    message = f"The device at {device_ip} is no longer responding."
+                
+                # Track that we sent an offline notification
                 self._notified_offline.add(device_ip)
-        elif success and (device_ip in self._notified_offline or previous_state == "offline"):
-            # Device came back online
-            should_notify = True
-            event_type = NotificationType.DEVICE_ONLINE
-            priority = NotificationPriority.LOW
-            title = f"Device Online: {device_name or device_ip}"
-            message = f"The device at {device_ip} is now responding."
-            self._notified_offline.discard(device_ip)
+                
+                logger.info(
+                    f"[Network {self.network_id}] Device {device_ip} went offline - creating notification "
+                    f"(is_anomaly={result.is_anomaly}, score={result.anomaly_score:.2f})"
+                )
+                
+                # Add context for multiple failures
+                if stats and stats.consecutive_failures >= 3:
+                    priority = NotificationPriority.HIGH
+                    message += f" ({stats.consecutive_failures} consecutive failures)"
+        
+        elif success:
+            # Device is online
+            if (device_ip in self._notified_offline or
+                state_changed or
+                just_came_online or
+                effective_previous_state in ("offline", "degraded")):
+                # Device came back online
+                should_notify = True
+                event_type = NotificationType.DEVICE_ONLINE
+                priority = NotificationPriority.LOW
+                title = f"Device Online: {device_name or device_ip}"
+                message = f"The device at {device_ip} is now responding."
+                
+                # Remove from tracking
+                had_offline_notification = device_ip in self._notified_offline
+                self._notified_offline.discard(device_ip)
+                
+                logger.info(
+                    f"[Network {self.network_id}] Device {device_ip} came back online - creating notification "
+                    f"(had_offline_notification={had_offline_notification})"
+                )
+            
+            # Check for degraded performance (high latency or packet loss)
+            if result.is_anomaly:
+                if result.anomaly_type == AnomalyType.UNUSUAL_LATENCY_SPIKE:
+                    should_notify = True
+                    event_type = NotificationType.HIGH_LATENCY
+                    priority = NotificationPriority.MEDIUM
+                    title = f"High Latency: {device_name or device_ip}"
+                    message = f"Unusual latency detected on {device_ip}: {latency_ms:.1f}ms (normally {stats.latency_stats.mean:.1f}ms)"
+                    logger.info(f"[Network {self.network_id}] High latency anomaly detected for {device_ip}")
+                
+                elif result.anomaly_type == AnomalyType.UNUSUAL_PACKET_LOSS:
+                    should_notify = True
+                    event_type = NotificationType.PACKET_LOSS
+                    priority = NotificationPriority.MEDIUM
+                    title = f"Packet Loss: {device_name or device_ip}"
+                    message = f"High packet loss detected on {device_ip}: {packet_loss*100:.1f}%"
+                    logger.info(f"[Network {self.network_id}] Packet loss anomaly detected for {device_ip}")
         
         if not should_notify:
+            logger.debug(
+                f"[Network {self.network_id}] No notification for {device_ip}: success={success}, "
+                f"effective_previous_state={effective_previous_state}, is_anomaly={result.is_anomaly}"
+            )
             return None
         
         import uuid

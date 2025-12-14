@@ -19,6 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    from sqlalchemy import inspect
+    
+    # Get database connection to check existing tables
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
     # Create user_role enum type
     op.execute("""
         DO $$ BEGIN
@@ -36,6 +43,10 @@ def upgrade() -> None:
             WHEN duplicate_object THEN null;
         END $$;
     """)
+    
+    # Skip table creation if tables already exist
+    if 'users' in existing_tables:
+        return
     
     # Create users table (compatible with cartographer-cloud format)
     op.create_table(

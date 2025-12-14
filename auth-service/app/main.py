@@ -42,7 +42,58 @@ async def lifespan(app: FastAPI):
         if not alembic_ini.exists():
             logger.warning(f"alembic.ini not found at {alembic_ini}, skipping migrations")
         else:
-            # Use alembic command line to run migrations
+            # First, check if we need to stamp the database (for migration from old version table)
+            from .database import async_session_maker
+            from sqlalchemy import text
+            
+            async def check_and_stamp_version():
+                """Check if tables exist but version table is empty, and stamp if needed."""
+                async with async_session_maker() as session:
+                    try:
+                        # Check if our version table exists and has entries
+                        result = await session.execute(text(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version_auth')"
+                        ))
+                        version_table_exists = result.scalar()
+                        
+                        if version_table_exists:
+                            result = await session.execute(text("SELECT COUNT(*) FROM alembic_version_auth"))
+                            version_count = result.scalar()
+                        else:
+                            version_count = 0
+                        
+                        # Check if users table exists (indicates migrations were run before)
+                        result = await session.execute(text(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')"
+                        ))
+                        tables_exist = result.scalar()
+                        
+                        return version_count == 0 and tables_exist
+                    except Exception as e:
+                        logger.warning(f"Could not check version table state: {e}")
+                        return False
+            
+            needs_stamp = await check_and_stamp_version()
+            
+            if needs_stamp:
+                # Tables exist but version table is empty - stamp to current head
+                logger.info("Tables exist but version table empty. Stamping database at 001_create_users_and_invites...")
+                
+                stamp_result = subprocess.run(
+                    [sys.executable, "-m", "alembic", "stamp", "001_create_users_and_invites"],
+                    cwd=str(app_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    env=os.environ.copy()
+                )
+                
+                if stamp_result.returncode == 0:
+                    logger.info("Database stamped at 001_create_users_and_invites")
+                else:
+                    logger.warning(f"Failed to stamp database: {stamp_result.stderr}")
+            
+            # Now run migrations normally
             logger.info("Running Alembic migrations...")
             result = subprocess.run(
                 [sys.executable, "-m", "alembic", "upgrade", "head"],
@@ -62,9 +113,7 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Migration stderr: {result.stderr}")
                 logger.error(f"Migration stdout: {result.stdout}")
                 # Don't raise an exception - allow service to start
-                # This handles cases where migrations have already been run
-                if "Target database is not up to date" not in result.stderr:
-                    logger.warning("Migration may have failed, but service will continue. Check database connection.")
+                logger.warning("Migration may have failed, but service will continue. Check database connection.")
                     
     except FileNotFoundError:
         logger.warning("Alembic not found, skipping migrations. Install alembic to enable automatic migrations.")

@@ -19,6 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    from sqlalchemy import inspect
+    from alembic import op
+    
+    # Get database connection to check existing tables
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    existing_tables = inspector.get_table_names()
+    
     # Create notification_priority enum type
     op.execute("""
         DO $$ BEGIN
@@ -27,6 +35,10 @@ def upgrade() -> None:
             WHEN duplicate_object THEN null;
         END $$;
     """)
+    
+    # Skip table creation if tables already exist
+    if 'user_network_notification_prefs' in existing_tables:
+        return
     
     # Create user_network_notification_prefs table
     op.create_table(

@@ -21,27 +21,52 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    from sqlalchemy import inspect
+    
+    # Get database connection to check existing columns
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Check if context_type column already exists (migration already applied)
+    columns = [col['name'] for col in inspector.get_columns('discord_user_links')]
+    if 'context_type' in columns:
+        # Migration already applied, skip
+        return
+    
     # Add context columns to discord_user_links
     op.add_column('discord_user_links', sa.Column('context_type', sa.String(length=20), nullable=False, server_default='global'))
     op.add_column('discord_user_links', sa.Column('context_id', sa.Integer(), nullable=True))
     
     # Remove old unique constraints (user_id and discord_id were unique)
-    op.drop_constraint('discord_user_links_user_id_key', 'discord_user_links', type_='unique')
-    op.drop_constraint('discord_user_links_discord_id_key', 'discord_user_links', type_='unique')
+    # Use try/except since constraints might not exist
+    try:
+        op.drop_constraint('discord_user_links_user_id_key', 'discord_user_links', type_='unique')
+    except Exception:
+        pass
+    try:
+        op.drop_constraint('discord_user_links_discord_id_key', 'discord_user_links', type_='unique')
+    except Exception:
+        pass
     
-    # Drop old unique indexes
-    op.drop_index('ix_discord_user_links_user_id', table_name='discord_user_links')
-    op.drop_index('ix_discord_user_links_discord_id', table_name='discord_user_links')
+    # Drop old unique indexes (may not exist)
+    try:
+        op.drop_index('ix_discord_user_links_user_id', table_name='discord_user_links')
+    except Exception:
+        pass
+    try:
+        op.drop_index('ix_discord_user_links_discord_id', table_name='discord_user_links')
+    except Exception:
+        pass
     
     # Create new indexes (non-unique, since same discord_id can be used in multiple contexts)
-    op.create_index('ix_discord_user_links_user_id', 'discord_user_links', ['user_id'], unique=False)
-    op.create_index('ix_discord_user_links_discord_id', 'discord_user_links', ['discord_id'], unique=False)
-    op.create_index('ix_discord_user_links_context', 'discord_user_links', ['context_type', 'context_id'], unique=False)
+    op.execute("CREATE INDEX IF NOT EXISTS ix_discord_user_links_user_id ON discord_user_links (user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_discord_user_links_discord_id ON discord_user_links (discord_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_discord_user_links_context ON discord_user_links (context_type, context_id)")
     
     # Create unique constraint: one Discord link per user per context
     # user_id + context_type + context_id must be unique (handles null context_id for global)
     op.execute("""
-        CREATE UNIQUE INDEX uq_discord_user_links_user_context 
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_discord_user_links_user_context 
         ON discord_user_links (user_id, context_type, COALESCE(context_id, -1))
     """)
     

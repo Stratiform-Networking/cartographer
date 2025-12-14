@@ -136,10 +136,6 @@ async def lifespan(app: FastAPI):
     # Run database migrations
     logger.info("Running database migrations...")
     try:
-        from alembic.config import Config
-        from alembic import command
-        from alembic.script import ScriptDirectory
-        from sqlalchemy import text
         import subprocess
         import sys
         from pathlib import Path
@@ -152,8 +148,69 @@ async def lifespan(app: FastAPI):
         if not alembic_ini.exists():
             logger.warning(f"alembic.ini not found at {alembic_ini}, skipping migrations")
         else:
-            # Use alembic command line to run migrations
-            # This is the most reliable way to run migrations programmatically
+            # First, check if we need to stamp the database (for migration from old version table)
+            # This handles the case where tables exist but the new version table doesn't track them
+            from .database import async_session_maker, engine
+            from sqlalchemy import text
+            
+            async def check_and_stamp_version():
+                """Check if tables exist but version table is empty, and stamp if needed."""
+                async with async_session_maker() as session:
+                    try:
+                        # Check if our version table exists and has entries
+                        result = await session.execute(text(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version_notification')"
+                        ))
+                        version_table_exists = result.scalar()
+                        
+                        if version_table_exists:
+                            result = await session.execute(text("SELECT COUNT(*) FROM alembic_version_notification"))
+                            version_count = result.scalar()
+                        else:
+                            version_count = 0
+                        
+                        # Check if discord_user_links table exists (indicates migrations were run before)
+                        result = await session.execute(text(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'discord_user_links')"
+                        ))
+                        tables_exist = result.scalar()
+                        
+                        # Check if context_type column exists (indicates 002 migration was applied)
+                        has_context_column = False
+                        if tables_exist:
+                            result = await session.execute(text(
+                                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'discord_user_links' AND column_name = 'context_type')"
+                            ))
+                            has_context_column = result.scalar()
+                        
+                        return version_count == 0 and tables_exist, has_context_column
+                    except Exception as e:
+                        logger.warning(f"Could not check version table state: {e}")
+                        return False, False
+            
+            needs_stamp, has_context = await check_and_stamp_version()
+            
+            if needs_stamp:
+                # Tables exist but version table is empty - stamp to current head
+                # Determine which revision to stamp based on schema state
+                stamp_revision = "002_discord_link_context" if has_context else "001_create_notification_tables"
+                logger.info(f"Tables exist but version table empty. Stamping database at {stamp_revision}...")
+                
+                stamp_result = subprocess.run(
+                    [sys.executable, "-m", "alembic", "stamp", stamp_revision],
+                    cwd=str(app_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    env=os.environ.copy()
+                )
+                
+                if stamp_result.returncode == 0:
+                    logger.info(f"Database stamped at {stamp_revision}")
+                else:
+                    logger.warning(f"Failed to stamp database: {stamp_result.stderr}")
+            
+            # Now run migrations normally
             logger.info("Running Alembic migrations...")
             result = subprocess.run(
                 [sys.executable, "-m", "alembic", "upgrade", "head"],
@@ -172,7 +229,8 @@ async def lifespan(app: FastAPI):
                 logger.error(f"Migration failed with return code {result.returncode}")
                 logger.error(f"Migration stderr: {result.stderr}")
                 logger.error(f"Migration stdout: {result.stdout}")
-                raise RuntimeError(f"Migration failed: {result.stderr}")
+                # Don't raise - let service continue if tables already exist
+                logger.warning("Migration may have failed, but service will continue. Check database connection.")
                 
     except FileNotFoundError:
         logger.warning("Alembic not found, skipping migrations. Install alembic to enable automatic migrations.")

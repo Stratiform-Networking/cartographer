@@ -1,39 +1,25 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Clean gradient background with noise dithering to prevent color banding -->
+		<!-- Gradient background using OKLCH color space for smoother interpolation -->
 		<div class="absolute inset-0 overflow-hidden pointer-events-none">
-			<!-- Gradient background -->
+			<!-- OKLCH gradient with blur for smooth banding-free transitions -->
 			<div 
-				class="absolute inset-0 transition-colors"
+				class="absolute -inset-4 blur-xl transition-colors"
 				:style="isDark 
-					? `background: linear-gradient(135deg, 
-						hsl(222, 47%, 9%) 0%, 
-						hsl(224, 44%, 9.5%) 11%, 
-						hsl(226, 41%, 10%) 22%, 
-						hsl(228, 38%, 10.5%) 33%, 
-						hsl(225, 42%, 10.5%) 44%, 
-						hsl(222, 45%, 10.8%) 55%, 
-						hsl(220, 48%, 11%) 66%, 
-						hsl(222, 46%, 11.2%) 77%, 
-						hsl(224, 44%, 11.5%) 88%, 
-						hsl(222, 47%, 11%) 100%
+					? `background: linear-gradient(135deg in oklch, 
+						oklch(0.18 0.025 260) 0%, 
+						oklch(0.19 0.022 255) 25%, 
+						oklch(0.20 0.020 250) 50%, 
+						oklch(0.21 0.018 255) 75%, 
+						oklch(0.22 0.025 260) 100%
 					)` 
-					: `background: linear-gradient(135deg, 
-						hsl(214, 32%, 96%) 0%, 
-						hsl(216, 28%, 96.5%) 12%, 
-						hsl(218, 24%, 97%) 25%, 
-						hsl(220, 20%, 97.5%) 37%, 
-						hsl(222, 18%, 98%) 50%, 
-						hsl(224, 14%, 98.5%) 62%, 
-						hsl(226, 10%, 99%) 75%, 
-						hsl(228, 6%, 99.5%) 87%, 
-						hsl(0, 0%, 100%) 100%
+					: `background: linear-gradient(135deg in oklch, 
+						oklch(0.965 0.01 250) 0%, 
+						oklch(0.975 0.008 255) 25%, 
+						oklch(0.985 0.005 260) 50%, 
+						oklch(0.995 0.002 265) 75%, 
+						oklch(1 0 0) 100%
 					)`"
-			></div>
-			<!-- Noise overlay for dithering - prevents color banding -->
-			<div 
-				class="absolute inset-0 noise-overlay"
-				:class="isDark ? 'noise-overlay-dark' : ''"
 			></div>
 			<!-- Subtle radial accent glow with smoother falloff -->
 			<div 

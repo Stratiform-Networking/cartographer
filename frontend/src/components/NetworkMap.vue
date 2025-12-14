@@ -1,8 +1,12 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Background with subtle accents -->
-		<div class="absolute inset-0 rounded-lg overflow-hidden pointer-events-none bg-slate-50 dark:bg-slate-900 network-map-bg">
-			<!-- Blue noise dither overlay -->
+		<!-- Gradient background using OKLCH color space for smoother interpolation -->
+		<div class="absolute inset-0 rounded-lg overflow-hidden pointer-events-none network-map-bg">
+			<!-- Light mode: Blur overlay -->
+			<div class="absolute -inset-4 dark:hidden blur-xl"></div>
+			<!-- Dark mode: Blur overlay -->
+			<div class="absolute -inset-4 hidden dark:block blur-xl"></div>
+			<!-- Blue noise dither overlay - prevents color banding -->
 			<div class="absolute inset-0 blue-noise-dither"></div>
 			<!-- Subtle radial accent glow -->
 			<div class="absolute inset-0 opacity-40 dark:opacity-25" style="background: radial-gradient(ellipse 100% 80% at 50% 30%, rgba(56, 189, 248, 0.08) 0%, rgba(56, 189, 248, 0.02) 35%, transparent 55%)"></div>

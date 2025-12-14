@@ -1,15 +1,22 @@
+"""
+Auth router with database-backed authentication.
+"""
+
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..database import get_db
+from ..db_models import User, UserRole
 from ..models import (
-    UserRole, UserCreate, UserUpdate, UserResponse,
+    UserCreate, UserUpdate, UserResponse,
     LoginRequest, LoginResponse, OwnerSetupRequest, SetupStatus,
     ChangePasswordRequest, SessionInfo, ErrorResponse,
     InviteCreate, InviteResponse, AcceptInviteRequest, InviteTokenInfo
 )
-from ..services.auth_service import auth_service, UserInDB
+from ..services.auth_service import auth_service
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +27,9 @@ security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
-) -> Optional[UserInDB]:
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
     """Get current user from JWT token (returns None if not authenticated)"""
     if not credentials:
         return None
@@ -30,7 +38,7 @@ async def get_current_user(
     if not token_payload:
         return None
     
-    user = auth_service.get_user(token_payload.sub)
+    user = await auth_service.get_user(db, token_payload.sub)
     if not user or not user.is_active:
         return None
     
@@ -38,8 +46,8 @@ async def get_current_user(
 
 
 async def require_auth(
-    user: Optional[UserInDB] = Depends(get_current_user)
-) -> UserInDB:
+    user: Optional[User] = Depends(get_current_user)
+) -> User:
     """Require authenticated user"""
     if not user:
         raise HTTPException(
@@ -51,8 +59,8 @@ async def require_auth(
 
 
 async def require_owner(
-    user: UserInDB = Depends(require_auth)
-) -> UserInDB:
+    user: User = Depends(require_auth)
+) -> User:
     """Require owner role"""
     if user.role != UserRole.OWNER:
         raise HTTPException(
@@ -63,8 +71,8 @@ async def require_owner(
 
 
 async def require_admin_access(
-    user: UserInDB = Depends(require_auth)
-) -> UserInDB:
+    user: User = Depends(require_auth)
+) -> User:
     """Require admin access (owner or admin)"""
     if user.role not in [UserRole.OWNER, UserRole.ADMIN]:
         raise HTTPException(
@@ -77,17 +85,17 @@ async def require_admin_access(
 # ==================== Setup Endpoints ====================
 
 @router.get("/setup/status", response_model=SetupStatus)
-async def get_setup_status():
+async def get_setup_status(db: AsyncSession = Depends(get_db)):
     """Check if initial setup is complete"""
-    status = auth_service.get_setup_status()
+    status = await auth_service.get_setup_status(db)
     return SetupStatus(**status)
 
 
 @router.post("/setup/owner", response_model=UserResponse)
-async def setup_owner(request: OwnerSetupRequest):
+async def setup_owner(request: OwnerSetupRequest, db: AsyncSession = Depends(get_db)):
     """Create the initial owner account (only works on first run)"""
     try:
-        user = await auth_service.setup_owner(request)
+        user = await auth_service.setup_owner(db, request)
         return user
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -96,34 +104,52 @@ async def setup_owner(request: OwnerSetupRequest):
 # ==================== Internal Endpoints (service-to-service) ====================
 
 @router.get("/internal/owner")
-async def get_owner_internal():
+async def get_owner_internal(db: AsyncSession = Depends(get_db)):
     """
     Get the owner user ID for internal service use.
     This endpoint is only accessible on the internal service port (8002)
     and is used by the migration script to assign ownership of migrated data.
     """
-    owner = auth_service.get_owner_user()
+    owner = await auth_service.get_owner_user(db)
     if not owner:
         raise HTTPException(status_code=404, detail="No owner user found")
     return {"user_id": owner.id, "username": owner.username}
 
 
 @router.get("/internal/users")
-async def get_all_users_internal():
+async def get_all_users_internal(db: AsyncSession = Depends(get_db)):
     """
     Get all user IDs for internal service use.
     Used by the migration script to detect orphaned networks.
     """
-    users = auth_service.get_all_user_ids()
+    users = await auth_service.get_all_user_ids(db)
     return [{"user_id": uid} for uid in users]
+
+
+@router.get("/internal/users/{user_id}")
+async def get_user_internal(user_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get user info by ID for internal service use.
+    Used by notification service to get user emails for notifications.
+    """
+    user = await auth_service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+    }
 
 
 # ==================== Authentication Endpoints ====================
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate and get access token (async password verification for better load handling)"""
-    user = await auth_service.authenticate(request.username, request.password)
+    user = await auth_service.authenticate(db, request.username, request.password)
     if not user:
         raise HTTPException(
             status_code=401,
@@ -141,16 +167,14 @@ async def login(request: LoginRequest):
 
 
 @router.post("/logout")
-async def logout(user: UserInDB = Depends(require_auth)):
+async def logout(user: User = Depends(require_auth)):
     """Logout current user (client should discard token)"""
-    # JWT tokens are stateless - logout is handled client-side
-    # This endpoint exists for API completeness and logging
     logger.info(f"User logged out: {user.username}")
     return {"message": "Logged out successfully"}
 
 
 @router.get("/session", response_model=SessionInfo)
-async def get_session(user: UserInDB = Depends(require_auth)):
+async def get_session(user: User = Depends(require_auth)):
     """Get current session information"""
     return SessionInfo(
         user=auth_service._to_response(user),
@@ -160,7 +184,8 @@ async def get_session(user: UserInDB = Depends(require_auth)):
 
 @router.post("/verify")
 async def verify_token(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Verify if the current token is valid.
@@ -172,16 +197,13 @@ async def verify_token(
     if not credentials:
         return {"valid": False}
     
-    # First, decode the token to check if it's a service token
     token_payload = auth_service.verify_token(credentials.credentials)
     if not token_payload:
         return {"valid": False}
     
-    # Check if this is a service token (used for service-to-service communication)
-    # Service tokens have a special "service" claim set to True
+    # Check if this is a service token
     raw_payload = auth_service.decode_token_payload(credentials.credentials)
     if raw_payload and raw_payload.get("service") is True:
-        # Service token - valid if signature verification passed
         return {
             "valid": True,
             "user_id": token_payload.sub,
@@ -191,7 +213,7 @@ async def verify_token(
         }
     
     # Regular user token - verify user exists in database
-    user = auth_service.get_user(token_payload.sub)
+    user = await auth_service.get_user(db, token_payload.sub)
     if not user or not user.is_active:
         return {"valid": False}
     
@@ -206,29 +228,36 @@ async def verify_token(
 # ==================== User Management Endpoints ====================
 
 @router.get("/users", response_model=List[UserResponse])
-async def list_users(user: UserInDB = Depends(require_auth)):
+async def list_users(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """List all users (owners see all, others see only themselves)"""
-    return auth_service.list_users(user)
+    return await auth_service.list_users(db, user)
 
 
 @router.post("/users", response_model=UserResponse)
-async def create_user(request: UserCreate, user: UserInDB = Depends(require_owner)):
+async def create_user(
+    request: UserCreate, 
+    user: User = Depends(require_owner), 
+    db: AsyncSession = Depends(get_db)
+):
     """Create a new user (owner only)"""
     try:
-        new_user = await auth_service.create_user(request, user)
+        new_user = await auth_service.create_user(db, request, user)
         return new_user
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)
-async def get_user(user_id: str, user: UserInDB = Depends(require_auth)):
+async def get_user(
+    user_id: str, 
+    user: User = Depends(require_auth), 
+    db: AsyncSession = Depends(get_db)
+):
     """Get user by ID"""
-    # Non-owners can only see themselves
     if user.role != UserRole.OWNER and user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
     
-    target = auth_service.get_user(user_id)
+    target = await auth_service.get_user(db, user_id)
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -239,11 +268,12 @@ async def get_user(user_id: str, user: UserInDB = Depends(require_auth)):
 async def update_user(
     user_id: str,
     request: UserUpdate,
-    user: UserInDB = Depends(require_auth)
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
 ):
     """Update a user"""
     try:
-        updated = await auth_service.update_user(user_id, request, user)
+        updated = await auth_service.update_user(db, user_id, request, user)
         return updated
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -252,10 +282,14 @@ async def update_user(
 
 
 @router.delete("/users/{user_id}")
-async def delete_user(user_id: str, user: UserInDB = Depends(require_owner)):
+async def delete_user(
+    user_id: str, 
+    user: User = Depends(require_owner), 
+    db: AsyncSession = Depends(get_db)
+):
     """Delete a user (owner only)"""
     try:
-        auth_service.delete_user(user_id, user)
+        await auth_service.delete_user(db, user_id, user)
         return {"message": "User deleted successfully"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -266,7 +300,7 @@ async def delete_user(user_id: str, user: UserInDB = Depends(require_owner)):
 # ==================== Profile Endpoints ====================
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_profile(user: UserInDB = Depends(require_auth)):
+async def get_current_profile(user: User = Depends(require_auth)):
     """Get current user's profile"""
     return auth_service._to_response(user)
 
@@ -274,15 +308,15 @@ async def get_current_profile(user: UserInDB = Depends(require_auth)):
 @router.patch("/me", response_model=UserResponse)
 async def update_current_profile(
     request: UserUpdate,
-    user: UserInDB = Depends(require_auth)
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
 ):
     """Update current user's profile"""
-    # Users can only update their own profile, not role
     if request.role is not None and user.role != UserRole.OWNER:
         raise HTTPException(status_code=403, detail="Cannot change your own role")
     
     try:
-        updated = await auth_service.update_user(user.id, request, user)
+        updated = await auth_service.update_user(db, user.id, request, user)
         return updated
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -291,11 +325,12 @@ async def update_current_profile(
 @router.post("/me/change-password")
 async def change_password(
     request: ChangePasswordRequest,
-    user: UserInDB = Depends(require_auth)
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
 ):
     """Change current user's password"""
     try:
-        await auth_service.change_password(user.id, request.current_password, request.new_password)
+        await auth_service.change_password(db, user.id, request.current_password, request.new_password)
         return {"message": "Password changed successfully"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -304,40 +339,55 @@ async def change_password(
 # ==================== Invitation Endpoints ====================
 
 @router.get("/invites", response_model=List[InviteResponse])
-async def list_invites(user: UserInDB = Depends(require_owner)):
+async def list_invites(user: User = Depends(require_owner), db: AsyncSession = Depends(get_db)):
     """List all invitations (owner only)"""
     try:
-        return auth_service.list_invites(user)
+        return await auth_service.list_invites(db, user)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.post("/invites", response_model=InviteResponse)
-async def create_invite(request: InviteCreate, user: UserInDB = Depends(require_owner)):
+async def create_invite(
+    request: InviteCreate, 
+    user: User = Depends(require_owner), 
+    db: AsyncSession = Depends(get_db)
+):
     """Create an invitation for a new user (owner only)"""
     try:
-        invite, email_sent = auth_service.create_invite(request, user)
+        invite, email_sent = await auth_service.create_invite(db, request, user)
         response = auth_service._invite_to_response(invite)
-        # Add email_sent info to response headers
         return response
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/invites/{invite_id}", response_model=InviteResponse)
-async def get_invite(invite_id: str, user: UserInDB = Depends(require_owner)):
+async def get_invite(
+    invite_id: str, 
+    user: User = Depends(require_owner), 
+    db: AsyncSession = Depends(get_db)
+):
     """Get a specific invitation (owner only)"""
-    invite = auth_service._invites.get(invite_id)
+    from sqlalchemy import select
+    from ..db_models import Invite
+    
+    result = await db.execute(select(Invite).where(Invite.id == invite_id))
+    invite = result.scalar_one_or_none()
     if not invite:
         raise HTTPException(status_code=404, detail="Invitation not found")
     return auth_service._invite_to_response(invite)
 
 
 @router.delete("/invites/{invite_id}")
-async def revoke_invite(invite_id: str, user: UserInDB = Depends(require_owner)):
+async def revoke_invite(
+    invite_id: str, 
+    user: User = Depends(require_owner), 
+    db: AsyncSession = Depends(get_db)
+):
     """Revoke a pending invitation (owner only)"""
     try:
-        auth_service.revoke_invite(invite_id, user)
+        await auth_service.revoke_invite(db, invite_id, user)
         return {"message": "Invitation revoked"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -346,10 +396,14 @@ async def revoke_invite(invite_id: str, user: UserInDB = Depends(require_owner))
 
 
 @router.post("/invites/{invite_id}/resend")
-async def resend_invite(invite_id: str, user: UserInDB = Depends(require_owner)):
+async def resend_invite(
+    invite_id: str, 
+    user: User = Depends(require_owner), 
+    db: AsyncSession = Depends(get_db)
+):
     """Resend an invitation email (owner only)"""
     try:
-        auth_service.resend_invite(invite_id, user)
+        await auth_service.resend_invite(db, invite_id, user)
         return {"message": "Invitation email resent"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -358,22 +412,22 @@ async def resend_invite(invite_id: str, user: UserInDB = Depends(require_owner))
 
 
 # ==================== Public Invitation Endpoints ====================
-# These don't require authentication
 
 @router.get("/invite/verify/{token}", response_model=InviteTokenInfo)
-async def verify_invite_token(token: str):
+async def verify_invite_token(token: str, db: AsyncSession = Depends(get_db)):
     """Verify an invitation token and get its info (public endpoint)"""
-    info = auth_service.get_invite_token_info(token)
+    info = await auth_service.get_invite_token_info(db, token)
     if not info:
         raise HTTPException(status_code=404, detail="Invalid invitation token")
     return info
 
 
 @router.post("/invite/accept", response_model=UserResponse)
-async def accept_invite(request: AcceptInviteRequest):
+async def accept_invite(request: AcceptInviteRequest, db: AsyncSession = Depends(get_db)):
     """Accept an invitation and create account (public endpoint)"""
     try:
         user = await auth_service.accept_invite(
+            db=db,
             token=request.token,
             username=request.username,
             first_name=request.first_name,

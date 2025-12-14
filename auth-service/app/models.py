@@ -1,15 +1,10 @@
 from pydantic import BaseModel, Field, field_validator, EmailStr
 from typing import Optional, List
 from datetime import datetime
-from enum import Enum
 import re
 
-
-class UserRole(str, Enum):
-    """App-level user permission levels"""
-    OWNER = "owner"    # Full access - can manage all users and app settings
-    ADMIN = "admin"    # Can manage users (except owner) and invite new users
-    MEMBER = "member"  # Basic user - can create and manage their own networks
+# Import UserRole from db_models for consistency
+from .db_models import UserRole, InviteStatus
 
 
 class UserBase(BaseModel):
@@ -86,11 +81,6 @@ class UserResponse(BaseModel):
     is_active: bool = True
 
 
-class UserInDB(UserResponse):
-    """User data stored in database"""
-    password_hash: str
-
-
 class LoginRequest(BaseModel):
     """Login credentials"""
     username: str
@@ -148,14 +138,6 @@ class ErrorResponse(BaseModel):
 
 # ==================== Invitation Models ====================
 
-class InviteStatus(str, Enum):
-    """Invitation status"""
-    PENDING = "pending"
-    ACCEPTED = "accepted"
-    EXPIRED = "expired"
-    REVOKED = "revoked"
-
-
 class InviteCreate(BaseModel):
     """Request to create an invitation"""
     email: EmailStr
@@ -180,12 +162,6 @@ class InviteResponse(BaseModel):
     created_at: datetime
     expires_at: datetime
     accepted_at: Optional[datetime] = None
-
-
-class InviteInDB(InviteResponse):
-    """Invitation data stored in database"""
-    token: str  # secure token for accepting invite
-    invited_by_id: str
 
 
 class AcceptInviteRequest(BaseModel):

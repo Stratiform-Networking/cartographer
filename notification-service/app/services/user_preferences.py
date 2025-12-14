@@ -191,12 +191,12 @@ class UserPreferencesService:
         return result.scalar_one_or_none()
     
     async def get_user_email(self, db: AsyncSession, user_id: str) -> Optional[str]:
-        """Get user's email from the users table (same database)"""
+        """Get user's email from the users table in the database"""
         try:
-            # Query the users table directly using raw SQL since we don't have the User model
+            # Query the users table directly using raw SQL
             from sqlalchemy import text
             result = await db.execute(
-                text("SELECT email FROM users WHERE id = :user_id"),
+                text("SELECT email FROM users WHERE id = :user_id AND is_active = true"),
                 {"user_id": user_id}
             )
             row = result.fetchone()
@@ -204,7 +204,7 @@ class UserPreferencesService:
                 return row[0]
             return None
         except Exception as e:
-            logger.warning(f"Could not fetch user email: {e}")
+            logger.warning(f"Could not fetch user email from database: {e}")
             return None
     
     async def get_users_with_enabled_notifications(

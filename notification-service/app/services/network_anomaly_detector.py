@@ -3,8 +3,11 @@ Per-network isolated anomaly detector manager.
 Each network has its own ML model and device statistics.
 """
 
+import os
+import json
 import logging
-from typing import Optional, Dict
+from pathlib import Path
+from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 from collections import deque
 
@@ -27,6 +30,10 @@ from ..models import (
 
 logger = logging.getLogger(__name__)
 
+# Persistence
+DATA_DIR = Path(os.environ.get("NOTIFICATION_DATA_DIR", "/app/data"))
+NETWORK_ANOMALY_DIR = DATA_DIR / "network_anomaly_detectors"
+
 
 class NetworkAnomalyDetector:
     """
@@ -34,7 +41,9 @@ class NetworkAnomalyDetector:
     Each network has completely separate ML models and device statistics.
     """
     
-    def __init__(self, network_id: int):
+    MODEL_VERSION = "1.0.0"
+    
+    def __init__(self, network_id: int, load_state: bool = True):
         self.network_id = network_id
         # Key device stats by device_ip (scoped to this network)
         self._device_stats: Dict[str, DeviceStats] = {}
@@ -44,6 +53,85 @@ class NetworkAnomalyDetector:
         self._notified_offline: set = set()  # device_ips
         self._anomaly_timestamps: deque = deque(maxlen=10000)
         self._current_devices: set = set()  # device_ips
+        
+        # Load persisted state if requested
+        if load_state:
+            self._load_state()
+    
+    def _get_state_file(self) -> Path:
+        """Get the state file path for this network"""
+        return NETWORK_ANOMALY_DIR / f"network_{self.network_id}.json"
+    
+    def _save_state(self):
+        """Save detector state to disk"""
+        try:
+            NETWORK_ANOMALY_DIR.mkdir(parents=True, exist_ok=True)
+            
+            state = {
+                "version": self.MODEL_VERSION,
+                "network_id": self.network_id,
+                "devices": {ip: stats.to_dict() for ip, stats in self._device_stats.items()},
+                "anomalies_detected": self._anomalies_detected,
+                "false_positives": self._false_positives,
+                "last_training": self._last_training.isoformat() if self._last_training else None,
+                "notified_offline": list(self._notified_offline),
+                "anomaly_timestamps": [ts.isoformat() for ts in self._anomaly_timestamps],
+                "current_devices": list(self._current_devices),
+            }
+            
+            with open(self._get_state_file(), 'w') as f:
+                json.dump(state, f, indent=2)
+            
+            logger.debug(f"Saved anomaly detector state for network {self.network_id} with {len(self._device_stats)} devices")
+        except Exception as e:
+            logger.error(f"Failed to save anomaly detector state for network {self.network_id}: {e}")
+    
+    def _load_state(self):
+        """Load detector state from disk"""
+        try:
+            state_file = self._get_state_file()
+            if not state_file.exists():
+                logger.debug(f"No existing anomaly detector state for network {self.network_id}")
+                return
+            
+            with open(state_file, 'r') as f:
+                state = json.load(f)
+            
+            # Check version compatibility
+            if state.get("version") != self.MODEL_VERSION:
+                logger.warning(f"Model version mismatch for network {self.network_id}, starting fresh")
+                return
+            
+            self._device_stats = {
+                ip: DeviceStats.from_dict(data)
+                for ip, data in state.get("devices", {}).items()
+            }
+            self._anomalies_detected = state.get("anomalies_detected", 0)
+            self._false_positives = state.get("false_positives", 0)
+            self._last_training = datetime.fromisoformat(state["last_training"]) if state.get("last_training") else None
+            self._notified_offline = set(state.get("notified_offline", []))
+            self._current_devices = set(state.get("current_devices", []))
+            
+            # Load anomaly timestamps (filter to keep only last 24h on load)
+            cutoff = datetime.utcnow() - timedelta(days=1)
+            self._anomaly_timestamps = deque(
+                (datetime.fromisoformat(ts) for ts in state.get("anomaly_timestamps", [])
+                 if datetime.fromisoformat(ts) > cutoff),
+                maxlen=10000
+            )
+            
+            logger.info(
+                f"Loaded anomaly detector state for network {self.network_id}: "
+                f"{len(self._device_stats)} devices, {len(self._anomaly_timestamps)} anomalies in 24h, "
+                f"{len(self._notified_offline)} pending online notifications"
+            )
+        except Exception as e:
+            logger.error(f"Failed to load anomaly detector state for network {self.network_id}: {e}")
+    
+    def save(self):
+        """Public method to save state - call on shutdown"""
+        self._save_state()
+        logger.info(f"Saved anomaly detector for network {self.network_id}")
     
     def train(
         self,
@@ -71,6 +159,11 @@ class NetworkAnomalyDetector:
         stats.update_check(success, latency_ms, packet_loss, check_time)
         self._last_training = check_time
         self._current_devices.add(device_ip)
+        
+        # Periodically save state (every 10 updates for new devices, 50 for established)
+        save_interval = 10 if stats.total_checks < 100 else 50
+        if stats.total_checks % save_interval == 0:
+            self._save_state()
     
     def detect_anomaly(
         self,
@@ -178,14 +271,14 @@ class NetworkAnomalyDetector:
         is_anomaly = max_anomaly_score >= 0.3
         
         if is_anomaly:
+            self._anomalies_detected += 1
+            self._anomaly_timestamps.append(datetime.utcnow())
             logger.info(
                 f"[Network {self.network_id}] Anomaly detected for {device_ip}: "
                 f"type={detected_type}, score={max_anomaly_score:.2f}, factors={contributing_factors}"
             )
-        
-        if is_anomaly:
-            self._anomalies_detected += 1
-            self._anomaly_timestamps.append(datetime.utcnow())
+            # Save state when anomaly is detected (important event)
+            self._save_state()
         
         confidence = min(stats.total_checks / 100.0, 1.0)
         
@@ -451,6 +544,44 @@ class NetworkAnomalyDetectorManager:
     
     def __init__(self):
         self._detectors: Dict[int, NetworkAnomalyDetector] = {}
+        # Load existing detectors from disk on startup
+        self._load_all()
+    
+    def _load_all(self):
+        """Load all existing network detectors from disk"""
+        try:
+            if not NETWORK_ANOMALY_DIR.exists():
+                logger.debug("No existing network anomaly detector data directory")
+                return
+            
+            # Find all network state files
+            for state_file in NETWORK_ANOMALY_DIR.glob("network_*.json"):
+                try:
+                    # Extract network_id from filename
+                    filename = state_file.stem  # e.g., "network_123"
+                    network_id = int(filename.split("_")[1])
+                    
+                    # Load the detector (it will load its own state)
+                    detector = NetworkAnomalyDetector(network_id, load_state=True)
+                    self._detectors[network_id] = detector
+                    
+                    logger.info(f"Loaded anomaly detector for network {network_id}")
+                except Exception as e:
+                    logger.error(f"Failed to load detector from {state_file}: {e}")
+            
+            logger.info(f"Loaded {len(self._detectors)} network anomaly detectors from disk")
+        except Exception as e:
+            logger.error(f"Failed to load network anomaly detectors: {e}")
+    
+    def save_all(self):
+        """Save all network detectors to disk"""
+        for network_id, detector in self._detectors.items():
+            try:
+                detector.save()
+            except Exception as e:
+                logger.error(f"Failed to save detector for network {network_id}: {e}")
+        
+        logger.info(f"Saved {len(self._detectors)} network anomaly detectors to disk")
     
     def get_detector(self, network_id: int) -> NetworkAnomalyDetector:
         """Get or create anomaly detector for a network"""

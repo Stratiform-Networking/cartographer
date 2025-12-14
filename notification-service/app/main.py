@@ -23,6 +23,7 @@ from .services.discord_service import discord_service, is_discord_configured
 from .services.notification_manager import notification_manager
 from .services.cartographer_status import cartographer_status_service
 from .services.anomaly_detector import anomaly_detector
+from .services.network_anomaly_detector import network_anomaly_detector_manager
 from .services.version_checker import version_checker
 from .services.usage_middleware import UsageTrackingMiddleware
 from .models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
@@ -374,6 +375,7 @@ async def lifespan(app: FastAPI):
     # Save ML model state
     logger.info("Saving ML anomaly detection model state...")
     anomaly_detector.save()
+    network_anomaly_detector_manager.save_all()
     logger.info("ML model state saved")
     
     # Stop scheduled broadcast scheduler

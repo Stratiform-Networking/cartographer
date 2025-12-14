@@ -214,18 +214,20 @@
 							</select>
 						</div>
 						<div>
-							<label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Pass-through Alerts</label>
-							<select
-								:value="preferences?.quiet_hours_bypass_priority || ''"
-								@change="updateQuietHoursBypass(($event.target as HTMLSelectElement).value || null)"
-								class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-							>
-								<option value="">None</option>
-								<option value="low">Low and higher</option>
-								<option value="medium">Medium and higher</option>
-								<option value="high">High and higher</option>
-								<option value="critical">Critical only</option>
-							</select>
+							<label class="block text-xs text-slate-500 dark:text-slate-400 mb-2">Pass-through Alerts</label>
+							<div class="grid grid-cols-5 gap-2">
+								<button
+									v-for="bypass in bypassOptions"
+									:key="bypass.value"
+									@click="updateQuietHoursBypass(bypass.value)"
+									class="px-2 py-2 text-xs font-medium rounded-lg transition-all duration-200 border"
+									:class="(preferences?.quiet_hours_bypass_priority || '') === bypass.value
+										? getBypassButtonActiveClass(bypass.value)
+										: 'bg-slate-700/50 border-slate-600 text-slate-400 hover:bg-slate-700 hover:text-slate-300'"
+								>
+									{{ bypass.label }}
+								</button>
+							</div>
 						</div>
 					</template>
 				</div>
@@ -256,6 +258,14 @@ const priorityOptions = [
 	{ value: 'critical', label: 'Critical' },
 ];
 
+const bypassOptions = [
+	{ value: '', label: 'None' },
+	{ value: 'low', label: 'Low+' },
+	{ value: 'medium', label: 'Med+' },
+	{ value: 'high', label: 'High+' },
+	{ value: 'critical', label: 'Crit' },
+];
+
 const globalNotificationTypes = [
 	{ value: 'cartographer_down', label: 'Cartographer Down', icon: '🚨', description: 'When Cartographer service goes offline', defaultPriority: 'critical' },
 	{ value: 'cartographer_up', label: 'Cartographer Up', icon: '✅', description: 'When Cartographer service comes back online', defaultPriority: 'medium' },
@@ -281,6 +291,21 @@ function getPriorityBadgeClass(priority: string): string {
 }
 
 function getPriorityButtonActiveClass(priority: string): string {
+	switch (priority) {
+		case 'low':
+			return 'bg-emerald-500/30 border-emerald-500 text-emerald-300';
+		case 'medium':
+			return 'bg-yellow-500/30 border-yellow-500 text-yellow-300';
+		case 'high':
+			return 'bg-orange-500/30 border-orange-500 text-orange-300';
+		case 'critical':
+			return 'bg-red-500/30 border-red-500 text-red-300';
+		default:
+			return 'bg-slate-500/30 border-slate-500 text-slate-300';
+	}
+}
+
+function getBypassButtonActiveClass(priority: string): string {
 	switch (priority) {
 		case 'low':
 			return 'bg-emerald-500/30 border-emerald-500 text-emerald-300';
@@ -368,7 +393,7 @@ function updateQuietHoursTimezone(timezone: string) {
 	emit('update', { quiet_hours_timezone: timezone });
 }
 
-function updateQuietHoursBypass(priority: string | null) {
-	emit('update', { quiet_hours_bypass_priority: priority });
+function updateQuietHoursBypass(priority: string) {
+	emit('update', { quiet_hours_bypass_priority: priority || null });
 }
 </script>

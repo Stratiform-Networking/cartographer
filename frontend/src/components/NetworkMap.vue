@@ -1,26 +1,8 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Gradient background using OKLCH color space for smoother interpolation -->
-		<div class="absolute inset-0 rounded-lg overflow-hidden pointer-events-none network-map-bg">
-			<!-- Light mode: OKLCH gradient with blur for smooth banding-free transitions -->
-			<div class="absolute -inset-4 dark:hidden blur-xl" style="background: 
-				linear-gradient(135deg in oklch, 
-					oklch(0.965 0.01 250) 0%, 
-					oklch(0.975 0.008 255) 25%, 
-					oklch(0.985 0.005 260) 50%, 
-					oklch(0.995 0.002 265) 75%, 
-					oklch(1 0 0) 100%
-				);"></div>
-			<!-- Dark mode: OKLCH gradient with blur - perceptually uniform color space -->
-			<div class="absolute -inset-4 hidden dark:block blur-xl" style="background: 
-				linear-gradient(135deg in oklch, 
-					oklch(0.18 0.025 260) 0%, 
-					oklch(0.19 0.022 255) 25%, 
-					oklch(0.20 0.020 250) 50%, 
-					oklch(0.21 0.018 255) 75%, 
-					oklch(0.22 0.025 260) 100%
-				);"></div>
-			<!-- Blue noise dither overlay - prevents color banding -->
+		<!-- Background with subtle accents -->
+		<div class="absolute inset-0 rounded-lg overflow-hidden pointer-events-none bg-slate-50 dark:bg-slate-900 network-map-bg">
+			<!-- Blue noise dither overlay -->
 			<div class="absolute inset-0 blue-noise-dither"></div>
 			<!-- Subtle radial accent glow -->
 			<div class="absolute inset-0 opacity-40 dark:opacity-25" style="background: radial-gradient(ellipse 100% 80% at 50% 30%, rgba(56, 189, 248, 0.08) 0%, rgba(56, 189, 248, 0.02) 35%, transparent 55%)"></div>

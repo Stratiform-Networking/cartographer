@@ -1,27 +1,11 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Gradient background using OKLCH color space for smoother interpolation -->
-		<div class="absolute inset-0 overflow-hidden pointer-events-none">
-			<!-- OKLCH gradient with blur for smooth banding-free transitions -->
-			<div 
-				class="absolute -inset-4 blur-xl transition-colors"
-				:style="isDark 
-					? `background: linear-gradient(135deg in oklch, 
-						oklch(0.18 0.025 260) 0%, 
-						oklch(0.19 0.022 255) 25%, 
-						oklch(0.20 0.020 250) 50%, 
-						oklch(0.21 0.018 255) 75%, 
-						oklch(0.22 0.025 260) 100%
-					)` 
-					: `background: linear-gradient(135deg in oklch, 
-						oklch(0.965 0.01 250) 0%, 
-						oklch(0.975 0.008 255) 25%, 
-						oklch(0.985 0.005 260) 50%, 
-						oklch(0.995 0.002 265) 75%, 
-						oklch(1 0 0) 100%
-					)`"
-			></div>
-			<!-- Blue noise dither overlay - prevents color banding -->
+		<!-- Background with subtle accents -->
+		<div 
+			class="absolute inset-0 overflow-hidden pointer-events-none transition-colors"
+			:class="isDark ? 'bg-slate-900' : 'bg-slate-50'"
+		>
+			<!-- Blue noise dither overlay -->
 			<div class="absolute inset-0 blue-noise-dither"></div>
 			<!-- Subtle radial accent glow with smoother falloff -->
 			<div 

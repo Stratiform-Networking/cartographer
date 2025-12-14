@@ -1,25 +1,46 @@
 <template>
 	<div class="w-full h-full relative">
-		<!-- Clean gradient background -->
-		<div class="absolute inset-0 overflow-hidden pointer-events-none">
-			<!-- Multi-stop gradient for smooth transitions -->
+		<!-- Clean gradient background with noise dithering to prevent color banding -->
+		<div class="absolute inset-0 overflow-hidden pointer-events-none gradient-noise">
+			<!-- Multi-stop gradient with subtle hue shifts for smooth banding-free transitions -->
 			<div 
 				class="absolute inset-0 transition-colors"
 				:style="isDark 
-					? 'background: linear-gradient(to bottom right, #0a0f1a, #0d1424, #0f172a)' 
-					: 'background: linear-gradient(to bottom right, rgb(241 245 249), rgb(248 250 252), white)'"
+					? `background: linear-gradient(135deg, 
+						hsl(220, 40%, 4%) 0%, 
+						hsl(222, 38%, 5%) 10%, 
+						hsl(224, 36%, 5.5%) 20%, 
+						hsl(226, 34%, 6%) 30%, 
+						hsl(228, 32%, 6.5%) 40%, 
+						hsl(230, 30%, 7%) 50%, 
+						hsl(232, 28%, 7.5%) 60%, 
+						hsl(234, 26%, 8%) 70%, 
+						hsl(236, 24%, 8.5%) 80%, 
+						hsl(222, 47%, 11%) 100%
+					)` 
+					: `background: linear-gradient(135deg, 
+						hsl(214, 32%, 96%) 0%, 
+						hsl(216, 28%, 96.5%) 12%, 
+						hsl(218, 24%, 97%) 25%, 
+						hsl(220, 20%, 97.5%) 37%, 
+						hsl(222, 18%, 98%) 50%, 
+						hsl(224, 14%, 98.5%) 62%, 
+						hsl(226, 10%, 99%) 75%, 
+						hsl(228, 6%, 99.5%) 87%, 
+						hsl(0, 0%, 100%) 100%
+					)`"
 			></div>
-			<!-- Subtle radial accent glow -->
+			<!-- Subtle radial accent glow with smoother falloff -->
 			<div 
 				class="absolute inset-0"
 				:class="isDark ? 'opacity-25' : 'opacity-40'"
-				style="background: radial-gradient(ellipse 100% 80% at 50% 30%, rgba(56, 189, 248, 0.08) 0%, transparent 50%)"
+				style="background: radial-gradient(ellipse 100% 80% at 50% 30%, rgba(56, 189, 248, 0.08) 0%, rgba(56, 189, 248, 0.02) 35%, transparent 55%)"
 			></div>
-			<!-- Bottom corner accent -->
+			<!-- Bottom corner accent with smoother falloff -->
 			<div 
 				class="absolute inset-0"
 				:class="isDark ? 'opacity-15' : 'opacity-30'"
-				style="background: radial-gradient(ellipse 60% 50% at 90% 90%, rgba(99, 102, 241, 0.06) 0%, transparent 50%)"
+				style="background: radial-gradient(ellipse 60% 50% at 90% 90%, rgba(99, 102, 241, 0.06) 0%, rgba(99, 102, 241, 0.015) 35%, transparent 55%)"
 			></div>
 		</div>
 		<!-- SVG with grid pattern that pans with content -->

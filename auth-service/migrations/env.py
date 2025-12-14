@@ -1,5 +1,7 @@
 """
 Alembic environment configuration for auth service migrations.
+Uses a separate version table (alembic_version_auth) to avoid conflicts
+with other services sharing the same database.
 """
 
 import asyncio
@@ -26,6 +28,9 @@ if config.config_file_name is not None:
 # Set target metadata
 target_metadata = Base.metadata
 
+# Use a service-specific version table to avoid conflicts with other services
+VERSION_TABLE = "alembic_version_auth"
+
 
 def get_database_url() -> str:
     """Get database URL from environment variable."""
@@ -49,6 +54,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        version_table=VERSION_TABLE,
     )
 
     with context.begin_transaction():
@@ -56,7 +62,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        version_table=VERSION_TABLE,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

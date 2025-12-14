@@ -109,9 +109,8 @@ def run_migrations_online() -> None:
     asyncio.run(run_async_migrations())
 
 
-# Only run migrations if this script is executed directly (not when imported)
-if __name__ == "__main__":
-    if context.is_offline_mode():
-        run_migrations_offline()
-    else:
-        run_migrations_online()
+# Run migrations when alembic invokes this script
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()

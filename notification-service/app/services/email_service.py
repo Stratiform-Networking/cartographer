@@ -281,7 +281,7 @@ async def send_notification_email(
     record = NotificationRecord(
         notification_id=notification_id,
         event_id=event.event_id,
-        network_id=event.network_id or 0,
+        network_id=event.network_id,
         channel=NotificationChannel.EMAIL,
         title=event.title,
         message=event.message,

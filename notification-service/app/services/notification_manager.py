@@ -161,8 +161,8 @@ class NotificationManager:
                 
                 # Handle migration from old user_id based records to network_id based
                 if "user_id" in record_data and "network_id" not in record_data:
-                    # Set network_id to 0 for old records (they'll still be viewable)
-                    record_data["network_id"] = 0
+                    # Set network_id to None for old records (they'll still be viewable)
+                    record_data["network_id"] = None
                     del record_data["user_id"]
                 
                 try:
@@ -1391,8 +1391,8 @@ class NotificationManager:
                     event=event,
                     notification_id=notification_id,
                 )
-                # Use network_id=0 for global notifications (not network-specific)
-                record.network_id = 0
+                # Use network_id=None for global notifications (not network-specific)
+                record.network_id = None
                 
                 if record.success:
                     logger.info(f"✓ Global {event.event_type.value} notification sent successfully to {prefs.email_address} (user {user_id})")

@@ -288,7 +288,7 @@ class DiscordNotificationService:
         record = NotificationRecord(
             notification_id=notification_id,
             event_id=event.event_id,
-            network_id=event.network_id or 0,
+            network_id=event.network_id,
             channel=NotificationChannel.DISCORD,
             title=event.title,
             message=event.message,

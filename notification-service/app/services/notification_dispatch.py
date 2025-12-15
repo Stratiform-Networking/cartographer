@@ -296,7 +296,7 @@ class NotificationDispatchService:
                     event=event,
                     notification_id=notification_id,
                 )
-                record.network_id = 0  # Global notifications
+                record.network_id = None  # Global notifications
                 user_records.append(record)
             
             if prefs.discord_enabled and prefs.discord_user_id:
@@ -307,7 +307,7 @@ class NotificationDispatchService:
                         event=event,
                         notification_id=notification_id,
                     )
-                    record.network_id = 0  # Global notifications
+                    record.network_id = None  # Global notifications
                     user_records.append(record)
                 except Exception as e:
                     logger.error(f"Failed to send global Discord notification to user {prefs.user_id}: {e}")

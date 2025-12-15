@@ -234,7 +234,7 @@ class NotificationRecord(BaseModel):
     """Record of a sent notification"""
     notification_id: str
     event_id: str
-    network_id: str  # UUID string - which network this notification was for
+    network_id: Optional[str] = None  # UUID string - which network this notification was for (None for global)
     channel: NotificationChannel
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     

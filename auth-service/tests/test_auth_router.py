@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from app.routers.auth import router, get_current_user, require_auth, require_owner, require_write_access
+from app.routers.auth import router, get_current_user, require_auth, require_owner, require_admin_access
 from app.models import (
     UserRole,
     UserResponse,

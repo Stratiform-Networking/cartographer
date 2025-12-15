@@ -130,17 +130,19 @@ class TestLifespan:
         
         mock_app = MagicMock()
         
-        with patch('app.main.http_pool') as mock_pool:
-            mock_pool.initialize_all = AsyncMock()
-            mock_pool.warm_up_all = AsyncMock(return_value={"service1": True})
-            mock_pool.close_all = AsyncMock()
-            
-            async with lifespan(mock_app):
-                mock_pool.initialize_all.assert_called_once()
-                mock_pool.warm_up_all.assert_called_once()
-            
-            # After exiting context, close should be called
-            mock_pool.close_all.assert_called_once()
+        with patch('app.main.init_db', new_callable=AsyncMock):
+            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=False):
+                with patch('app.main.http_pool') as mock_pool:
+                    mock_pool.initialize_all = AsyncMock()
+                    mock_pool.warm_up_all = AsyncMock(return_value={"service1": True})
+                    mock_pool.close_all = AsyncMock()
+                    
+                    async with lifespan(mock_app):
+                        mock_pool.initialize_all.assert_called_once()
+                        mock_pool.warm_up_all.assert_called_once()
+                    
+                    # After exiting context, close should be called
+                    mock_pool.close_all.assert_called_once()
     
     async def test_lifespan_handles_partial_warmup(self):
         """Lifespan should handle partial warm-up success"""
@@ -148,18 +150,20 @@ class TestLifespan:
         
         mock_app = MagicMock()
         
-        with patch('app.main.http_pool') as mock_pool:
-            mock_pool.initialize_all = AsyncMock()
-            mock_pool.warm_up_all = AsyncMock(return_value={
-                "service1": True,
-                "service2": False,
-                "service3": True
-            })
-            mock_pool.close_all = AsyncMock()
-            
-            # Should not raise even if some services fail warm-up
-            async with lifespan(mock_app):
-                pass
+        with patch('app.main.init_db', new_callable=AsyncMock):
+            with patch('app.main.migrate_layout_to_database', new_callable=AsyncMock, return_value=False):
+                with patch('app.main.http_pool') as mock_pool:
+                    mock_pool.initialize_all = AsyncMock()
+                    mock_pool.warm_up_all = AsyncMock(return_value={
+                        "service1": True,
+                        "service2": False,
+                        "service3": True
+                    })
+                    mock_pool.close_all = AsyncMock()
+                    
+                    # Should not raise even if some services fail warm-up
+                    async with lifespan(mock_app):
+                        pass
 
 
 class TestDistPathConfiguration:
@@ -190,7 +194,9 @@ class TestDistPathConfiguration:
             import app.main
             importlib.reload(app.main)
             
-            assert str(app.main.DIST_PATH) == custom_path
+            # Convert custom_path to platform-specific path for comparison
+            expected_path = str(Path(custom_path))
+            assert str(app.main.DIST_PATH) == expected_path
 
 
 class TestStaticFileServing:

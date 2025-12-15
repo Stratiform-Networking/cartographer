@@ -25,8 +25,8 @@ class TestUserRole:
     def test_role_values(self):
         """Verify role enum values"""
         assert UserRole.OWNER.value == "owner"
-        assert UserRole.READ_WRITE.value == "readwrite"
-        assert UserRole.READ_ONLY.value == "readonly"
+        assert UserRole.ADMIN.value == "admin"
+        assert UserRole.MEMBER.value == "member"
 
 
 class TestAuthenticatedUser:
@@ -37,13 +37,13 @@ class TestAuthenticatedUser:
         user = AuthenticatedUser(**sample_user_data)
         assert user.is_owner is True
     
-    def test_readonly_is_not_owner(self, sample_readonly_user):
-        """Read-only role should return False for is_owner"""
+    def test_member_is_not_owner(self, sample_readonly_user):
+        """Member role should return False for is_owner"""
         user = AuthenticatedUser(**sample_readonly_user)
         assert user.is_owner is False
     
-    def test_readwrite_is_not_owner(self, sample_readwrite_user):
-        """Read-write role should return False for is_owner"""
+    def test_admin_is_not_owner(self, sample_readwrite_user):
+        """Admin role should return False for is_owner"""
         user = AuthenticatedUser(**sample_readwrite_user)
         assert user.is_owner is False
     
@@ -52,13 +52,13 @@ class TestAuthenticatedUser:
         user = AuthenticatedUser(**sample_user_data)
         assert user.can_write is True
     
-    def test_readwrite_can_write(self, sample_readwrite_user):
-        """Read-write role should have write access"""
+    def test_admin_can_write(self, sample_readwrite_user):
+        """Admin role should have write access"""
         user = AuthenticatedUser(**sample_readwrite_user)
         assert user.can_write is True
     
-    def test_readonly_cannot_write(self, sample_readonly_user):
-        """Read-only role should not have write access"""
+    def test_member_cannot_write(self, sample_readonly_user):
+        """Member role should not have write access"""
         user = AuthenticatedUser(**sample_readonly_user)
         assert user.can_write is False
 
@@ -239,16 +239,16 @@ class TestRequireWriteAccess:
         
         assert result == user
     
-    async def test_readwrite_has_write_access(self, sample_readwrite_user):
-        """Read-write user should have write access"""
+    async def test_admin_has_write_access(self, sample_readwrite_user):
+        """Admin user should have write access"""
         user = AuthenticatedUser(**sample_readwrite_user)
         
         result = await require_write_access(user=user)
         
         assert result == user
     
-    async def test_readonly_denied_write_access(self, sample_readonly_user):
-        """Read-only user should be denied write access"""
+    async def test_member_denied_write_access(self, sample_readonly_user):
+        """Member user should be denied write access"""
         user = AuthenticatedUser(**sample_readonly_user)
         
         with pytest.raises(HTTPException) as exc_info:
@@ -269,8 +269,8 @@ class TestRequireOwner:
         
         assert result == user
     
-    async def test_readwrite_denied_owner_access(self, sample_readwrite_user):
-        """Read-write user should be denied owner access"""
+    async def test_admin_denied_owner_access(self, sample_readwrite_user):
+        """Admin user should be denied owner access"""
         user = AuthenticatedUser(**sample_readwrite_user)
         
         with pytest.raises(HTTPException) as exc_info:
@@ -279,8 +279,8 @@ class TestRequireOwner:
         assert exc_info.value.status_code == 403
         assert "Owner access required" in exc_info.value.detail
     
-    async def test_readonly_denied_owner_access(self, sample_readonly_user):
-        """Read-only user should be denied owner access"""
+    async def test_member_denied_owner_access(self, sample_readonly_user):
+        """Member user should be denied owner access"""
         user = AuthenticatedUser(**sample_readonly_user)
         
         with pytest.raises(HTTPException) as exc_info:

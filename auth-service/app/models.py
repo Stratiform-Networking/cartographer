@@ -194,3 +194,41 @@ class InviteTokenInfo(BaseModel):
     invited_by_name: str
     expires_at: datetime
     is_valid: bool
+
+
+# ==================== Internal Database Models ====================
+
+class UserInDB(BaseModel):
+    """User with hashed password - internal use for auth operations"""
+    id: str
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    role: UserRole
+    hashed_password: str
+    is_active: bool = True
+    created_at: datetime
+    updated_at: datetime
+    last_login: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class InviteInDB(BaseModel):
+    """Internal invite model with token"""
+    id: str
+    email: str
+    role: UserRole
+    status: InviteStatus
+    token: str
+    invited_by_id: str
+    invited_by_username: str
+    invited_by_name: str
+    created_at: datetime
+    expires_at: datetime
+    accepted_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True

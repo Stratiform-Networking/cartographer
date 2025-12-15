@@ -42,21 +42,21 @@ def sample_user_data():
 
 @pytest.fixture
 def sample_readonly_user():
-    """Sample read-only user data"""
+    """Sample member (read-only) user data"""
     return {
         "user_id": "user-456",
-        "username": "readonly_user",
-        "role": "readonly"
+        "username": "member_user",
+        "role": "member"
     }
 
 
 @pytest.fixture
 def sample_readwrite_user():
-    """Sample read-write user data"""
+    """Sample admin (read-write) user data"""
     return {
         "user_id": "user-789",
-        "username": "readwrite_user",
-        "role": "readwrite"
+        "username": "admin_user",
+        "role": "admin"
     }
 
 

@@ -20,12 +20,12 @@ def owner_user():
 
 @pytest.fixture
 def readwrite_user():
-    return AuthenticatedUser(user_id="rw-123", username="readwrite", role=UserRole.READ_WRITE)
+    return AuthenticatedUser(user_id="rw-123", username="admin", role=UserRole.ADMIN)
 
 
 @pytest.fixture
 def readonly_user():
-    return AuthenticatedUser(user_id="ro-123", username="readonly", role=UserRole.READ_ONLY)
+    return AuthenticatedUser(user_id="ro-123", username="member", role=UserRole.MEMBER)
 
 
 def create_mock_response(content=None, status_code=200):
@@ -146,7 +146,7 @@ class TestHealthProxyRouter:
         from app.routers.health_proxy import register_devices
         
         mock_request = MagicMock()
-        mock_request.json = AsyncMock(return_value={"ips": ["192.168.1.1"]})
+        mock_request.json = AsyncMock(return_value={"ips": ["192.168.1.1"], "network_id": 1})
         
         await register_devices(request=mock_request, user=readwrite_user)
         
@@ -1026,13 +1026,14 @@ class TestNotificationProxyRouter:
         assert "/status" in call_kwargs["path"]
     
     async def test_get_discord_info(self, mock_http_pool, owner_user):
-        """get_discord_info should GET"""
+        """get_discord_info should GET user's discord link status"""
         from app.routers.notification_proxy import get_discord_info
         
-        await get_discord_info(user=owner_user)
+        await get_discord_info(context_type="global", network_id=None, user=owner_user)
         
         call_kwargs = mock_http_pool.request.call_args[1]
-        assert "/discord/info" in call_kwargs["path"]
+        assert "/discord" in call_kwargs["path"]
+        assert owner_user.user_id in call_kwargs["path"]
     
     async def test_get_discord_guilds(self, mock_http_pool, owner_user):
         """get_discord_guilds should GET"""
@@ -1144,10 +1145,15 @@ class TestNotificationProxyRouter:
         mock_request = MagicMock()
         mock_request.json = AsyncMock(return_value={
             "title": "Test",
-            "message": "Test message"
+            "message": "Test message",
+            "network_id": 1
         })
         
-        await send_global_notification(request=mock_request, user=owner_user)
+        mock_db = AsyncMock()
+        # Mock the get_network_member_user_ids to return a list of users
+        with patch('app.routers.notification_proxy.get_network_member_user_ids', new_callable=AsyncMock) as mock_get_users:
+            mock_get_users.return_value = ["user-1", "user-2"]
+            await send_global_notification(request=mock_request, user=owner_user, db=mock_db)
         
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/send-notification" in call_kwargs["path"]

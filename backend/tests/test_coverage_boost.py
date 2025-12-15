@@ -22,7 +22,7 @@ def owner_user():
 
 @pytest.fixture
 def readwrite_user():
-    return AuthenticatedUser(user_id="rw-123", username="readwrite", role=UserRole.READ_WRITE)
+    return AuthenticatedUser(user_id="rw-123", username="admin", role=UserRole.ADMIN)
 
 
 class TestMapperStreamGenerator:
@@ -275,7 +275,7 @@ class TestMapperEmbedException:
 class TestEmbedDataException:
     """Test exception handling in embed data endpoint"""
     
-    def test_get_embed_data_exception(self, tmp_path):
+    async def test_get_embed_data_exception(self, tmp_path):
         """get_embed_data should handle load exceptions"""
         from app.routers.mapper import get_embed_data
         
@@ -293,10 +293,12 @@ class TestEmbedDataException:
         # Create a layout file that will cause json.load to fail
         layout_file.write_text("not valid json {{{")
         
+        mock_db = AsyncMock()
+        
         with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
             with patch('app.routers.mapper._saved_layout_path', return_value=layout_file):
                 with pytest.raises(HTTPException) as exc_info:
-                    get_embed_data(embed_id="test")
+                    await get_embed_data(embed_id="test", db=mock_db)
                 
                 assert exc_info.value.status_code == 500
 

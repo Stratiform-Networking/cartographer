@@ -50,7 +50,7 @@ def sample_owner(auth_service_instance):
         last_name="Owner",
         email="owner@test.com",
         role=UserRole.OWNER,
-        password_hash="$2b$10$test_hash_for_owner",
+        hashed_password="$2b$10$test_hash_for_owner",
         created_at=now,
         updated_at=now,
         is_active=True
@@ -71,8 +71,8 @@ def sample_user(auth_service_instance, sample_owner):
         first_name="Test",
         last_name="User",
         email="testuser@test.com",
-        role=UserRole.READ_ONLY,
-        password_hash="$2b$10$test_hash_for_user",
+        role=UserRole.MEMBER,
+        hashed_password="$2b$10$test_hash_for_user",
         created_at=now,
         updated_at=now,
         is_active=True
@@ -83,18 +83,18 @@ def sample_user(auth_service_instance, sample_owner):
 
 @pytest.fixture
 def sample_readwrite_user(auth_service_instance, sample_owner):
-    """Create a sample read-write user"""
+    """Create a sample admin (read-write) user"""
     from app.models import UserRole, UserInDB
     
     now = datetime.now(timezone.utc)
     user = UserInDB(
         id="rw-user-id-789",
         username="rwuser",
-        first_name="ReadWrite",
+        first_name="Admin",
         last_name="User",
         email="rwuser@test.com",
-        role=UserRole.READ_WRITE,
-        password_hash="$2b$10$test_hash_for_rw_user",
+        role=UserRole.ADMIN,
+        hashed_password="$2b$10$test_hash_for_rw_user",
         created_at=now,
         updated_at=now,
         is_active=True
@@ -112,9 +112,9 @@ def sample_invite(auth_service_instance, sample_owner):
     invite = InviteInDB(
         id="invite-id-123",
         email="invited@test.com",
-        role=UserRole.READ_ONLY,
+        role=UserRole.MEMBER,
         status=InviteStatus.PENDING,
-        invited_by=sample_owner.username,
+        invited_by_username=sample_owner.username,
         invited_by_name=f"{sample_owner.first_name} {sample_owner.last_name}",
         invited_by_id=sample_owner.id,
         token="test-invite-token-abc123",
@@ -134,9 +134,9 @@ def expired_invite(auth_service_instance, sample_owner):
     invite = InviteInDB(
         id="expired-invite-id",
         email="expired@test.com",
-        role=UserRole.READ_ONLY,
+        role=UserRole.MEMBER,
         status=InviteStatus.PENDING,
-        invited_by=sample_owner.username,
+        invited_by_username=sample_owner.username,
         invited_by_name=f"{sample_owner.first_name} {sample_owner.last_name}",
         invited_by_id=sample_owner.id,
         token="expired-invite-token",

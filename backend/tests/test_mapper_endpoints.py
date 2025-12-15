@@ -2,6 +2,7 @@
 Integration tests for mapper router endpoints using TestClient.
 """
 import os
+import sys
 import json
 import pytest
 import tempfile
@@ -9,8 +10,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+
+# Skip bash script tests on Windows
+skip_on_windows = pytest.mark.skipif(sys.platform == 'win32', reason="Bash scripts cannot run on Windows")
 
 from app.dependencies.auth import AuthenticatedUser, UserRole
 from app.routers.mapper import router
@@ -25,12 +29,12 @@ def owner_user():
 
 @pytest.fixture
 def readwrite_user():
-    return AuthenticatedUser(user_id="rw-123", username="readwrite", role=UserRole.READ_WRITE)
+    return AuthenticatedUser(user_id="rw-123", username="admin", role=UserRole.ADMIN)
 
 
 @pytest.fixture
 def readonly_user():
-    return AuthenticatedUser(user_id="ro-123", username="readonly", role=UserRole.READ_ONLY)
+    return AuthenticatedUser(user_id="ro-123", username="member", role=UserRole.MEMBER)
 
 
 @pytest.fixture
@@ -94,6 +98,7 @@ class TestRunMapperEndpoint:
             
             assert "404" in str(exc_info.value.status_code) or "not found" in str(exc_info.value.detail).lower()
     
+    @skip_on_windows
     def test_run_mapper_executes_script(self, temp_project_root, readwrite_user):
         """Should execute script and return results"""
         from app.routers.mapper import run_mapper
@@ -260,7 +265,7 @@ class TestEmbedEndpoints:
         }))
         
         with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
-            response = list_embeds(user=owner_user)
+            response = list_embeds(user=owner_user, network_id=None)
             
             data = json.loads(response.body.decode())
             assert len(data["embeds"]) == 1
@@ -372,40 +377,46 @@ class TestEmbedDataEndpoint:
             "layout_file": layout_file
         }
     
-    def test_get_embed_data_not_found(self, temp_data_dir):
+    async def test_get_embed_data_not_found(self, temp_data_dir):
         """Should return 404 for non-existent embed"""
         from app.routers.mapper import get_embed_data
         
         embeds_file = temp_data_dir / "embeds.json"
         embeds_file.write_text("{}")
         
+        mock_db = AsyncMock()
+        
         with patch('app.routers.mapper._embeds_config_path', return_value=embeds_file):
-            with pytest.raises(Exception) as exc_info:
-                get_embed_data(embed_id="nonexistent")
+            with pytest.raises(HTTPException) as exc_info:
+                await get_embed_data(embed_id="nonexistent", db=mock_db)
             
-            assert "404" in str(exc_info.value.status_code)
+            assert exc_info.value.status_code == 404
     
-    def test_get_embed_data_no_layout(self, setup_embed):
+    async def test_get_embed_data_no_layout(self, setup_embed):
         """Should return exists=False if no layout saved"""
         from app.routers.mapper import get_embed_data
         
         # Remove layout file
         setup_embed["layout_file"].unlink()
         
+        mock_db = AsyncMock()
+        
         with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed["embeds_file"]):
             with patch('app.routers.mapper._saved_layout_path', return_value=setup_embed["layout_file"]):
-                response = get_embed_data(embed_id="embed123")
+                response = await get_embed_data(embed_id="embed123", db=mock_db)
                 
                 data = json.loads(response.body.decode())
                 assert data["exists"] is False
     
-    def test_get_embed_data_non_sensitive(self, setup_embed):
+    async def test_get_embed_data_non_sensitive(self, setup_embed):
         """Should return raw IPs when not in sensitive mode"""
         from app.routers.mapper import get_embed_data
         
+        mock_db = AsyncMock()
+        
         with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed["embeds_file"]):
             with patch('app.routers.mapper._saved_layout_path', return_value=setup_embed["layout_file"]):
-                response = get_embed_data(embed_id="embed123")
+                response = await get_embed_data(embed_id="embed123", db=mock_db)
                 
                 data = json.loads(response.body.decode())
                 assert data["exists"] is True
@@ -413,13 +424,15 @@ class TestEmbedDataEndpoint:
                 assert data["showOwner"] is True
                 assert data["ownerDisplayName"] == "Admin"
     
-    def test_get_embed_data_sensitive(self, setup_embed):
+    async def test_get_embed_data_sensitive(self, setup_embed):
         """Should anonymize IPs in sensitive mode"""
         from app.routers.mapper import get_embed_data
         
+        mock_db = AsyncMock()
+        
         with patch('app.routers.mapper._embeds_config_path', return_value=setup_embed["embeds_file"]):
             with patch('app.routers.mapper._saved_layout_path', return_value=setup_embed["layout_file"]):
-                response = get_embed_data(embed_id="sensitive456")
+                response = await get_embed_data(embed_id="sensitive456", db=mock_db)
                 
                 data = json.loads(response.body.decode())
                 assert data["exists"] is True

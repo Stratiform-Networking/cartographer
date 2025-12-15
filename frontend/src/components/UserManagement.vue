@@ -1,7 +1,7 @@
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200/80 dark:border-slate-800/80">
+		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Header -->
 				<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<div class="flex items-center gap-2">
@@ -268,8 +268,8 @@
 		</div>
 
 		<!-- Add/Edit User Modal -->
-		<div v-if="showAddUser || editingUser" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200/80 dark:border-slate-800/80">
+		<div v-if="showAddUser || editingUser" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Modal Header -->
 				<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<div class="flex items-center gap-2">
@@ -446,8 +446,8 @@
 		</div>
 
 		<!-- Delete Confirmation Modal -->
-		<div v-if="deletingUser" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
+		<div v-if="deletingUser" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Modal Header -->
 				<div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -482,8 +482,8 @@
 		</div>
 
 		<!-- Invite User Modal -->
-		<div v-if="showInviteForm" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
+		<div v-if="showInviteForm" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Modal Header -->
 				<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<div class="flex items-center gap-2">
@@ -560,8 +560,8 @@
 		</div>
 
 		<!-- Revoke Invitation Confirmation Modal -->
-		<div v-if="revokingInvite" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
+		<div v-if="revokingInvite" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Modal Header -->
 				<div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

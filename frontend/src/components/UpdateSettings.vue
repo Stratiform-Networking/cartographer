@@ -8,7 +8,7 @@
 			leave-from-class="opacity-100"
 			leave-to-class="opacity-0"
 		>
-			<div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+			<div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
 				<Transition
 					enter-active-class="transition ease-out duration-200"
 					enter-from-class="opacity-0 scale-95"
@@ -17,7 +17,7 @@
 					leave-from-class="opacity-100 scale-100"
 					leave-to-class="opacity-0 scale-95"
 				>
-					<div v-if="isOpen" class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200/80 dark:border-slate-800/80">
+					<div v-if="isOpen" class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200/80 dark:border-slate-800/80">
 						<!-- Header -->
 						<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 							<div class="flex items-center gap-2">

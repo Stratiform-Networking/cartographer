@@ -1,6 +1,6 @@
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
 			<div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
 				<!-- Header -->
 				<div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 rounded-t-xl">

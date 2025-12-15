@@ -610,6 +610,14 @@ const showNotificationSettings = ref(false);
 const showSendNotification = ref(false);
 const showUpdateSettings = ref(false);
 
+// Computed: detect if any modal panel is open (to pause polling and reduce lag)
+const isAnyModalOpen = computed(() => 
+	showUserManagement.value || 
+	showNotificationSettings.value || 
+	showSendNotification.value || 
+	showUpdateSettings.value
+);
+
 // Network context (from props or defaults)
 const networkId = computed(() => props.networkId);
 const networkName = computed(() => props.networkName || 'Cartographer');
@@ -878,6 +886,15 @@ onMounted(async () => {
 // Stop polling when app unmounts
 onBeforeUnmount(() => {
 	stopPolling();
+});
+
+// Pause/resume polling when modal panels open/close to reduce lag
+watch(isAnyModalOpen, (isOpen) => {
+	if (isOpen) {
+		stopPolling();
+	} else {
+		startPolling(10000);
+	}
 });
 
 // Auto-save debounce timer

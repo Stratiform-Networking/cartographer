@@ -4,6 +4,10 @@
 		<div class="absolute inset-0 rounded-lg overflow-hidden pointer-events-none network-map-bg">
 			<!-- Light mode: Blur overlay -->
 			<div class="absolute -inset-4 dark:hidden blur-xl"></div>
+			<div 
+				class="absolute inset-0 pointer-events-none hidden dark:block"
+				style="background: linear-gradient(160deg, #05182f 0%, #020e20 50%, #03172d 100%); opacity: 0.5;"
+			></div>
 			<!-- Dark mode: Blur overlay -->
 			<div class="absolute -inset-4 hidden dark:block blur-xl"></div>
 			<!-- Blue noise dither overlay - prevents color banding -->
@@ -20,7 +24,7 @@
 
 <script lang="ts" setup>
 import * as d3 from "d3";
-import { onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { onMounted, onBeforeUnmount, ref, watch, computed } from "vue";
 import type { TreeNode, DeviceMetrics, HealthStatus } from "../types/network";
 import { useMapLayout } from "../composables/useMapLayout";
 
@@ -61,6 +65,17 @@ const emit = defineEmits<{
 
 const svgRef = ref<SVGSVGElement | null>(null);
 const { updatePosition } = useMapLayout();
+
+// Create a stable fingerprint of health statuses to avoid deep watch on healthMetrics
+// This only changes when actual status values change, not on every poll response
+const healthStatusFingerprint = computed(() => {
+	if (!props.healthMetrics) return '';
+	const entries = Object.entries(props.healthMetrics)
+		.map(([ip, m]) => `${ip}:${m.status}`)
+		.sort()
+		.join('|');
+	return entries;
+});
 
 let cleanup: (() => void) | null = null;
 let currentTransform = d3.zoomIdentity.translate(24, 24);
@@ -668,9 +683,21 @@ onBeforeUnmount(() => {
 	if (cleanup) cleanup();
 });
 
-watch(() => [props.data, props.selectedId, props.mode, props.healthMetrics], () => {
+// Watch for structural changes that require full re-render (data tree structure)
+watch(() => props.data, () => {
 	render();
 }, { deep: true });
+
+// Watch for selection and mode changes (shallow comparison is sufficient)
+watch(() => [props.selectedId, props.mode], () => {
+	render();
+});
+
+// Watch health status fingerprint - only re-renders when actual status values change
+// This prevents expensive re-renders on every health poll when statuses haven't changed
+watch(healthStatusFingerprint, () => {
+	render();
+});
 </script>
 
 <style>

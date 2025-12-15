@@ -1,7 +1,7 @@
 <template>
 	<Teleport to="body">
-		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200/80 dark:border-slate-800/80">
+		<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Header -->
 				<div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<div class="flex items-center gap-2">
@@ -213,8 +213,8 @@
 		</div>
 
 		<!-- Remove Confirmation Modal -->
-		<div v-if="removingMember" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-			<div class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
+		<div v-if="removingMember" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60">
+			<div class="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-md border border-slate-200/80 dark:border-slate-800/80">
 				<!-- Modal Header -->
 				<div class="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50 rounded-t-xl">
 					<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -251,7 +251,7 @@
 		<!-- Teleported dropdown menu (rendered outside overflow container) -->
 		<div
 			v-if="openDropdown && dropdownPosition"
-			class="fixed w-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200/80 dark:border-slate-800/80 py-1 z-[70]"
+			class="fixed w-40 bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-slate-200/80 dark:border-slate-800/80 py-1 z-[70]"
 			:style="{ top: dropdownPosition.top + 'px', left: dropdownPosition.left + 'px' }"
 		>
 			<button

@@ -44,7 +44,7 @@
 			>
 				<div 
 					v-if="isOpen"
-					class="fixed w-56 rounded-xl shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border border-slate-200/80 dark:border-slate-700/50 overflow-hidden z-[100]"
+					class="fixed w-56 rounded-xl shadow-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/50 overflow-hidden z-[100]"
 					:style="dropdownPosition"
 				>
 					<!-- User Info Header -->
@@ -161,7 +161,7 @@
 				leave-from-class="opacity-100"
 				leave-to-class="opacity-0"
 			>
-				<div v-if="showPasswordModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 dark:bg-slate-950/80 backdrop-blur-sm">
+				<div v-if="showPasswordModal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 dark:bg-slate-950/90">
 					<Transition
 						enter-active-class="transition ease-out duration-200"
 						enter-from-class="opacity-0 scale-95"
@@ -170,7 +170,7 @@
 						leave-from-class="opacity-100 scale-100"
 						leave-to-class="opacity-0 scale-95"
 					>
-						<div v-if="showPasswordModal" class="bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200/80 dark:border-slate-700/50">
+						<div v-if="showPasswordModal" class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200/80 dark:border-slate-700/50">
 							<!-- Header -->
 							<div class="flex items-center justify-between px-6 py-4 bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200/80 dark:border-slate-700/50">
 								<div class="flex items-center gap-3">

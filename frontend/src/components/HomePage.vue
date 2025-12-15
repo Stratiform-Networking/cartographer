@@ -84,6 +84,7 @@
 					@logout="onLogout" 
 					@manageUsers="showUserManagement = true"
 					@notifications="showNotificationSettings = true"
+					@updates="showUpdateSettings = true"
 				/>
 			</div>
 		</header>
@@ -219,7 +220,7 @@
 			leave-to-class="opacity-0"
 		>
 			<div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-6">
-				<div class="absolute inset-0 bg-black/40 dark:bg-slate-950/80 backdrop-blur-sm" @click="closeCreateModal" />
+				<div class="absolute inset-0 bg-black/60 dark:bg-slate-950/90" @click="closeCreateModal" />
 
 				<Transition
 					enter-active-class="transition duration-200 delay-75"
@@ -309,7 +310,7 @@
 			leave-to-class="opacity-0"
 		>
 			<div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-6">
-				<div class="absolute inset-0 bg-black/40 dark:bg-slate-950/80 backdrop-blur-sm" @click="closeEditModal" />
+				<div class="absolute inset-0 bg-black/60 dark:bg-slate-950/90" @click="closeEditModal" />
 
 				<Transition
 					enter-active-class="transition duration-200 delay-75"
@@ -399,7 +400,7 @@
 			leave-to-class="opacity-0"
 		>
 			<div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center p-6">
-				<div class="absolute inset-0 bg-black/40 dark:bg-slate-950/80 backdrop-blur-sm" @click="closeDeleteModal" />
+				<div class="absolute inset-0 bg-black/60 dark:bg-slate-950/90" @click="closeDeleteModal" />
 
 				<Transition
 					enter-active-class="transition duration-200 delay-75"
@@ -472,6 +473,7 @@
 			:networkId="null" 
 			@close="showNotificationSettings = false" 
 		/>
+		<UpdateSettings :isOpen="showUpdateSettings" @close="showUpdateSettings = false" />
 	</div>
 </template>
 
@@ -485,6 +487,7 @@ import LoginScreen from "./LoginScreen.vue";
 import UserMenu from "./UserMenu.vue";
 import NotificationSettingsPanel from "./NotificationSettingsPanel.vue";
 import UserManagement from "./UserManagement.vue";
+import UpdateSettings from "./UpdateSettings.vue";
 
 const router = useRouter();
 const { isAuthenticated, user, checkSetupStatus, verifySession } = useAuth();
@@ -495,6 +498,7 @@ const authLoading = ref(true);
 const needsSetup = ref(false);
 const showUserManagement = ref(false);
 const showNotificationSettings = ref(false);
+const showUpdateSettings = ref(false);
 
 // Dark mode state
 const isDark = ref(true);

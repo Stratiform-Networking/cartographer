@@ -1,16 +1,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Cartographer - Production Docker Compose
-# Uses pre-built images from a container registry
-# Uses host networking to scan actual LAN devices
+# Cartographer - Network Mapping Application (Windows/Docker Desktop friendly)
+# - NO host networking (network_mode: host) because it breaks port publishing on Windows
+# - Uses default bridge network + service DNS names (postgres, redis, health, etc.)
+# - Publishes service ports to the Windows host so localhost:8000 works
 # ─────────────────────────────────────────────────────────────────────────────
-version: "3.8"
 
 services:
   # PostgreSQL database for network data
   postgres:
     image: postgres:16-alpine
     container_name: cartographer-postgres
-    network_mode: host
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-cartographer}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartographer_secret}
@@ -19,18 +18,18 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cartographer"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cartographer}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    ports:
+      - "5432:5432"
 
   # Redis for metrics pub/sub
   redis:
     image: redis:7-alpine
     container_name: cartographer-redis
-    # Use host network for consistency with other services
-    network_mode: host
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -41,29 +40,28 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    ports:
+      - "6379:6379"
 
   # Main application (Backend + Frontend)
   app:
-    image: ${REGISTRY:-yourusername}/cartographer-app:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: cartographer-app
-    # Use host network to access real LAN for scanning
-    network_mode: host
     volumes:
       - cartographer-data:/app/data
     environment:
       - FRONTEND_DIST=/app/frontend/dist
-      # Database connection (PostgreSQL)
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
-      # Health service is on localhost when using host network
-      - HEALTH_SERVICE_URL=http://localhost:8001
-      # Auth service is on localhost when using host network
-      - AUTH_SERVICE_URL=http://localhost:8002
-      # Metrics service is on localhost when using host network
-      - METRICS_SERVICE_URL=http://localhost:8003
-      # Assistant service is on localhost when using host network
-      - ASSISTANT_SERVICE_URL=http://localhost:8004
-      # Notification service is on localhost when using host network
-      - NOTIFICATION_SERVICE_URL=http://localhost:8005
+      # Database connection (PostgreSQL) - use service name
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@postgres:5432/${POSTGRES_DB:-cartographer}
+      # Microservices - use service names (Docker DNS)
+      - HEALTH_SERVICE_URL=http://health:8001
+      - AUTH_SERVICE_URL=http://auth:8002
+      - METRICS_SERVICE_URL=http://metrics:8003
+      - ASSISTANT_SERVICE_URL=http://assistant:8004
+      - NOTIFICATION_SERVICE_URL=http://notifications:8005
+    # Network scanning may still require privileges; keep as-is
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -81,18 +79,21 @@ services:
         condition: service_healthy
       notifications:
         condition: service_healthy
+    ports:
+      - "8000:8000"
 
   # Health Monitoring Microservice
   health:
-    image: ${REGISTRY:-yourusername}/cartographer-health:${TAG:-latest}
+    build:
+      context: ./health-service
+      dockerfile: Dockerfile
     container_name: cartographer-health
-    # Use host network to ping actual LAN devices
-    network_mode: host
     volumes:
       - health-data:/app/data
     environment:
       - CORS_ORIGINS=*
       - HEALTH_DATA_DIR=/app/data
+      - NOTIFICATION_SERVICE_URL=http://notifications:8005
     cap_add:
       - NET_RAW
     restart: unless-stopped
@@ -102,26 +103,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    ports:
+      - "8001:8001"
 
   # Auth Microservice
   auth:
-    image: ${REGISTRY:-yourusername}/cartographer-auth:${TAG:-latest}
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
     container_name: cartographer-auth
-    # Use host network for consistent localhost access
-    network_mode: host
     volumes:
       - auth-data:/app/data
     environment:
       - CORS_ORIGINS=*
       - AUTH_DATA_DIR=/app/data
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@postgres:5432/${POSTGRES_DB:-cartographer}
-      # IMPORTANT: Set a secure secret in production!
-      - JWT_SECRET=${JWT_SECRET}
+      - JWT_SECRET=${JWT_SECRET:-cartographer-dev-secret-change-in-production}
       - JWT_EXPIRATION_HOURS=24
-      # Email invitations via Resend (optional - invites work without email)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <noreply@cartographer.app>}
-      - APPLICATION_URL=${APPLICATION_URL}
+      # If your frontend is served by the app on :8000, point here.
+      # If you actually run a separate Vite dev server, override this via env.
+      - APPLICATION_URL=${APPLICATION_URL:-http://localhost:8000}
       - INVITE_EXPIRATION_HOURS=${INVITE_EXPIRATION_HOURS:-72}
     restart: unless-stopped
     healthcheck:
@@ -130,24 +133,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    ports:
+      - "8002:8002"
 
   # Metrics Publishing Microservice
   metrics:
-    image: ${REGISTRY:-yourusername}/cartographer-metrics:${TAG:-latest}
+    build:
+      context: ./metrics-service
+      dockerfile: Dockerfile
     container_name: cartographer-metrics
-    # Use host network for consistent localhost access
-    network_mode: host
     environment:
       - CORS_ORIGINS=*
-      # Redis on localhost when using host network
-      - REDIS_URL=redis://localhost:6379
+      - REDIS_URL=redis://redis:6379
       - REDIS_DB=0
-      # Other services on localhost when using host network
-      - HEALTH_SERVICE_URL=http://localhost:8001
-      - BACKEND_SERVICE_URL=http://localhost:8000
-      # JWT secret must match auth service for service-to-service auth
-      - JWT_SECRET=${JWT_SECRET}
-      # Publishing configuration
+      - HEALTH_SERVICE_URL=http://health:8001
+      - BACKEND_SERVICE_URL=http://app:8000
+      - JWT_SECRET=${JWT_SECRET:-cartographer-dev-secret-change-in-production}
       - METRICS_PUBLISH_INTERVAL=${METRICS_PUBLISH_INTERVAL:-30}
     restart: unless-stopped
     depends_on:
@@ -161,24 +162,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    ports:
+      - "8003:8003"
 
   # AI Assistant Microservice
   assistant:
-    image: ${REGISTRY:-yourusername}/cartographer-assistant:${TAG:-latest}
+    build:
+      context: ./assistant-service
+      dockerfile: Dockerfile
     container_name: cartographer-assistant
-    # Use host network for consistent localhost access
-    network_mode: host
     environment:
       - CORS_ORIGINS=*
-      # Metrics service for network context
-      - METRICS_SERVICE_URL=http://localhost:8003
-      # AI Provider API Keys (set in environment)
+      - METRICS_SERVICE_URL=http://metrics:8003
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      # Ollama (local models)
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://localhost:11434}
+      # On Windows, "localhost" from inside container is the container itself.
+      # Use host.docker.internal to reach a host-installed Ollama.
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
     restart: unless-stopped
     depends_on:
       metrics:
@@ -189,37 +191,31 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    ports:
+      - "8004:8004"
 
   # Notification Microservice
   notifications:
-    image: ${REGISTRY:-yourusername}/cartographer-notifications:${TAG:-latest}
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
     container_name: cartographer-notifications
-    # Use host network for consistent localhost access
-    network_mode: host
     volumes:
       - notification-data:/app/data
-      # Mount host timezone so quiet hours work correctly in user's local time
-      - /etc/localtime:/etc/localtime:ro
     environment:
-      # Use host timezone for quiet hours (fallback if /etc/localtime not available)
       - TZ=${TZ:-}
       - CORS_ORIGINS=*
       - NOTIFICATION_DATA_DIR=/app/data
-      # Database connection (PostgreSQL) for notification preferences and Discord links
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
-      # Current application version for update checking
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@postgres:5432/${POSTGRES_DB:-cartographer}
       - CARTOGRAPHER_VERSION=${CARTOGRAPHER_VERSION:-0.1.1}
-      # Email notifications via Resend (same key as auth service)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <notifications@cartographer.app>}
-      - APPLICATION_URL=${APPLICATION_URL}
-      # Discord bot credentials (set in environment)
+      - APPLICATION_URL=${APPLICATION_URL:-http://localhost:8000}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
-      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI}
-      # Health service for integrating with health checks
-      - HEALTH_SERVICE_URL=http://localhost:8001
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-http://localhost:8005/api/auth/discord/callback}
+      - HEALTH_SERVICE_URL=http://health:8001
     restart: unless-stopped
     depends_on:
       postgres:
@@ -232,6 +228,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    ports:
+      - "8005:8005"
 
 volumes:
   postgres-data:

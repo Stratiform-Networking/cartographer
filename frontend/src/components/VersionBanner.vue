@@ -114,7 +114,7 @@
 		>
 			<div
 				v-if="showSettings"
-				class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+				class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60"
 				@click.self="showSettings = false"
 			>
 				<Transition

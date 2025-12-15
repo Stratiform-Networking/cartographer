@@ -32,7 +32,7 @@ def generate_agent_key() -> str:
 
 
 async def get_network_with_access(
-    network_id: int,
+    network_id: str,
     user: AuthenticatedUser,
     db: AsyncSession,
     require_write: bool = False,
@@ -94,7 +94,7 @@ async def get_network_with_access(
 
 
 async def get_network_member_user_ids(
-    network_id: int,
+    network_id: str,
     db: AsyncSession,
 ) -> List[str]:
     """
@@ -237,7 +237,7 @@ async def list_networks(
 
 @router.get("/{network_id}", response_model=NetworkResponse)
 async def get_network(
-    network_id: int,
+    network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
@@ -256,7 +256,7 @@ async def get_network(
 
 @router.patch("/{network_id}", response_model=NetworkResponse)
 async def update_network(
-    network_id: int,
+    network_id: str,
     update_data: NetworkUpdate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
@@ -285,7 +285,7 @@ async def update_network(
 
 @router.delete("/{network_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_network(
-    network_id: int,
+    network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
@@ -309,7 +309,7 @@ async def delete_network(
 
 @router.get("/{network_id}/layout", response_model=NetworkLayoutResponse)
 async def get_network_layout(
-    network_id: int,
+    network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
@@ -326,7 +326,7 @@ async def get_network_layout(
 
 @router.post("/{network_id}/layout", response_model=NetworkLayoutResponse)
 async def save_network_layout(
-    network_id: int,
+    network_id: str,
     layout_data: NetworkLayoutSave,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
@@ -355,7 +355,7 @@ async def save_network_layout(
 
 @router.get("/{network_id}/permissions", response_model=List[PermissionResponse])
 async def list_network_permissions(
-    network_id: int,
+    network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
@@ -387,7 +387,7 @@ async def list_network_permissions(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_permission(
-    network_id: int,
+    network_id: str,
     perm_data: PermissionCreate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
@@ -441,7 +441,7 @@ async def create_permission(
     "/{network_id}/permissions/{user_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def delete_permission(
-    network_id: int,
+    network_id: str,
     user_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
@@ -484,7 +484,7 @@ async def delete_permission(
 
 @router.get("/{network_id}/notifications", response_model=NetworkNotificationSettingsResponse)
 async def get_network_notification_settings(
-    network_id: int,
+    network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
@@ -525,7 +525,7 @@ async def get_network_notification_settings(
 
 @router.put("/{network_id}/notifications", response_model=NetworkNotificationSettingsResponse)
 async def update_network_notification_settings(
-    network_id: int,
+    network_id: str,
     settings_data: NetworkNotificationSettingsCreate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),

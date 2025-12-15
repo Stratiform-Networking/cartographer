@@ -31,7 +31,7 @@ class UserNetworkNotificationPrefs(Base):
     
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), index=True)
-    network_id: Mapped[int] = mapped_column(index=True)  # FK to networks.id (in main app)
+    network_id: Mapped[str] = mapped_column(UUID(as_uuid=False), index=True)  # FK to networks.id (UUID in main app)
     
     # Channels
     email_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -124,7 +124,7 @@ class DiscordUserLink(Base):
     
     # Context: "network" or "global" - allows different Discord accounts per network and global
     context_type: Mapped[str] = mapped_column(String(20), default="global")  # "network" or "global"
-    context_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # network_id for "network", null for "global"
+    context_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=False), nullable=True)  # network_id (UUID) for "network", null for "global"
     
     discord_id: Mapped[str] = mapped_column(String(255), index=True)
     discord_username: Mapped[str] = mapped_column(String(255))

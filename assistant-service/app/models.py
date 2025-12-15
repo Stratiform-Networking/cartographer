@@ -49,7 +49,7 @@ class ChatRequest(BaseModel):
     model: Optional[str] = Field(default=None, description="Model to use (uses default if not specified)")
     conversation_history: List[ChatMessage] = Field(default_factory=list)
     include_network_context: bool = Field(default=True, description="Include network topology as context")
-    network_id: Optional[int] = Field(default=None, description="Network ID for multi-tenant mode")
+    network_id: Optional[str] = Field(default=None, description="Network ID (UUID) for multi-tenant mode")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=1, le=32000)
 

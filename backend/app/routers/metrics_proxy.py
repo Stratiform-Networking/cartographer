@@ -42,7 +42,7 @@ async def proxy_request(method: str, path: str, params: dict = None, json_body: 
 
 @router.get("/snapshot")
 async def get_snapshot(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Proxy get current snapshot. Requires authentication.
@@ -58,7 +58,7 @@ async def get_snapshot(
 
 @router.post("/snapshot/generate")
 async def generate_snapshot(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_write_access)
 ):
     """Proxy generate new snapshot. Requires write access.
@@ -74,7 +74,7 @@ async def generate_snapshot(
 
 @router.post("/snapshot/publish")
 async def publish_snapshot(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_write_access)
 ):
     """Proxy publish snapshot to Redis. Requires write access.
@@ -113,7 +113,7 @@ async def update_config(request: Request, user: AuthenticatedUser = Depends(requ
 
 @router.get("/summary")
 async def get_summary(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Proxy get network summary. Requires authentication.
@@ -130,7 +130,7 @@ async def get_summary(
 @router.get("/nodes/{node_id}")
 async def get_node_metrics(
     node_id: str,
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Proxy get specific node metrics. Requires authentication.
@@ -147,7 +147,7 @@ async def get_node_metrics(
 
 @router.get("/connections")
 async def get_connections(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Proxy get all connections. Requires authentication.
@@ -163,7 +163,7 @@ async def get_connections(
 
 @router.get("/gateways")
 async def get_gateways(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Proxy get gateway ISP info. Requires authentication.
@@ -181,7 +181,7 @@ async def get_gateways(
 
 @router.get("/debug/layout")
 async def debug_layout(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug: Get raw layout data to verify notes are saved. Requires authentication.

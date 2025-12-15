@@ -27,7 +27,7 @@ class NetworkUpdate(BaseModel):
 
 class NetworkResponse(BaseModel):
     """Network response."""
-    id: int
+    id: str  # UUID string
     name: str
     description: Optional[str]
     is_active: bool
@@ -45,7 +45,7 @@ class NetworkResponse(BaseModel):
 
 class NetworkLayoutResponse(BaseModel):
     """Network layout data response."""
-    id: int
+    id: str  # UUID string
     name: str
     layout_data: Optional[dict[str, Any]]
     updated_at: datetime
@@ -72,7 +72,7 @@ class PermissionCreate(BaseModel):
 class PermissionResponse(BaseModel):
     """Permission response."""
     id: int
-    network_id: int
+    network_id: str  # UUID string
     user_id: str
     role: PermissionRole
     created_at: datetime
@@ -129,7 +129,7 @@ class NetworkNotificationSettingsCreate(BaseModel):
 class NetworkNotificationSettingsResponse(BaseModel):
     """Network notification settings response."""
     id: int
-    network_id: int
+    network_id: str  # UUID string
     enabled: bool
     email_enabled: bool
     email_address: Optional[str]

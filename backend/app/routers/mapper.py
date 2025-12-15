@@ -410,7 +410,7 @@ async def get_embed_data(embed_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/embeds")
 def list_embeds(
 	user: AuthenticatedUser = Depends(require_auth),
-	network_id: Optional[int] = Query(None, description="Filter embeds by network ID")
+	network_id: Optional[str] = Query(None, description="Filter embeds by network ID (UUID)")
 ):
 	"""List all embed configurations. Requires authentication."""
 	embeds = _load_all_embeds()

@@ -112,7 +112,7 @@ class MonitoringStatus(BaseModel):
 class RegisterDevicesRequest(BaseModel):
     """Request to register devices for monitoring"""
     ips: List[str]
-    network_id: int  # The network these devices belong to
+    network_id: str  # UUID string - the network these devices belong to
 
 
 # ==================== Gateway Test IP Models ====================

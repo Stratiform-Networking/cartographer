@@ -6,7 +6,7 @@
 export type PermissionRole = "viewer" | "editor" | "admin";
 
 export interface Network {
-	id: number;
+	id: string; // UUID string
 	name: string;
 	description: string | null;
 	is_active: boolean;
@@ -28,7 +28,7 @@ export interface NetworkUpdate {
 }
 
 export interface NetworkLayoutResponse {
-	id: number;
+	id: string; // UUID string
 	name: string;
 	layout_data: Record<string, unknown> | null;
 	updated_at: string;
@@ -36,7 +36,7 @@ export interface NetworkLayoutResponse {
 
 export interface NetworkPermission {
 	id: number;
-	network_id: number;
+	network_id: string; // UUID string
 	user_id: string;
 	role: PermissionRole;
 	created_at: string;

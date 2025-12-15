@@ -57,7 +57,7 @@ async def proxy_request(
 # ==================== Per-Network Preferences Endpoints ====================
 
 @router.get("/networks/{network_id}/preferences")
-async def get_network_preferences(network_id: int, user: AuthenticatedUser = Depends(require_auth)):
+async def get_network_preferences(network_id: str, user: AuthenticatedUser = Depends(require_auth)):
     """Get notification preferences for a specific network."""
     return await proxy_request(
         "GET",
@@ -67,7 +67,7 @@ async def get_network_preferences(network_id: int, user: AuthenticatedUser = Dep
 
 
 @router.put("/networks/{network_id}/preferences")
-async def update_network_preferences(network_id: int, request: Request, user: AuthenticatedUser = Depends(require_auth)):
+async def update_network_preferences(network_id: str, request: Request, user: AuthenticatedUser = Depends(require_auth)):
     """Update notification preferences for a specific network."""
     body = await request.json()
     return await proxy_request(
@@ -79,7 +79,7 @@ async def update_network_preferences(network_id: int, request: Request, user: Au
 
 
 @router.delete("/networks/{network_id}/preferences")
-async def delete_network_preferences(network_id: int, user: AuthenticatedUser = Depends(require_auth)):
+async def delete_network_preferences(network_id: str, user: AuthenticatedUser = Depends(require_auth)):
     """Delete notification preferences for a network (reset to defaults)."""
     return await proxy_request(
         "DELETE",
@@ -89,7 +89,7 @@ async def delete_network_preferences(network_id: int, user: AuthenticatedUser = 
 
 
 @router.post("/networks/{network_id}/test")
-async def send_network_test_notification(network_id: int, request: Request, user: AuthenticatedUser = Depends(require_auth)):
+async def send_network_test_notification(network_id: str, request: Request, user: AuthenticatedUser = Depends(require_auth)):
     """Send a test notification for a specific network."""
     body = await request.json()
     return await proxy_request(
@@ -102,7 +102,7 @@ async def send_network_test_notification(network_id: int, request: Request, user
 
 @router.get("/networks/{network_id}/history")
 async def get_network_notification_history(
-    network_id: int,
+    network_id: str,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
     user: AuthenticatedUser = Depends(require_auth),
@@ -117,7 +117,7 @@ async def get_network_notification_history(
 
 
 @router.get("/networks/{network_id}/stats")
-async def get_network_notification_stats(network_id: int, user: AuthenticatedUser = Depends(require_auth)):
+async def get_network_notification_stats(network_id: str, user: AuthenticatedUser = Depends(require_auth)):
     """Get notification statistics for a specific network."""
     return await proxy_request(
         "GET",
@@ -239,7 +239,7 @@ async def get_notification_stats(user: AuthenticatedUser = Depends(require_auth)
 
 @router.get("/ml/status")
 async def get_ml_model_status(
-    network_id: int = Query(None, description="Network ID for per-network stats"),
+    network_id: str = Query(None, description="Network ID for per-network stats"),
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """Get ML anomaly detection model status."""
@@ -289,7 +289,7 @@ async def send_global_notification(
     Send a network-scoped broadcast notification to all users in a network. Owner only.
     
     Expects a JSON body with:
-    - network_id: int - The network to broadcast to (required)
+    - network_id: str - The network UUID to broadcast to (required)
     - title: str - The notification title
     - message: str - The notification message
     - event_type: str - The type of notification (e.g., 'scheduled_maintenance', 'system_status')
@@ -301,11 +301,8 @@ async def send_global_notification(
     if not network_id:
         raise HTTPException(status_code=400, detail="network_id is required")
     
-    # Ensure network_id is an integer
-    try:
-        network_id = int(network_id)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="network_id must be an integer")
+    # Ensure network_id is a string (UUID)
+    network_id = str(network_id)
     
     # Get all network members (owner + users with permissions)
     try:
@@ -654,7 +651,7 @@ async def test_global_discord(
 
 @router.get("/users/me/networks/{network_id}/preferences")
 async def get_user_network_preferences(
-    network_id: int,
+    network_id: str,
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """Get current user's notification preferences for a specific network."""
@@ -667,7 +664,7 @@ async def get_user_network_preferences(
 
 @router.put("/users/me/networks/{network_id}/preferences")
 async def update_user_network_preferences(
-    network_id: int,
+    network_id: str,
     request: Request,
     user: AuthenticatedUser = Depends(require_auth),
 ):
@@ -683,7 +680,7 @@ async def update_user_network_preferences(
 
 @router.delete("/users/me/networks/{network_id}/preferences")
 async def delete_user_network_preferences(
-    network_id: int,
+    network_id: str,
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """Delete current user's network notification preferences (reset to defaults)."""
@@ -723,7 +720,7 @@ async def update_user_global_preferences(
 
 @router.post("/users/me/networks/{network_id}/test")
 async def test_user_network_notification(
-    network_id: int,
+    network_id: str,
     request: Request,
     user: AuthenticatedUser = Depends(require_auth),
 ):
@@ -757,7 +754,7 @@ async def test_user_global_notification(
 @router.get("/auth/discord/link")
 async def initiate_discord_oauth(
     context_type: str = Query("global", description="Context type: 'network' or 'global'"),
-    network_id: Optional[int] = Query(None, description="Network ID if context_type is 'network'"),
+    network_id: Optional[str] = Query(None, description="Network ID (UUID) if context_type is 'network'"),
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """
@@ -822,7 +819,7 @@ async def discord_oauth_callback(
 @router.delete("/users/me/discord/link")
 async def unlink_discord(
     context_type: str = Query("global", description="Context type: 'network' or 'global'"),
-    network_id: Optional[int] = Query(None, description="Network ID if context_type is 'network'"),
+    network_id: Optional[str] = Query(None, description="Network ID (UUID) if context_type is 'network'"),
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """
@@ -846,7 +843,7 @@ async def unlink_discord(
 @router.get("/users/me/discord")
 async def get_discord_info(
     context_type: str = Query("global", description="Context type: 'network' or 'global'"),
-    network_id: Optional[int] = Query(None, description="Network ID if context_type is 'network'"),
+    network_id: Optional[str] = Query(None, description="Network ID (UUID) if context_type is 'network'"),
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """
@@ -871,7 +868,7 @@ async def get_discord_info(
 
 @router.post("/networks/{network_id}/send")
 async def send_network_notification(
-    network_id: int,
+    network_id: str,
     request: FastAPIRequest,
     user: AuthenticatedUser = Depends(require_write_access),
     db: AsyncSession = Depends(get_db),

@@ -31,7 +31,7 @@ class SendNetworkNotificationRequest(BaseModel):
 
 @router.post("/networks/{network_id}/notifications/send")
 async def send_network_notification(
-    network_id: int,
+    network_id: str,
     request: SendNetworkNotificationRequest,
     db: AsyncSession = Depends(get_db),
 ):

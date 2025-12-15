@@ -43,7 +43,7 @@ class NetworkAnomalyDetector:
     
     MODEL_VERSION = "1.0.0"
     
-    def __init__(self, network_id: int, load_state: bool = True):
+    def __init__(self, network_id: str, load_state: bool = True):
         self.network_id = network_id
         # Key device stats by device_ip (scoped to this network)
         self._device_stats: Dict[str, DeviceStats] = {}
@@ -587,7 +587,7 @@ class NetworkAnomalyDetectorManager:
         
         logger.info(f"Saved {len(self._detectors)} network anomaly detectors to disk")
     
-    def get_detector(self, network_id: int) -> NetworkAnomalyDetector:
+    def get_detector(self, network_id: str) -> NetworkAnomalyDetector:
         """Get or create anomaly detector for a network"""
         if network_id not in self._detectors:
             self._detectors[network_id] = NetworkAnomalyDetector(network_id)
@@ -595,14 +595,14 @@ class NetworkAnomalyDetectorManager:
         
         return self._detectors[network_id]
     
-    def get_stats(self, network_id: int) -> MLModelStatus:
+    def get_stats(self, network_id: str) -> MLModelStatus:
         """Get ML model status for a network"""
         detector = self.get_detector(network_id)
         return detector.get_model_status()
     
     def process_health_check(
         self,
-        network_id: int,
+        network_id: str,
         device_ip: str,
         success: bool,
         latency_ms: Optional[float] = None,

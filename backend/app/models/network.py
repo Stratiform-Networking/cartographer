@@ -6,6 +6,7 @@ Schema matches cartographer-cloud for future sync compatibility.
 from datetime import datetime
 from typing import Optional
 import enum
+import uuid
 
 from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey, JSON, Integer
 from sqlalchemy import Enum as SQLEnum
@@ -14,6 +15,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from ..database import Base
+
+
+def generate_uuid() -> str:
+    """Generate a new UUID string for network IDs."""
+    return str(uuid.uuid4())
 
 
 class PermissionRole(str, enum.Enum):
@@ -33,7 +39,9 @@ class Network(Base):
     """
     __tablename__ = "networks"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=generate_uuid
+    )
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), index=True)
 
     name: Mapped[str] = mapped_column(String(100))
@@ -79,8 +87,8 @@ class NetworkPermission(Base):
     __tablename__ = "network_permissions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    network_id: Mapped[int] = mapped_column(
-        ForeignKey("networks.id", ondelete="CASCADE"), index=True
+    network_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("networks.id", ondelete="CASCADE"), index=True
     )
     user_id: Mapped[str] = mapped_column(UUID(as_uuid=False), index=True)
     role: Mapped[PermissionRole] = mapped_column(
@@ -104,8 +112,8 @@ class NetworkNotificationSettings(Base):
     __tablename__ = "network_notification_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    network_id: Mapped[int] = mapped_column(
-        ForeignKey("networks.id", ondelete="CASCADE"), unique=True, index=True
+    network_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("networks.id", ondelete="CASCADE"), unique=True, index=True
     )
     
     # Master switch for this network's notifications

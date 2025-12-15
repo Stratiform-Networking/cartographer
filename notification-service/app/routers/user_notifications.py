@@ -36,7 +36,7 @@ router = APIRouter()
 class NetworkPreferencesResponse(BaseModel):
     """Response model for network preferences"""
     user_id: str
-    network_id: int
+    network_id: str  # UUID string
     email_enabled: bool
     discord_enabled: bool
     discord_user_id: Optional[str] = None
@@ -152,7 +152,7 @@ class TestNotificationRequest(BaseModel):
 @router.get("/users/{user_id}/networks/{network_id}/preferences", response_model=NetworkPreferencesResponse)
 async def get_network_preferences(
     user_id: str,
-    network_id: int,
+    network_id: str,
     db: AsyncSession = Depends(get_db),
 ):
     """Get user's notification preferences for a specific network"""
@@ -165,7 +165,7 @@ async def get_network_preferences(
 @router.put("/users/{user_id}/networks/{network_id}/preferences", response_model=NetworkPreferencesResponse)
 async def update_network_preferences(
     user_id: str,
-    network_id: int,
+    network_id: str,
     update: NetworkPreferencesUpdate,
     db: AsyncSession = Depends(get_db),
 ):
@@ -187,7 +187,7 @@ async def update_network_preferences(
 @router.delete("/users/{user_id}/networks/{network_id}/preferences")
 async def delete_network_preferences(
     user_id: str,
-    network_id: int,
+    network_id: str,
     db: AsyncSession = Depends(get_db),
 ):
     """Delete user's network notification preferences (reset to defaults)"""
@@ -235,7 +235,7 @@ async def update_global_preferences(
 @router.post("/users/{user_id}/networks/{network_id}/test", response_model=TestNotificationResponse)
 async def test_network_notification(
     user_id: str,
-    network_id: int,
+    network_id: str,
     request: TestNotificationRequest,
     db: AsyncSession = Depends(get_db),
 ):

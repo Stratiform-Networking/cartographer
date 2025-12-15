@@ -438,7 +438,7 @@ class NotificationManager:
         message: str,
         scheduled_at: datetime,
         created_by: str,
-        network_id: int,
+        network_id: str,
         event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE,
         priority: NotificationPriority = NotificationPriority.MEDIUM,
         timezone: str = None,
@@ -578,7 +578,7 @@ class NotificationManager:
     
     # ==================== Preferences Management (per-network) ====================
     
-    def get_preferences(self, network_id: int) -> NotificationPreferences:
+    def get_preferences(self, network_id: str) -> NotificationPreferences:
         """Get notification preferences for a network (creates default if not exists)"""
         key = str(network_id)
         if key not in self._preferences:
@@ -587,7 +587,7 @@ class NotificationManager:
         
         return self._preferences[key]
     
-    def update_preferences(self, network_id: int, update: NotificationPreferencesUpdate) -> NotificationPreferences:
+    def update_preferences(self, network_id: str, update: NotificationPreferencesUpdate) -> NotificationPreferences:
         """Update notification preferences for a network"""
         prefs = self.get_preferences(network_id)
         
@@ -623,7 +623,7 @@ class NotificationManager:
         
         return self._preferences[key]
     
-    def delete_preferences(self, network_id: int) -> bool:
+    def delete_preferences(self, network_id: str) -> bool:
         """Delete preferences for a network"""
         key = str(network_id)
         if key in self._preferences:
@@ -798,7 +798,7 @@ class NotificationManager:
     
     # ==================== Rate Limiting ====================
     
-    def _check_rate_limit(self, network_id: int, prefs: NotificationPreferences) -> bool:
+    def _check_rate_limit(self, network_id: str, prefs: NotificationPreferences) -> bool:
         """Check if network is within rate limit. Returns True if allowed."""
         now = datetime.utcnow()
         hour_ago = now - timedelta(hours=1)
@@ -817,7 +817,7 @@ class NotificationManager:
         
         return True
     
-    def _record_rate_limit(self, network_id: int):
+    def _record_rate_limit(self, network_id: str):
         """Record a notification for rate limiting"""
         now = datetime.utcnow()
         key = str(network_id)
@@ -933,7 +933,7 @@ class NotificationManager:
     
     async def send_notification_to_network(
         self,
-        network_id: int,
+        network_id: str,
         event: NetworkEvent,
         force: bool = False,
     ) -> List[NotificationRecord]:
@@ -1042,7 +1042,7 @@ class NotificationManager:
     
     async def send_notification_to_network_members(
         self,
-        network_id: int,
+        network_id: str,
         user_ids: List[str],
         event: NetworkEvent,
         force: bool = False,
@@ -1271,7 +1271,7 @@ class NotificationManager:
     
     async def send_notification(
         self,
-        network_id: int,
+        network_id: str,
         event: NetworkEvent,
         force: bool = False,
     ) -> List[NotificationRecord]:
@@ -1441,7 +1441,7 @@ class NotificationManager:
     
     async def send_test_notification(
         self,
-        network_id: int,
+        network_id: str,
         request: TestNotificationRequest,
     ) -> TestNotificationResponse:
         """Send a test notification via a specific channel"""
@@ -1560,7 +1560,7 @@ class NotificationManager:
         self,
         device_ip: str,
         success: bool,
-        network_id: int,
+        network_id: str,
         latency_ms: Optional[float] = None,
         packet_loss: Optional[float] = None,
         device_name: Optional[str] = None,

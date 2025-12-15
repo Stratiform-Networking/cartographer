@@ -143,8 +143,11 @@ async def register_devices(request: RegisterDevicesRequest):
     """
     Register devices for passive monitoring.
     These devices will be checked periodically in the background.
+    
+    Args:
+        request: Contains list of IPs and network_id (UUID string)
     """
-    # Create mapping of IP to network_id
+    # Create mapping of IP to network_id (now a UUID string)
     devices_map = {ip: request.network_id for ip in request.ips}
     health_checker.set_monitored_devices(devices_map)
     

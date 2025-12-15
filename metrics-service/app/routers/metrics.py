@@ -68,7 +68,7 @@ class SpeedTestRequest(BaseModel):
 # ==================== Snapshot Endpoints ====================
 
 @router.get("/snapshot", response_model=SnapshotResponse)
-async def get_current_snapshot(network_id: Optional[int] = Query(None, description="Network ID to get snapshot for")):
+async def get_current_snapshot(network_id: Optional[str] = Query(None, description="Network ID (UUID) to get snapshot for")):
     """
     Get the current/latest network topology snapshot.
     Returns the last generated snapshot from memory.
@@ -92,7 +92,7 @@ async def get_current_snapshot(network_id: Optional[int] = Query(None, descripti
 
 
 @router.post("/snapshot/generate", response_model=SnapshotResponse)
-async def generate_snapshot(network_id: Optional[int] = Query(None, description="Network ID to generate snapshot for")):
+async def generate_snapshot(network_id: Optional[str] = Query(None, description="Network ID (UUID) to generate snapshot for")):
     """
     Trigger immediate generation of a new network topology snapshot.
     This will fetch fresh data from all services and create a new snapshot.
@@ -120,7 +120,7 @@ async def generate_snapshot(network_id: Optional[int] = Query(None, description=
 
 
 @router.post("/snapshot/publish", response_model=TriggerResponse)
-async def publish_snapshot(network_id: Optional[int] = Query(None, description="Network ID to publish snapshot for")):
+async def publish_snapshot(network_id: Optional[str] = Query(None, description="Network ID (UUID) to publish snapshot for")):
     """
     Generate and publish a new snapshot to Redis.
     This will make the snapshot available to all subscribers.
@@ -392,7 +392,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # ==================== Summary Endpoints ====================
 
 @router.get("/summary")
-async def get_summary(network_id: Optional[int] = Query(None, description="Network ID to get summary for")):
+async def get_summary(network_id: Optional[str] = Query(None, description="Network ID (UUID) to get summary for")):
     """
     Get a summary of the current network state without full details.
     Lighter weight than full snapshot for dashboards.
@@ -444,7 +444,7 @@ async def get_summary(network_id: Optional[int] = Query(None, description="Netwo
 
 
 @router.get("/nodes/{node_id}")
-async def get_node_metrics(node_id: str, network_id: Optional[int] = Query(None, description="Network ID")):
+async def get_node_metrics(node_id: str, network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
     """Get metrics for a specific node by ID.
     
     Args:
@@ -464,7 +464,7 @@ async def get_node_metrics(node_id: str, network_id: Optional[int] = Query(None,
 
 
 @router.get("/connections")
-async def get_connections(network_id: Optional[int] = Query(None, description="Network ID")):
+async def get_connections(network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
     """Get all node connections from the current snapshot.
     
     Args:
@@ -486,7 +486,7 @@ async def get_connections(network_id: Optional[int] = Query(None, description="N
 
 
 @router.get("/gateways")
-async def get_gateways(network_id: Optional[int] = Query(None, description="Network ID")):
+async def get_gateways(network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
     """Get ISP information for all gateway devices.
     
     Args:
@@ -508,7 +508,7 @@ async def get_gateways(network_id: Optional[int] = Query(None, description="Netw
 
 
 @router.get("/debug/layout")
-async def debug_layout(network_id: Optional[int] = Query(None, description="Network ID")):
+async def debug_layout(network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
     """Debug endpoint to see raw layout data from backend.
     
     Args:

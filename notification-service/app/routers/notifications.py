@@ -49,7 +49,7 @@ router = APIRouter()
 
 @router.get("/networks/{network_id}/preferences", response_model=NotificationPreferences)
 async def get_network_preferences(
-    network_id: int,
+    network_id: str,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
     """Get notification preferences for a specific network"""
@@ -58,7 +58,7 @@ async def get_network_preferences(
 
 @router.put("/networks/{network_id}/preferences", response_model=NotificationPreferences)
 async def update_network_preferences(
-    network_id: int,
+    network_id: str,
     update: NotificationPreferencesUpdate,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
@@ -68,7 +68,7 @@ async def update_network_preferences(
 
 @router.delete("/networks/{network_id}/preferences")
 async def delete_network_preferences(
-    network_id: int,
+    network_id: str,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
     """Delete notification preferences for a network (reset to defaults)"""
@@ -83,7 +83,7 @@ async def get_preferences_legacy(
 ):
     """DEPRECATED: Use /networks/{network_id}/preferences instead"""
     # Return default preferences for backwards compatibility
-    return NotificationPreferences(network_id=0, owner_user_id=x_user_id)
+    return NotificationPreferences(network_id="00000000-0000-0000-0000-000000000000", owner_user_id=x_user_id)
 
 
 # ==================== Service Status ====================
@@ -142,7 +142,7 @@ async def get_discord_invite_url():
 
 @router.post("/networks/{network_id}/test", response_model=TestNotificationResponse)
 async def send_test_notification(
-    network_id: int,
+    network_id: str,
     request: TestNotificationRequest,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
@@ -154,7 +154,7 @@ async def send_test_notification(
 
 @router.get("/networks/{network_id}/history", response_model=NotificationHistoryResponse)
 async def get_network_notification_history(
-    network_id: int,
+    network_id: str,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
     x_user_id: str = Header(..., description="User ID from auth service"),
@@ -165,7 +165,7 @@ async def get_network_notification_history(
 
 @router.get("/networks/{network_id}/stats", response_model=NotificationStatsResponse)
 async def get_network_notification_stats(
-    network_id: int,
+    network_id: str,
     x_user_id: str = Header(..., description="User ID from auth service"),
 ):
     """Get notification statistics for a specific network"""
@@ -175,7 +175,7 @@ async def get_network_notification_stats(
 # ==================== Anomaly Detection ====================
 
 @router.get("/ml/status", response_model=MLModelStatus)
-async def get_ml_model_status(network_id: Optional[int] = Query(None, description="Network ID for per-network stats")):
+async def get_ml_model_status(network_id: Optional[str] = Query(None, description="Network ID (UUID) for per-network stats")):
     """Get ML anomaly detection model status"""
     if network_id is not None:
         # Return per-network stats
@@ -188,7 +188,7 @@ async def get_ml_model_status(network_id: Optional[int] = Query(None, descriptio
 @router.get("/ml/baseline/{device_ip}", response_model=Optional[DeviceBaseline])
 async def get_device_baseline(
     device_ip: str,
-    network_id: int = Query(..., description="Network ID this device belongs to"),
+    network_id: str = Query(..., description="Network ID (UUID) this device belongs to"),
 ):
     """Get learned baseline for a specific device in a network"""
     detector = network_anomaly_detector_manager.get_detector(network_id)
@@ -208,7 +208,7 @@ async def mark_false_positive(event_id: str):
 @router.delete("/ml/baseline/{device_ip}")
 async def reset_device_baseline(
     device_ip: str,
-    network_id: int = Query(..., description="Network ID this device belongs to"),
+    network_id: str = Query(..., description="Network ID (UUID) this device belongs to"),
 ):
     """Reset learned baseline for a specific device in a network"""
     detector = network_anomaly_detector_manager.get_detector(network_id)
@@ -219,7 +219,7 @@ async def reset_device_baseline(
 
 
 @router.delete("/ml/reset")
-async def reset_all_ml_data(network_id: Optional[int] = Query(None, description="Network ID to reset (or all if not provided)")):
+async def reset_all_ml_data(network_id: Optional[str] = Query(None, description="Network ID (UUID) to reset (or all if not provided)")):
     """Reset ML model data (use with caution)"""
     if network_id is not None:
         # Reset specific network
@@ -236,7 +236,7 @@ async def reset_all_ml_data(network_id: Optional[int] = Query(None, description=
 @router.post("/ml/sync-devices")
 async def sync_current_devices(
     device_ips: List[str],
-    network_id: int = Query(..., description="Network ID these devices belong to"),
+    network_id: str = Query(..., description="Network ID (UUID) these devices belong to"),
 ):
     """
     Sync the list of devices currently in a network.
@@ -261,7 +261,7 @@ async def sync_current_devices(
 async def process_health_check(
     device_ip: str,
     success: bool,
-    network_id: int,
+    network_id: str,
     latency_ms: Optional[float] = None,
     packet_loss: Optional[float] = None,
     device_name: Optional[str] = None,
@@ -331,7 +331,7 @@ async def process_health_check(
 
 @router.post("/networks/{network_id}/send-notification")
 async def send_network_notification(
-    network_id: int,
+    network_id: str,
     request: Request,
 ):
     """

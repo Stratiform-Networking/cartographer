@@ -100,7 +100,7 @@ async def register_devices(request: Request, user: AuthenticatedUser = Depends(r
     
     Expects JSON body with:
     - ips: List[str] - Device IP addresses
-    - network_id: int - The network these devices belong to (required)
+    - network_id: str - The network UUID these devices belong to (required)
     """
     body = await request.json()
     # Validate network_id is present

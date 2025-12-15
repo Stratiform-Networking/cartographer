@@ -33,7 +33,7 @@ class UserPreferencesService:
         self,
         db: AsyncSession,
         user_id: str,
-        network_id: int,
+        network_id: str,
     ) -> Optional[UserNetworkNotificationPrefs]:
         """Get user's notification preferences for a specific network"""
         result = await db.execute(
@@ -49,7 +49,7 @@ class UserPreferencesService:
         self,
         db: AsyncSession,
         user_id: str,
-        network_id: int,
+        network_id: str,
         user_email: Optional[str] = None,
     ) -> UserNetworkNotificationPrefs:
         """Get or create user's notification preferences for a network"""
@@ -90,7 +90,7 @@ class UserPreferencesService:
         self,
         db: AsyncSession,
         user_id: str,
-        network_id: int,
+        network_id: str,
         update_data: Dict[str, Any],
     ) -> UserNetworkNotificationPrefs:
         """Update user's network notification preferences"""
@@ -111,7 +111,7 @@ class UserPreferencesService:
         self,
         db: AsyncSession,
         user_id: str,
-        network_id: int,
+        network_id: str,
     ) -> bool:
         """Delete user's network notification preferences"""
         prefs = await self.get_network_preferences(db, user_id, network_id)
@@ -210,7 +210,7 @@ class UserPreferencesService:
     async def get_users_with_enabled_notifications(
         self,
         db: AsyncSession,
-        network_id: int,
+        network_id: str,
         notification_type: NotificationType,
     ) -> List[UserNetworkNotificationPrefs]:
         """Get all users in a network who have this notification type enabled"""
@@ -273,7 +273,7 @@ class UserPreferencesService:
     async def get_network_member_user_ids(
         self,
         db: AsyncSession,
-        network_id: int,
+        network_id: str,
     ) -> List[str]:
         """Get all user IDs who are members of a network (owner + users with permissions)"""
         try:

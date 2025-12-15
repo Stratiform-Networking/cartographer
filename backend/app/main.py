@@ -17,6 +17,7 @@ from .services.http_client import http_pool
 from .services.usage_middleware import UsageTrackingMiddleware
 from .database import init_db
 from .migrations.migrate_layout import migrate_layout_to_database
+from .migrations.migrate_network_id_to_uuid import migrate_network_ids_to_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,14 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application - initializing database...")
     await init_db()
     logger.info("Database initialized")
+    
+    # Run migration for network IDs (integer -> UUID)
+    try:
+        uuid_migrated = await migrate_network_ids_to_uuid()
+        if uuid_migrated:
+            logger.info("Network ID UUID migration completed")
+    except Exception as e:
+        logger.warning(f"Network ID UUID migration failed (non-fatal): {e}")
     
     # Run migration for existing layouts
     try:

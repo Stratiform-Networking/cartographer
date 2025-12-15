@@ -122,7 +122,7 @@ class NotificationDispatchService:
         self,
         db: AsyncSession,
         user_id: str,
-        network_id: int,
+        network_id: str,
         event: NetworkEvent,
         user_email: Optional[str] = None,
     ) -> List[NotificationRecord]:
@@ -221,7 +221,7 @@ class NotificationDispatchService:
     async def send_to_network_users(
         self,
         db: AsyncSession,
-        network_id: int,
+        network_id: str,
         user_ids: List[str],
         event: NetworkEvent,
         scheduled_at: Optional[datetime] = None,

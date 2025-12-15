@@ -3,7 +3,7 @@ import axios from "axios";
 import type { SavedLayout } from "./useMapLayout";
 
 export interface Network {
-	id: number;
+	id: string; // UUID string
 	name: string;
 	description: string | null;
 	is_active: boolean;
@@ -16,7 +16,7 @@ export interface Network {
 }
 
 export interface NetworkLayoutResponse {
-	id: number;
+	id: string; // UUID string
 	name: string;
 	layout_data: SavedLayout | null;
 	updated_at: string;
@@ -37,7 +37,7 @@ export type NetworkPermissionRole = "viewer" | "editor";
 
 export interface NetworkPermission {
 	id: number;
-	network_id: number;
+	network_id: string; // UUID string
 	user_id: string;
 	role: NetworkPermissionRole;
 	created_at: string;
@@ -111,7 +111,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function getNetwork(id: number): Promise<Network> {
+	async function getNetwork(id: string): Promise<Network> {
 		try {
 			const response = await axios.get<Network>(`/api/networks/${id}`);
 			return response.data;
@@ -123,7 +123,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function updateNetwork(id: number, data: UpdateNetworkData): Promise<Network> {
+	async function updateNetwork(id: string, data: UpdateNetworkData): Promise<Network> {
 		try {
 			const response = await axios.patch<Network>(`/api/networks/${id}`, data);
 			// Update local state
@@ -138,7 +138,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function deleteNetwork(id: number): Promise<void> {
+	async function deleteNetwork(id: string): Promise<void> {
 		try {
 			await axios.delete(`/api/networks/${id}`);
 			// Remove from local state
@@ -149,7 +149,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function getNetworkLayout(id: number): Promise<NetworkLayoutResponse> {
+	async function getNetworkLayout(id: string): Promise<NetworkLayoutResponse> {
 		try {
 			const response = await axios.get<NetworkLayoutResponse>(`/api/networks/${id}/layout`);
 			return response.data;
@@ -159,7 +159,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function saveNetworkLayout(id: number, layoutData: SavedLayout): Promise<NetworkLayoutResponse> {
+	async function saveNetworkLayout(id: string, layoutData: SavedLayout): Promise<NetworkLayoutResponse> {
 		try {
 			const response = await axios.post<NetworkLayoutResponse>(`/api/networks/${id}/layout`, {
 				layout_data: layoutData,
@@ -179,7 +179,7 @@ export function useNetworks() {
 
 	// ==================== Network Permission Management ====================
 
-	async function listNetworkPermissions(networkId: number): Promise<NetworkPermission[]> {
+	async function listNetworkPermissions(networkId: string): Promise<NetworkPermission[]> {
 		try {
 			const response = await axios.get<NetworkPermission[]>(`/api/networks/${networkId}/permissions`);
 			return response.data;
@@ -189,7 +189,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function addNetworkPermission(networkId: number, data: CreateNetworkPermission): Promise<NetworkPermission> {
+	async function addNetworkPermission(networkId: string, data: CreateNetworkPermission): Promise<NetworkPermission> {
 		try {
 			const response = await axios.post<NetworkPermission>(`/api/networks/${networkId}/permissions`, data);
 			return response.data;
@@ -199,7 +199,7 @@ export function useNetworks() {
 		}
 	}
 
-	async function removeNetworkPermission(networkId: number, userId: string): Promise<void> {
+	async function removeNetworkPermission(networkId: string, userId: string): Promise<void> {
 		try {
 			await axios.delete(`/api/networks/${networkId}/permissions/${userId}`);
 		} catch (e: any) {

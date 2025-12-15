@@ -111,7 +111,7 @@ def get_default_priority_for_type(notification_type: NotificationType) -> Notifi
 class NotificationPreferences(BaseModel):
     """Network's notification preferences (per-network settings)"""
     # Network identification - notifications are scoped per-network
-    network_id: int
+    network_id: str  # UUID string
     network_name: Optional[str] = None  # For display purposes
     
     # Owner's user_id for system-wide notifications (cartographer up/down)
@@ -207,7 +207,7 @@ class NetworkEvent(BaseModel):
     priority: NotificationPriority = NotificationPriority.MEDIUM
     
     # Network context - notifications are per-network
-    network_id: Optional[int] = None
+    network_id: Optional[str] = None  # UUID string
     network_name: Optional[str] = None
     
     # Device information
@@ -234,7 +234,7 @@ class NotificationRecord(BaseModel):
     """Record of a sent notification"""
     notification_id: str
     event_id: str
-    network_id: int  # Which network this notification was for
+    network_id: str  # UUID string - which network this notification was for
     channel: NotificationChannel
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     
@@ -388,7 +388,7 @@ class ScheduledBroadcast(BaseModel):
     message: str
     event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE
     priority: NotificationPriority = NotificationPriority.MEDIUM
-    network_id: int  # The network this broadcast belongs to (required)
+    network_id: str  # UUID string - the network this broadcast belongs to (required)
     scheduled_at: datetime
     timezone: Optional[str] = None  # IANA timezone name (e.g., "America/New_York") for display
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -405,7 +405,7 @@ class ScheduledBroadcastCreate(BaseModel):
     message: str
     event_type: NotificationType = NotificationType.SCHEDULED_MAINTENANCE
     priority: NotificationPriority = NotificationPriority.MEDIUM
-    network_id: int  # The network this broadcast belongs to (required)
+    network_id: str  # UUID string - the network this broadcast belongs to (required)
     scheduled_at: datetime
     timezone: Optional[str] = None  # IANA timezone name for display purposes
 

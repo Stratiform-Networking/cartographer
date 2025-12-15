@@ -61,13 +61,13 @@ async def list_models(provider: str, user: AuthenticatedUser = Depends(require_a
 
 @router.get("/context")
 async def get_context(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Get network context summary. Requires authentication.
     
     Args:
-        network_id: Optional network ID for multi-tenant mode.
+        network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
@@ -77,13 +77,13 @@ async def get_context(
 
 @router.post("/context/refresh")
 async def refresh_context(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Refresh cached network context. Requires authentication.
     
     Args:
-        network_id: Optional network ID for multi-tenant mode.
+        network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
@@ -93,13 +93,13 @@ async def refresh_context(
 
 @router.get("/context/debug")
 async def get_context_debug(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug: Get full context string sent to AI. Requires authentication.
     
     Args:
-        network_id: Optional network ID for multi-tenant mode.
+        network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
@@ -109,13 +109,13 @@ async def get_context_debug(
 
 @router.get("/context/raw")
 async def get_context_raw(
-    network_id: Optional[int] = None,
+    network_id: Optional[str] = None,
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug: Get raw snapshot data from metrics. Requires authentication.
     
     Args:
-        network_id: Optional network ID for multi-tenant mode.
+        network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:

@@ -114,7 +114,6 @@ services:
     environment:
       - CORS_ORIGINS=*
       - AUTH_DATA_DIR=/app/data
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@postgres:5432/${POSTGRES_DB:-cartographer}
       # IMPORTANT: Set a secure secret in production!
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION_HOURS=24

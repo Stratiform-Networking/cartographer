@@ -15,7 +15,7 @@ from .routers.notification_proxy import router as notification_proxy_router
 from .routers.networks import router as networks_router
 from .services.http_client import http_pool
 from .services.usage_middleware import UsageTrackingMiddleware
-from .database import init_db
+from .database import init_db, wait_for_db
 from .migrations.migrate_layout import migrate_layout_to_database
 from .migrations.migrate_network_id_to_uuid import migrate_network_ids_to_uuid
 
@@ -32,8 +32,12 @@ async def lifespan(app: FastAPI):
     Application lifespan manager.
     Handles startup and shutdown tasks including HTTP client pool warm-up.
     """
-    # Startup: Initialize database
-    logger.info("Starting application - initializing database...")
+    # Startup: Wait for database to become available (handles transient DNS/network issues)
+    logger.info("Starting application - waiting for database...")
+    await wait_for_db(timeout=60.0)
+    
+    # Initialize database tables
+    logger.info("Initializing database tables...")
     await init_db()
     logger.info("Database initialized")
     

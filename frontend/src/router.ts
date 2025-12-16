@@ -30,7 +30,8 @@ const routes = [
 ];
 
 const router = createRouter({
-	history: createWebHistory(),
+	// Use BASE_URL from Vite (set via VITE_BASE_PATH env var, defaults to /)
+	history: createWebHistory(import.meta.env.BASE_URL),
 	routes
 });
 

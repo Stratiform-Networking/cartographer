@@ -299,54 +299,95 @@ async function handleLinkDiscordWithContext(contextType: 'network' | 'global', n
 		
 		let linkCompleted = false;
 		
-		// Listen for message from popup
-		const messageHandler = async (event: MessageEvent) => {
-			if (event.origin !== window.location.origin) {
-				return;
+		// Handler for OAuth completion (triggered by App.vue via postMessage or localStorage)
+		const oauthCompleteHandler = async (event: CustomEvent) => {
+			const data = event.detail;
+			if (!data || linkCompleted) return;
+			
+			// Check if this callback matches our context (or accept any if no context specified)
+			const callbackContextType = data.context_type || 'global';
+			const callbackNetworkId = data.network_id;
+			
+			// Only handle if it matches our initiated context
+			if (contextType === 'network' && networkId !== undefined) {
+				if (callbackContextType !== 'network' || callbackNetworkId !== networkId) {
+					// This callback is for a different context, ignore
+					return;
+				}
+			} else if (contextType === 'global') {
+				if (callbackContextType !== 'global') {
+					return;
+				}
 			}
 			
-			if (event.data && event.data.type === 'discord_oauth_callback') {
-				window.removeEventListener('message', messageHandler);
-				linkCompleted = true;
-				
-				if (event.data.status === 'success') {
-					// Reload data for the specific context
-					if (contextType === 'network' && networkId !== undefined) {
-						networkDiscordLink.value = await getDiscordLink('network', networkId);
-					} else {
-						globalDiscordLink.value = await getDiscordLink('global');
-					}
-					const contextLabel = contextType === 'network' ? 'network' : 'global';
-					showToast(true, `Discord account linked successfully for ${contextLabel}!`);
+			linkCompleted = true;
+			window.removeEventListener('discord-oauth-complete', oauthCompleteHandler as EventListener);
+			
+			if (data.status === 'success') {
+				// Reload data for the specific context
+				if (contextType === 'network' && networkId !== undefined) {
+					networkDiscordLink.value = await getDiscordLink('network', networkId);
 				} else {
-					showToast(false, 'Discord linking failed', event.data.message || 'Unknown error');
+					globalDiscordLink.value = await getDiscordLink('global');
 				}
+				const contextLabel = contextType === 'network' ? 'network' : 'global';
+				showToast(true, `Discord account linked successfully for ${contextLabel}!`);
+			} else {
+				showToast(false, 'Discord linking failed', data.message || 'Unknown error');
 			}
 		};
 		
-		window.addEventListener('message', messageHandler);
+		// Listen for the custom event dispatched by App.vue (works for both postMessage and localStorage)
+		window.addEventListener('discord-oauth-complete', oauthCompleteHandler as EventListener);
 		
-		// Fallback: Check when popup closes (instead of aggressive polling)
+		// Fallback: Check when popup closes (in case the event wasn't received)
 		const checkPopupClosed = setInterval(async () => {
 			if (popup.closed) {
 				clearInterval(checkPopupClosed);
-				window.removeEventListener('message', messageHandler);
 				
-				// Only reload if we haven't already handled via postMessage
-				if (!linkCompleted) {
-					if (contextType === 'network' && networkId !== undefined) {
-						networkDiscordLink.value = await getDiscordLink('network', networkId);
-					} else {
-						globalDiscordLink.value = await getDiscordLink('global');
+				// Give a small delay for storage event to propagate
+				setTimeout(async () => {
+					window.removeEventListener('discord-oauth-complete', oauthCompleteHandler as EventListener);
+					
+					// Only reload if we haven't already handled via event
+					if (!linkCompleted) {
+						// Check localStorage directly as final fallback
+						const storedData = localStorage.getItem('discord_oauth_callback');
+						if (storedData) {
+							try {
+								const data = JSON.parse(storedData);
+								localStorage.removeItem('discord_oauth_callback');
+								if (data.status === 'success') {
+									if (contextType === 'network' && networkId !== undefined) {
+										networkDiscordLink.value = await getDiscordLink('network', networkId);
+									} else {
+										globalDiscordLink.value = await getDiscordLink('global');
+									}
+									showToast(true, 'Discord account linked successfully!');
+								} else {
+									showToast(false, 'Discord linking failed', data.message || 'Unknown error');
+								}
+								return;
+							} catch (e) {
+								// Invalid JSON
+							}
+						}
+						
+						// No stored data, just reload the link status
+						if (contextType === 'network' && networkId !== undefined) {
+							networkDiscordLink.value = await getDiscordLink('network', networkId);
+						} else {
+							globalDiscordLink.value = await getDiscordLink('global');
+						}
 					}
-				}
+				}, 500);
 			}
 		}, 500);
 		
 		// Stop checking after 5 minutes
 		setTimeout(() => {
 			clearInterval(checkPopupClosed);
-			window.removeEventListener('message', messageHandler);
+			window.removeEventListener('discord-oauth-complete', oauthCompleteHandler as EventListener);
 		}, 300000);
 	} catch (e: any) {
 		showToast(false, 'Failed to initiate Discord OAuth', e.message || 'Unknown error');

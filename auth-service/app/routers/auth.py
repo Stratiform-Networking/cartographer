@@ -144,6 +144,76 @@ async def get_user_internal(user_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
+# ==================== Registration Endpoint (Cloud) ====================
+
+@router.post("/register", response_model=LoginResponse, status_code=201)
+async def register(request: UserCreate, db: AsyncSession = Depends(get_db)):
+    """
+    Open registration endpoint for cloud deployments.
+    Creates a new user with 'member' role and returns access token.
+    
+    This endpoint allows public registration without requiring an invite.
+    For self-hosted deployments, use the invite system instead.
+    """
+    import os
+    
+    # Check if open registration is enabled (for cloud deployments)
+    allow_registration = os.environ.get("ALLOW_OPEN_REGISTRATION", "false").lower() == "true"
+    if not allow_registration:
+        raise HTTPException(
+            status_code=403,
+            detail="Open registration is disabled. Use an invite to create an account."
+        )
+    
+    # Check for existing username/email
+    existing_user = await auth_service.get_user_by_username(db, request.username)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    existing_email = await auth_service.get_user_by_email(db, request.email)
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already in use")
+    
+    # Create user with member role
+    try:
+        from ..services.auth_service import hash_password_async
+        from ..db_models import User
+        import uuid
+        
+        password_hash = await hash_password_async(request.password)
+        
+        user = User(
+            id=str(uuid.uuid4()),
+            username=request.username.lower(),
+            first_name=request.first_name,
+            last_name=request.last_name,
+            email=request.email.lower(),
+            role=UserRole.MEMBER,
+            hashed_password=password_hash,
+            is_active=True,
+            is_verified=True,
+        )
+        
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"User registered: {user.username}")
+        
+        # Create access token
+        token, expires_in = auth_service.create_access_token(user)
+        
+        return LoginResponse(
+            access_token=token,
+            token_type="bearer",
+            expires_in=expires_in,
+            user=auth_service._to_response(user)
+        )
+    except Exception as e:
+        logger.error(f"Registration failed: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+
 # ==================== Authentication Endpoints ====================
 
 @router.post("/login", response_model=LoginResponse)

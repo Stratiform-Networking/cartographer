@@ -2310,7 +2310,7 @@ async function loadCartographerStatus() {
 			cartographerStatusEmail.value = response.data.email_address;
 		}
 		// Load global prefs from subscription
-		globalPrefs.value.email_enabled = response.data.email_enabled ?? true;
+		globalPrefs.value.email_enabled = response.data.email_enabled ?? false;
 		globalPrefs.value.discord_enabled = response.data.discord_enabled ?? false;
 		globalPrefs.value.discord_delivery_method = response.data.discord_delivery_method ?? 'dm';
 		globalPrefs.value.discord_guild_id = response.data.discord_guild_id ?? '';

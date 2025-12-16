@@ -45,7 +45,7 @@ async def get_cartographer_status_subscription(
             "cartographer_down_enabled": True,
             "cartographer_up_priority": "medium",
             "cartographer_down_priority": "critical",
-            "email_enabled": True,
+            "email_enabled": False,
             "discord_enabled": False,
             "discord_delivery_method": "dm",
             "discord_guild_id": None,
@@ -92,7 +92,7 @@ class CreateSubscriptionRequest(BaseModel):
     cartographer_down_enabled: bool = True
     cartographer_up_priority: str = "medium"
     cartographer_down_priority: str = "critical"
-    email_enabled: bool = True
+    email_enabled: bool = False
     discord_enabled: bool = False
     discord_delivery_method: str = "dm"
     discord_guild_id: Optional[str] = None

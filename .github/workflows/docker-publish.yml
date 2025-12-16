@@ -4,23 +4,87 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+    paths:
+      - 'VERSION'
   workflow_dispatch:
     inputs:
       tag:
         description: 'Tag to use for images (e.g., v0.14.12)'
-        required: true
-        default: 'latest'
+        required: false
+        default: ''
 
 env:
   REGISTRY: ghcr.io
   OWNER: devartech
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
+  # Check if version changed and create tag if needed
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from VERSION file
+        id: get-version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: v$VERSION"
+
+      - name: Check if tag already exists
+        id: check
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          
+          # For tag pushes, always build
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "Tag push detected, will build"
+            exit 0
+          fi
+          
+          # For workflow_dispatch with custom tag
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.tag }}" ]]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "Manual dispatch with custom tag, will build"
+            exit 0
+          fi
+          
+          # Check if this version tag already exists
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "Tag $VERSION already exists, skipping build"
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "New version $VERSION detected, will build"
+          fi
+
+      - name: Create and push tag
+        if: steps.check.outputs.should_build == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-and-push:
+    needs: check-version
+    if: needs.check-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -58,13 +122,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract version from tag
+      - name: Determine version tag
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
             VERSION="${{ github.event.inputs.tag }}"
-          else
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="${{ needs.check-version.outputs.version }}"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Building with version: $VERSION"
@@ -75,14 +141,12 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.OWNER }}/${{ matrix.name }}
           tags: |
-            # Tag with version (e.g., v0.14.12)
-            type=semver,pattern={{version}}
-            # Tag with major.minor (e.g., v0.14)
-            type=semver,pattern={{major}}.{{minor}}
-            # Tag as latest on version tags
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            # For manual dispatch
-            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            # Tag with full version (e.g., v0.14.12)
+            type=raw,value=${{ steps.version.outputs.VERSION }}
+            # Tag with major.minor (e.g., 0.14)
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.VERSION }}
+            # Always tag as latest
+            type=raw,value=latest
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -95,4 +159,3 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-

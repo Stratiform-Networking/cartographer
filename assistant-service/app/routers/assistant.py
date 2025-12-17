@@ -557,19 +557,13 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
         raise HTTPException(status_code=500, detail=str(e))
     
     async def generate():
-        import traceback
-        
         try:
             # Build system prompt with network context
-            logger.info(f"[Stream] Starting generate for provider={request.provider}, model={request.model}")
-            
             if request.include_network_context:
-                logger.info("[Stream] Building network context...")
                 context, summary = await metrics_context_service.build_context_string(network_id=request.network_id)
                 system_prompt = SYSTEM_PROMPT_TEMPLATE.format(network_context=context)
                 
                 # Send context summary first
-                logger.info(f"[Stream] Sending context summary: {len(context)} chars")
                 yield f"data: {json.dumps({'type': 'context', 'summary': summary})}\n\n"
             else:
                 system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
@@ -577,7 +571,6 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
                 )
             
             # Convert conversation history
-            logger.info(f"[Stream] Converting {len(request.conversation_history)} history messages")
             messages = [
                 ProviderChatMessage(role=msg.role.value, content=msg.content)
                 for msg in request.conversation_history
@@ -585,23 +578,17 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
             
             # Add current message
             messages.append(ProviderChatMessage(role="user", content=request.message))
-            logger.info(f"[Stream] Total messages: {len(messages)}, calling stream_chat...")
             
             # Stream response
-            chunk_count = 0
             async for chunk in provider.stream_chat(messages, system_prompt):
-                chunk_count += 1
                 yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
             
-            logger.info(f"[Stream] Completed, sent {chunk_count} chunks")
             # Send done signal
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             
         except Exception as e:
-            error_msg = str(e) if str(e) else f"{type(e).__name__}: (no message)"
-            logger.error(f"[Stream] Error ({type(e).__name__}): {error_msg}")
-            logger.error(f"[Stream] Full traceback:\n{traceback.format_exc()}")
-            yield f"data: {json.dumps({'type': 'error', 'error': error_msg})}\n\n"
+            logger.error(f"Stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
     
     return StreamingResponse(
         generate(),

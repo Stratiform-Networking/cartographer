@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..dependencies import AuthenticatedUser, require_auth
+from ..dependencies import AuthenticatedUser, require_auth, require_auth_with_rate_limit
 from ..models import (
     ModelProvider,
     ChatRequest,
@@ -34,7 +34,6 @@ from ..providers import (
 )
 from ..providers.base import ChatMessage as ProviderChatMessage
 from ..services.metrics_context import metrics_context_service
-from ..services.rate_limit import rate_limit_per_day
 
 logger = logging.getLogger(__name__)
 
@@ -473,9 +472,13 @@ async def get_context_raw(
 
 # ==================== Chat Endpoints ====================
 
-@router.post("/chat", response_model=ChatResponse, dependencies=[Depends(rate_limit_per_day(CHAT_LIMIT_PER_DAY))])
-async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_auth)):
-    """Non-streaming chat endpoint. Requires authentication."""
+# Create a rate-limited auth dependency for chat endpoints
+require_chat_auth = require_auth_with_rate_limit(CHAT_LIMIT_PER_DAY, "chat")
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_chat_auth)):
+    """Non-streaming chat endpoint. Requires authentication and is rate-limited."""
     # Get provider
     provider_config = ProviderConfig(
         model=request.model,
@@ -527,9 +530,9 @@ async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_a
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(require_auth), dependencies=[Depends(rate_limit_per_day(CHAT_LIMIT_PER_DAY))]):
+async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(require_chat_auth)):
     """
-    Streaming chat endpoint. Requires authentication.
+    Streaming chat endpoint. Requires authentication and is rate-limited.
     Returns Server-Sent Events (SSE) with response chunks.
     """
     # Get provider

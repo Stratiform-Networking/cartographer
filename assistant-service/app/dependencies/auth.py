@@ -160,3 +160,24 @@ async def require_auth(
         )
     return user
 
+
+def require_auth_with_rate_limit(limit: int, endpoint: str):
+    """
+    Create a dependency that requires authentication AND enforces a daily rate limit.
+    
+    Args:
+        limit: Maximum requests per day
+        endpoint: Endpoint identifier for the rate limit key (e.g., "chat")
+    
+    Returns:
+        A FastAPI dependency function
+    """
+    async def _dependency(
+        user: AuthenticatedUser = Depends(require_auth)
+    ) -> AuthenticatedUser:
+        from ..services.rate_limit import check_rate_limit
+        await check_rate_limit(user.user_id, endpoint, limit)
+        return user
+    
+    return _dependency
+

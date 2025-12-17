@@ -6,6 +6,7 @@ from .auth import (
     UserRole,
     get_current_user,
     require_auth,
+    require_auth_with_rate_limit,
 )
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "UserRole",
     "get_current_user",
     "require_auth",
+    "require_auth_with_rate_limit",
 ]
 

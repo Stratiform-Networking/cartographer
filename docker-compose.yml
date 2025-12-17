@@ -201,6 +201,8 @@ services:
       - ASSISTANT_CHAT_LIMIT_PER_DAY=${ASSISTANT_CHAT_LIMIT_PER_DAY:-99999}
     restart: unless-stopped
     depends_on:
+      redis:
+        condition: service_healthy
       metrics:
         condition: service_healthy
     healthcheck:

@@ -35,39 +35,53 @@ end
 return v
 """
 
-def rate_limit_per_day(
-    limit: int,
-    key_fn: Optional[Callable[[Request], str]] = None,
-):
+
+async def check_rate_limit(user_id: str, endpoint: str, limit: int) -> None:
     """
-    Returns a FastAPI dependency that enforces a fixed-window daily limit.
+    Check if user has exceeded their daily rate limit.
+    Raises HTTPException with 429 if limit exceeded.
+    
+    Args:
+        user_id: The user's ID
+        endpoint: Endpoint identifier for the rate limit key
+        limit: Maximum requests per day
     """
-    async def _dep(request: Request):
-        redis = await get_redis()
+    redis = await get_redis()
+    
+    # Include date so keys naturally partition by day
+    day = datetime.now(timezone.utc).date().isoformat()
+    key = f"rl:assistant:{user_id}:{endpoint}:{day}"
+    
+    ttl = _seconds_until_utc_midnight()
+    count = await redis.eval(LUA_INCR_EXPIRE, 1, key, ttl)
+    
+    if int(count) > limit:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily limit exceeded for this endpoint ({limit}/day). Try again tomorrow.",
+            headers={"Retry-After": str(ttl)},
+        )
 
-        if key_fn:
-            key = key_fn(request)
-        else:
-            # expects auth to have put user somewhere; see router usage below
-            user = getattr(request.state, "user", None)
-            user_id = getattr(user, "id", None) or getattr(user, "user_id", None)
-            if not user_id:
-                # If you can't reliably access user here, pass your own key_fn
-                raise HTTPException(status_code=500, detail="Rate limit missing user identity")
 
-            # include date so keys naturally partition by day
-            day = datetime.now(timezone.utc).date().isoformat()
-            key = f"rl:assistant:{user_id}:{request.method}:{request.url.path}:{day}"
-
-        ttl = _seconds_until_utc_midnight()
-        count = await redis.eval(LUA_INCR_EXPIRE, 1, key, ttl)
-
-        if int(count) > limit:
-            # Optional: include a Retry-After hint
-            raise HTTPException(
-                status_code=429,
-                detail=f"Daily limit exceeded for this endpoint ({limit}/day). Try again later.",
-                headers={"Retry-After": str(ttl)},
-            )
-
-    return _dep
+async def get_rate_limit_status(user_id: str, endpoint: str, limit: int) -> dict:
+    """
+    Get the current rate limit status for a user.
+    
+    Returns:
+        dict with 'used', 'limit', 'remaining', 'resets_in_seconds'
+    """
+    redis = await get_redis()
+    
+    day = datetime.now(timezone.utc).date().isoformat()
+    key = f"rl:assistant:{user_id}:{endpoint}:{day}"
+    
+    count = await redis.get(key)
+    used = int(count) if count else 0
+    ttl = _seconds_until_utc_midnight()
+    
+    return {
+        "used": used,
+        "limit": limit,
+        "remaining": max(0, limit - used),
+        "resets_in_seconds": ttl,
+    }

@@ -35,8 +35,8 @@ class TestUserRole:
     def test_role_values(self):
         """Should have expected enum values"""
         assert UserRole.OWNER.value == "owner"
-        assert UserRole.READ_WRITE.value == "readwrite"
-        assert UserRole.READ_ONLY.value == "readonly"
+        assert UserRole.ADMIN.value == "admin"
+        assert UserRole.MEMBER.value == "member"
 
 
 class TestUserBase:
@@ -111,10 +111,10 @@ class TestUserCreate:
             last_name="User",
             email="new@test.com",
             password="securepass123",
-            role=UserRole.READ_ONLY
+            role=UserRole.MEMBER
         )
         assert user.password == "securepass123"
-        assert user.role == UserRole.READ_ONLY
+        assert user.role == UserRole.MEMBER
     
     def test_password_min_length(self):
         """Should require minimum password length"""
@@ -137,7 +137,7 @@ class TestUserCreate:
             email="new@test.com",
             password="securepass123"
         )
-        assert user.role == UserRole.READ_ONLY
+        assert user.role == UserRole.MEMBER
 
 
 class TestOwnerSetupRequest:
@@ -194,7 +194,7 @@ class TestUserResponse:
             first_name="Test",
             last_name="User",
             email="test@test.com",
-            role=UserRole.READ_ONLY,
+            role=UserRole.MEMBER,
             created_at=now,
             updated_at=now,
             is_active=True
@@ -220,7 +220,7 @@ class TestLoginModels:
             first_name="Test",
             last_name="User",
             email="test@test.com",
-            role=UserRole.READ_ONLY,
+            role=UserRole.MEMBER,
             created_at=now,
             updated_at=now
         )
@@ -294,7 +294,7 @@ class TestSessionInfo:
             first_name="Test",
             last_name="User",
             email="test@test.com",
-            role=UserRole.READ_ONLY,
+            role=UserRole.MEMBER,
             created_at=now,
             updated_at=now
         )
@@ -323,7 +323,7 @@ class TestInviteCreate:
         """Should create valid invite"""
         invite = InviteCreate(
             email="invite@test.com",
-            role=UserRole.READ_ONLY
+            role=UserRole.MEMBER
         )
         assert invite.email == "invite@test.com"
     
@@ -339,7 +339,7 @@ class TestInviteCreate:
     def test_default_role(self):
         """Should default to read-only"""
         invite = InviteCreate(email="invite@test.com")
-        assert invite.role == UserRole.READ_ONLY
+        assert invite.role == UserRole.MEMBER
 
 
 class TestInviteResponse:
@@ -351,7 +351,7 @@ class TestInviteResponse:
         response = InviteResponse(
             id="invite-123",
             email="invite@test.com",
-            role=UserRole.READ_ONLY,
+            role=UserRole.MEMBER,
             status=InviteStatus.PENDING,
             invited_by="admin",
             invited_by_name="Admin User",
@@ -406,7 +406,7 @@ class TestInviteTokenInfo:
         now = datetime.utcnow()
         info = InviteTokenInfo(
             email="invite@test.com",
-            role=UserRole.READ_ONLY,
+            role=UserRole.MEMBER,
             invited_by_name="Admin User",
             expires_at=now,
             is_valid=True

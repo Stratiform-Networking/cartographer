@@ -21,13 +21,22 @@ class DatabaseSettings:
 
 db_settings = DatabaseSettings()
 
-# Create async engine
+# Create async engine with appropriate settings based on database type
+_engine_kwargs = {
+    "echo": False,
+}
+
+# Only add pool settings for PostgreSQL (not SQLite)
+if "sqlite" not in db_settings.database_url:
+    _engine_kwargs.update({
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 10,
+    })
+
 engine = create_async_engine(
     db_settings.database_url,
-    echo=False,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    **_engine_kwargs
 )
 
 # Session factory

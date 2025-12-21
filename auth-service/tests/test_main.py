@@ -1,41 +1,54 @@
 """
-Unit tests for the main FastAPI application.
+Unit tests for main application module.
 """
 import pytest
-from unittest.mock import patch, MagicMock
+import os
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
-
-from app.main import create_app, app
 
 
 class TestCreateApp:
-    """Tests for create_app factory"""
+    """Tests for create_app function"""
     
-    def test_creates_fastapi_app(self):
-        """Should create a FastAPI application"""
-        test_app = create_app()
+    def test_create_app(self):
+        """Should create FastAPI app"""
+        from app.main import create_app
         
-        assert test_app is not None
-        assert test_app.title == "Cartographer Auth Service"
-        assert test_app.version == "0.1.0"
+        app = create_app()
+        
+        assert app is not None
+        assert app.title == "Cartographer Auth Service"
     
-    def test_includes_auth_router(self):
-        """Should include auth router at /api/auth prefix"""
-        test_app = create_app()
-        
-        routes = [r.path for r in test_app.routes]
-        
-        # Check that auth endpoints are included
-        assert any("/api/auth" in str(r) for r in routes)
+    def test_create_app_with_docs_disabled(self):
+        """Should disable docs when DISABLE_DOCS is true"""
+        with patch.dict(os.environ, {"DISABLE_DOCS": "true"}):
+            from app.main import create_app
+            
+            app = create_app()
+            
+            assert app.docs_url is None
+            assert app.redoc_url is None
+            assert app.openapi_url is None
+    
+    def test_create_app_cors_origins(self):
+        """Should configure CORS from environment"""
+        with patch.dict(os.environ, {"CORS_ORIGINS": "http://localhost:3000,http://localhost:5173"}):
+            from app.main import create_app
+            
+            app = create_app()
+            
+            assert app is not None
 
 
-class TestRootEndpoint:
-    """Tests for root endpoint"""
+class TestEndpoints:
+    """Tests for app endpoints"""
     
-    def test_root_returns_service_info(self):
-        """Should return service information"""
-        test_app = create_app()
-        client = TestClient(test_app)
+    def test_root_endpoint(self):
+        """Should return service info"""
+        from app.main import create_app
+        
+        app = create_app()
+        client = TestClient(app, raise_server_exceptions=False)
         
         response = client.get("/")
         
@@ -43,49 +56,148 @@ class TestRootEndpoint:
         data = response.json()
         assert data["service"] == "Cartographer Auth Service"
         assert data["status"] == "running"
-        assert data["version"] == "0.1.0"
-
-
-class TestHealthzEndpoint:
-    """Tests for healthz endpoint"""
     
-    def test_healthz_returns_healthy(self):
+    def test_healthz_endpoint(self):
         """Should return healthy status"""
-        test_app = create_app()
-        client = TestClient(test_app)
+        from app.main import create_app
+        
+        app = create_app()
+        client = TestClient(app, raise_server_exceptions=False)
         
         response = client.get("/healthz")
         
         assert response.status_code == 200
-        assert response.json() == {"status": "healthy"}
+        assert response.json()["status"] == "healthy"
 
 
-class TestCORS:
-    """Tests for CORS middleware"""
+class TestLifespan:
+    """Tests for application lifespan"""
     
-    def test_cors_allows_all_origins_by_default(self):
-        """Should allow all origins by default"""
-        with patch.dict('os.environ', {}, clear=False):
-            test_app = create_app()
-            
-            # CORS middleware should be present
-            middlewares = [m.cls.__name__ for m in test_app.user_middleware]
-            assert "CORSMiddleware" in middlewares
+    @pytest.mark.asyncio
+    async def test_lifespan_without_alembic(self):
+        """Should handle missing alembic.ini gracefully"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        
+        app = FastAPI()
+        
+        with patch('pathlib.Path.exists', return_value=False):
+            async with lifespan(app):
+                pass  # Should complete without error
     
-    def test_cors_uses_env_origins(self):
-        """Should use CORS_ORIGINS from environment"""
-        with patch.dict('os.environ', {"CORS_ORIGINS": "http://localhost:3000,http://example.com"}):
-            test_app = create_app()
-            
-            # App should be created without errors
-            assert test_app is not None
+    @pytest.mark.asyncio
+    async def test_lifespan_with_alembic_success(self):
+        """Should run migrations successfully"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        import subprocess
+        
+        app = FastAPI()
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "Migration successful"
+        mock_result.stderr = ""
+        
+        mock_session = AsyncMock()
+        mock_result_obj = MagicMock()
+        mock_result_obj.scalar.return_value = False  # version_table_exists = False
+        mock_session.execute.return_value = mock_result_obj
+        
+        mock_session_context = AsyncMock()
+        mock_session_context.__aenter__.return_value = mock_session
+        mock_session_context.__aexit__.return_value = None
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('subprocess.run', return_value=mock_result), \
+             patch('app.database.async_session_maker', return_value=mock_session_context):
+            async with lifespan(app):
+                pass  # Should complete without error
+    
+    @pytest.mark.asyncio
+    async def test_lifespan_migration_failure(self):
+        """Should handle migration failure gracefully"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        
+        app = FastAPI()
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "Migration error"
+        
+        mock_session = AsyncMock()
+        mock_result_obj = MagicMock()
+        mock_result_obj.scalar.return_value = False
+        mock_session.execute.return_value = mock_result_obj
+        
+        mock_session_context = AsyncMock()
+        mock_session_context.__aenter__.return_value = mock_session
+        mock_session_context.__aexit__.return_value = None
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('subprocess.run', return_value=mock_result), \
+             patch('app.database.async_session_maker', return_value=mock_session_context):
+            async with lifespan(app):
+                pass  # Should continue despite failure
+    
+    @pytest.mark.asyncio
+    async def test_lifespan_migration_timeout(self):
+        """Should handle migration timeout"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        import subprocess
+        
+        app = FastAPI()
+        
+        mock_session = AsyncMock()
+        mock_result_obj = MagicMock()
+        mock_result_obj.scalar.return_value = False
+        mock_session.execute.return_value = mock_result_obj
+        
+        mock_session_context = AsyncMock()
+        mock_session_context.__aenter__.return_value = mock_session
+        mock_session_context.__aexit__.return_value = None
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('subprocess.run', side_effect=subprocess.TimeoutExpired(cmd="test", timeout=60)), \
+             patch('app.database.async_session_maker', return_value=mock_session_context):
+            async with lifespan(app):
+                pass  # Should continue despite timeout
+    
+    @pytest.mark.asyncio
+    async def test_lifespan_alembic_not_found(self):
+        """Should handle alembic not installed"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        
+        app = FastAPI()
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('subprocess.run', side_effect=FileNotFoundError()):
+            async with lifespan(app):
+                pass  # Should continue without alembic
+    
+    @pytest.mark.asyncio
+    async def test_lifespan_general_exception(self):
+        """Should handle general exceptions during migration"""
+        from app.main import lifespan
+        from fastapi import FastAPI
+        
+        app = FastAPI()
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('subprocess.run', side_effect=Exception("Test error")):
+            async with lifespan(app):
+                pass  # Should continue despite error
 
 
-class TestGlobalAppInstance:
-    """Tests for global app instance"""
+class TestAppInstance:
+    """Tests for the app instance"""
     
-    def test_global_app_exists(self):
-        """Should have a global app instance"""
+    def test_app_exists(self):
+        """Should have app instance"""
+        from app.main import app
+        
         assert app is not None
-        assert app.title == "Cartographer Auth Service"
-

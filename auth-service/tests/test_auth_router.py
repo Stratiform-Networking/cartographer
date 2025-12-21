@@ -42,7 +42,7 @@ def mock_owner():
         last_name="Owner",
         email="owner@test.com",
         role=UserRole.OWNER,
-        password_hash="hash",
+        hashed_password="hash",
         created_at=now,
         updated_at=now,
         is_active=True
@@ -51,7 +51,7 @@ def mock_owner():
 
 @pytest.fixture
 def mock_user():
-    """Create mock regular user"""
+    """Create mock regular user (member role)"""
     now = datetime.now(timezone.utc)
     return UserInDB(
         id="user-456",
@@ -59,8 +59,8 @@ def mock_user():
         first_name="Test",
         last_name="User",
         email="user@test.com",
-        role=UserRole.READ_ONLY,
-        password_hash="hash",
+        role=UserRole.MEMBER,
+        hashed_password="hash",
         created_at=now,
         updated_at=now,
         is_active=True
@@ -69,7 +69,7 @@ def mock_user():
 
 @pytest.fixture
 def mock_rw_user():
-    """Create mock read-write user"""
+    """Create mock admin (read-write) user"""
     now = datetime.now(timezone.utc)
     return UserInDB(
         id="rw-789",
@@ -77,8 +77,8 @@ def mock_rw_user():
         first_name="RW",
         last_name="User",
         email="rw@test.com",
-        role=UserRole.READ_WRITE,
-        password_hash="hash",
+        role=UserRole.ADMIN,
+        hashed_password="hash",
         created_at=now,
         updated_at=now,
         is_active=True
@@ -97,7 +97,7 @@ class TestSetupEndpoints:
         }
         
         with patch('app.routers.auth.auth_service') as mock_service:
-            mock_service.get_setup_status.return_value = mock_status
+            mock_service.get_setup_status = AsyncMock(return_value=mock_status)
             
             response = client.get("/api/auth/setup/status")
             
@@ -196,7 +196,7 @@ class TestAuthenticationEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             
             response = client.post(
                 "/api/auth/logout",
@@ -216,7 +216,7 @@ class TestAuthenticationEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service._to_response.return_value = UserResponse(
                 id=mock_owner.id,
                 username=mock_owner.username,
@@ -227,7 +227,7 @@ class TestAuthenticationEndpoints:
                 created_at=mock_owner.created_at,
                 updated_at=mock_owner.updated_at
             )
-            mock_service.get_permissions.return_value = ["read:map"]
+            mock_service.get_permissions = MagicMock(return_value=["read:map"])
             
             response = client.get(
                 "/api/auth/session",
@@ -248,7 +248,7 @@ class TestAuthenticationEndpoints:
                 iat=datetime.now(timezone.utc)
             )
             mock_service.decode_token_payload.return_value = {"service": False}
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             
             response = client.post(
                 "/api/auth/verify",
@@ -316,8 +316,8 @@ class TestUserManagementEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
-            mock_service.list_users.return_value = [UserResponse(
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
+            mock_service.list_users = AsyncMock(return_value=[UserResponse(
                 id=mock_owner.id,
                 username=mock_owner.username,
                 first_name=mock_owner.first_name,
@@ -326,7 +326,7 @@ class TestUserManagementEndpoints:
                 role=mock_owner.role,
                 created_at=mock_owner.created_at,
                 updated_at=mock_owner.updated_at
-            )]
+            )])
             
             response = client.get(
                 "/api/auth/users",
@@ -346,14 +346,14 @@ class TestUserManagementEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service.create_user = AsyncMock(return_value=UserResponse(
                 id="new-user-123",
                 username="newuser",
                 first_name="New",
                 last_name="User",
                 email="new@test.com",
-                role=UserRole.READ_ONLY,
+                role=UserRole.MEMBER,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc)
             ))
@@ -383,7 +383,7 @@ class TestUserManagementEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service._to_response.return_value = UserResponse(
                 id=mock_owner.id,
                 username=mock_owner.username,
@@ -413,7 +413,7 @@ class TestUserManagementEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_user
+            mock_service.get_user = AsyncMock(return_value=mock_user)
             
             response = client.get(
                 f"/api/auth/users/{mock_owner.id}",
@@ -433,7 +433,7 @@ class TestUserManagementEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service.update_user = AsyncMock(return_value=UserResponse(
                 id=mock_owner.id,
                 username=mock_owner.username,
@@ -464,8 +464,8 @@ class TestUserManagementEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
-            mock_service.delete_user.return_value = True
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
+            mock_service.delete_user = AsyncMock(return_value=True)
             
             response = client.delete(
                 f"/api/auth/users/{mock_user.id}",
@@ -489,7 +489,7 @@ class TestProfileEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service._to_response.return_value = UserResponse(
                 id=mock_owner.id,
                 username=mock_owner.username,
@@ -519,7 +519,7 @@ class TestProfileEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service.update_user = AsyncMock(return_value=UserResponse(
                 id=mock_owner.id,
                 username=mock_owner.username,
@@ -550,12 +550,12 @@ class TestProfileEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_user
+            mock_service.get_user = AsyncMock(return_value=mock_user)
             
             response = client.patch(
                 "/api/auth/me",
                 headers={"Authorization": "Bearer token123"},
-                json={"role": "readwrite"}
+                json={"role": "admin"}
             )
             
             assert response.status_code == 403
@@ -571,7 +571,7 @@ class TestProfileEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             mock_service.change_password = AsyncMock(return_value=True)
             
             response = client.post(
@@ -600,8 +600,8 @@ class TestInviteEndpoints:
                 exp=datetime.now(timezone.utc) + timedelta(hours=1),
                 iat=datetime.now(timezone.utc)
             )
-            mock_service.get_user.return_value = mock_owner
-            mock_service.list_invites.return_value = []
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
+            mock_service.list_invites = AsyncMock(return_value=[])
             
             response = client.get(
                 "/api/auth/invites",
@@ -623,27 +623,27 @@ class TestInviteEndpoints:
                 exp=now + timedelta(hours=1),
                 iat=now
             )
-            mock_service.get_user.return_value = mock_owner
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
             
             mock_invite = InviteInDB(
                 id="invite-123",
                 email="new@test.com",
-                role=UserRole.READ_ONLY,
+                role=UserRole.MEMBER,
                 status=InviteStatus.PENDING,
-                invited_by=mock_owner.username,
+                invited_by_username=mock_owner.username,
                 invited_by_name=f"{mock_owner.first_name} {mock_owner.last_name}",
                 invited_by_id=mock_owner.id,
                 token="token123",
                 created_at=now,
                 expires_at=now + timedelta(hours=72)
             )
-            mock_service.create_invite.return_value = (mock_invite, False)
+            mock_service.create_invite = AsyncMock(return_value=(mock_invite, False))
             mock_service._invite_to_response.return_value = InviteResponse(
                 id=mock_invite.id,
                 email=mock_invite.email,
                 role=mock_invite.role,
                 status=mock_invite.status,
-                invited_by=mock_invite.invited_by,
+                invited_by=mock_invite.invited_by_username,
                 invited_by_name=mock_invite.invited_by_name,
                 created_at=mock_invite.created_at,
                 expires_at=mock_invite.expires_at
@@ -652,7 +652,7 @@ class TestInviteEndpoints:
             response = client.post(
                 "/api/auth/invites",
                 headers={"Authorization": "Bearer token123"},
-                json={"email": "new@test.com", "role": "readonly"}
+                json={"email": "new@test.com", "role": "member"}
             )
             
             assert response.status_code == 200
@@ -662,13 +662,13 @@ class TestInviteEndpoints:
         with patch('app.routers.auth.auth_service') as mock_service:
             from app.models import InviteTokenInfo
             
-            mock_service.get_invite_token_info.return_value = InviteTokenInfo(
+            mock_service.get_invite_token_info = AsyncMock(return_value=InviteTokenInfo(
                 email="invite@test.com",
-                role=UserRole.READ_ONLY,
+                role=UserRole.MEMBER,
                 invited_by_name="Admin User",
                 expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
                 is_valid=True
-            )
+            ))
             
             response = client.get("/api/auth/invite/verify/test-token")
             
@@ -678,7 +678,7 @@ class TestInviteEndpoints:
     def test_verify_invite_token_not_found(self, client):
         """Should return 404 for invalid token"""
         with patch('app.routers.auth.auth_service') as mock_service:
-            mock_service.get_invite_token_info.return_value = None
+            mock_service.get_invite_token_info = AsyncMock(return_value=None)
             
             response = client.get("/api/auth/invite/verify/invalid-token")
             
@@ -695,7 +695,7 @@ class TestInviteEndpoints:
                 first_name="New",
                 last_name="User",
                 email="invite@test.com",
-                role=UserRole.READ_ONLY,
+                role=UserRole.MEMBER,
                 created_at=now,
                 updated_at=now
             ))
@@ -742,17 +742,17 @@ class TestDependencies:
         result = await require_owner(mock_owner)
         assert result == mock_owner
     
-    async def test_require_write_access_readonly_denied(self, mock_user):
-        """Should deny read-only users"""
+    async def test_require_admin_access_member_denied(self, mock_user):
+        """Should deny member users"""
         from fastapi import HTTPException
         
         with pytest.raises(HTTPException) as exc_info:
-            await require_write_access(mock_user)
+            await require_admin_access(mock_user)
         
         assert exc_info.value.status_code == 403
     
-    async def test_require_write_access_readwrite_allowed(self, mock_rw_user):
-        """Should allow read-write users"""
-        result = await require_write_access(mock_rw_user)
+    async def test_require_admin_access_admin_allowed(self, mock_rw_user):
+        """Should allow admin users"""
+        result = await require_admin_access(mock_rw_user)
         assert result == mock_rw_user
 

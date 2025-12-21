@@ -163,11 +163,11 @@ class TestSendInvitationEmail:
                 to_email="test@test.com",
                 invite_token="token",
                 invited_by_name="Admin",
-                role="readwrite"
+                role="admin"
             )
             
             call_args = mock_resend.Emails.send.call_args[0][0]
-            assert "Read &amp; Write" in call_args["html"] or "Read & Write" in call_args["text"]
+            assert "Admin" in call_args["html"] or "Admin" in call_args["text"]
     
     def test_handles_result_object(self):
         """Should handle result as object with id attribute"""

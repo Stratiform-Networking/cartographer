@@ -1,7 +1,7 @@
 # 🗺️ Cartographer
 
 [![Tests](https://github.com/DevArtech/cartographer/actions/workflows/tests.yml/badge.svg)](https://github.com/DevArtech/cartographer/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/DevArtech/cartographer/graph/badge.svg)](https://codecov.io/gh/DevArtech/cartographer)
+[![codecov](https://codecov.io/gh/DevArtech/cartographer/graph/badge.svg)](https://codecov.io/gh/Meridian-Inc/cartographer)
 
 [![Network Map](https://raw.githubusercontent.com/DevArtech/cartographer/refs/heads/main/assets/application.png)](https://cartographer.artzima.dev/embed/yJLRHFuiajaxkWvLc44Gm0f4)
 

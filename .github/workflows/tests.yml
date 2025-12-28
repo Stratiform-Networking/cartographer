@@ -21,14 +21,12 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
       - run: pytest tests/ -q --tb=no --cov=app --cov-report=xml --cov-fail-under=90
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: backend/coverage.xml
           flags: backend
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   frontend:
     runs-on: ubuntu-latest
@@ -44,14 +42,12 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run test:coverage -- --reporter=dot
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: frontend/coverage/coverage-final.json
           flags: frontend
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   assistant-service:
     runs-on: ubuntu-latest
@@ -73,14 +69,12 @@ jobs:
           GOOGLE_API_KEY: ""
           GEMINI_API_KEY: ""
           METRICS_SERVICE_URL: "http://localhost:8003"
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: assistant-service/coverage.xml
           flags: assistant-service
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   auth-service:
     runs-on: ubuntu-latest
@@ -96,14 +90,12 @@ jobs:
           cache-dependency-path: auth-service/requirements.txt
       - run: pip install -r requirements.txt
       - run: pytest tests/ -q --tb=no --cov=app --cov-report=xml --cov-fail-under=95
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: auth-service/coverage.xml
           flags: auth-service
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   health-service:
     runs-on: ubuntu-latest
@@ -119,14 +111,12 @@ jobs:
           cache-dependency-path: health-service/requirements.txt
       - run: pip install -r requirements.txt
       - run: pytest tests/ -q --tb=no --cov=app --cov-report=xml --cov-fail-under=95
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: health-service/coverage.xml
           flags: health-service
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   metrics-service:
     runs-on: ubuntu-latest
@@ -142,14 +132,12 @@ jobs:
           cache-dependency-path: metrics-service/requirements.txt
       - run: pip install -r requirements.txt
       - run: pytest tests/ -q --tb=no --cov=app --cov-report=xml --cov-fail-under=95
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: metrics-service/coverage.xml
           flags: metrics-service
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   notification-service:
     runs-on: ubuntu-latest
@@ -165,12 +153,9 @@ jobs:
           cache-dependency-path: notification-service/requirements.txt
       - run: pip install -r requirements.txt
       - run: pytest tests/ -q --tb=no --cov=app --cov-report=xml --cov-fail-under=80
-      - uses: codecov/codecov-action@v4
-        if: always()
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           file: notification-service/coverage.xml
           flags: notification-service
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-

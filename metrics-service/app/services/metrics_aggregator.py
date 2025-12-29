@@ -5,16 +5,16 @@ Collects and aggregates data from the health service and backend
 to produce comprehensive network topology snapshots.
 """
 
-import os
 import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, List, Any
+from typing import Any
 
 import httpx
 import jwt
 
+from ..config import settings
 from ..models import (
     NetworkTopologySnapshot,
     NodeMetrics,
@@ -29,7 +29,6 @@ from ..models import (
     GatewayISPInfo,
     TestIPMetrics,
     SpeedTestMetrics,
-    SpeedTestMetrics,
     LanPortsConfig,
     LanPort,
     PortType,
@@ -39,17 +38,6 @@ from ..models import (
 from .redis_publisher import redis_publisher
 
 logger = logging.getLogger(__name__)
-
-# Service URLs from environment
-HEALTH_SERVICE_URL = os.environ.get("HEALTH_SERVICE_URL", "http://localhost:8001")
-BACKEND_SERVICE_URL = os.environ.get("BACKEND_SERVICE_URL", "http://localhost:8000")
-
-# JWT Configuration (must match auth service)
-JWT_SECRET = os.environ.get("JWT_SECRET", "cartographer-dev-secret-change-in-production")
-JWT_ALGORITHM = "HS256"
-
-# Publishing configuration
-DEFAULT_PUBLISH_INTERVAL = int(os.environ.get("METRICS_PUBLISH_INTERVAL", "30"))
 
 
 def _generate_service_token() -> str:
@@ -70,7 +58,7 @@ def _generate_service_token() -> str:
         "service": True,  # Mark as service token
     }
     
-    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     return token
 
 
@@ -86,15 +74,15 @@ class MetricsAggregator:
     """
     
     def __init__(self):
-        self._publish_interval = DEFAULT_PUBLISH_INTERVAL
+        self._publish_interval = settings.metrics_publish_interval
         self._publishing_enabled = True
-        self._publish_task: Optional[asyncio.Task] = None
+        self._publish_task: asyncio.Task | None = None
         # Multi-tenant: store snapshots per network_id (None key for legacy single-network mode)
-        self._snapshots: Dict[Optional[str], NetworkTopologySnapshot] = {}
-        self._last_speed_test: Dict[str, SpeedTestMetrics] = {}  # gateway_ip -> last speed test
+        self._snapshots: dict[str | None, NetworkTopologySnapshot] = {}
+        self._last_speed_test: dict[str, SpeedTestMetrics] = {}  # gateway_ip -> last speed test
     
     @property
-    def _last_snapshot(self) -> Optional[NetworkTopologySnapshot]:
+    def _last_snapshot(self) -> NetworkTopologySnapshot | None:
         """Backwards compatibility: get the first/only snapshot (legacy mode)."""
         if None in self._snapshots:
             return self._snapshots[None]
@@ -104,13 +92,13 @@ class MetricsAggregator:
         return None
     
     @_last_snapshot.setter
-    def _last_snapshot(self, value: Optional[NetworkTopologySnapshot]):
+    def _last_snapshot(self, value: NetworkTopologySnapshot | None):
         """Backwards compatibility: set snapshot without network_id."""
         self._snapshots[None] = value
     
     # ==================== Data Fetching ====================
     
-    async def _fetch_all_network_ids(self) -> List[str]:
+    async def _fetch_all_network_ids(self) -> list[str]:
         """Fetch all network IDs from the backend for multi-tenant snapshot generation.
         
         Returns:
@@ -119,7 +107,7 @@ class MetricsAggregator:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
-                    f"{BACKEND_SERVICE_URL}/api/networks",
+                    f"{settings.backend_service_url}/api/networks",
                     headers=SERVICE_AUTH_HEADER
                 )
                 if response.status_code == 200:
@@ -139,7 +127,7 @@ class MetricsAggregator:
         
         return []
     
-    async def _fetch_network_layout(self, network_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def _fetch_network_layout(self, network_id: str | None = None) -> dict[str, Any] | None:
         """Fetch the saved network layout from the backend.
         
         Args:
@@ -152,7 +140,7 @@ class MetricsAggregator:
                 if network_id is not None:
                     # Use multi-tenant endpoint - requires explicit network_id
                     response = await client.get(
-                        f"{BACKEND_SERVICE_URL}/api/networks/{network_id}/layout",
+                        f"{settings.backend_service_url}/api/networks/{network_id}/layout",
                         headers=SERVICE_AUTH_HEADER
                     )
                     if response.status_code == 200:
@@ -175,7 +163,7 @@ class MetricsAggregator:
                     # Legacy single-file endpoint for backwards compatibility only
                     # This should only be used for non-multi-tenant deployments
                     response = await client.get(
-                        f"{BACKEND_SERVICE_URL}/api/load-layout",
+                        f"{settings.backend_service_url}/api/load-layout",
                         headers=SERVICE_AUTH_HEADER
                     )
                     if response.status_code == 200:
@@ -197,11 +185,11 @@ class MetricsAggregator:
             logger.error(f"Failed to fetch network layout: {e}")
             return None
     
-    async def _fetch_health_metrics(self) -> Dict[str, Any]:
+    async def _fetch_health_metrics(self) -> dict[str, Any]:
         """Fetch all cached health metrics from the health service."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/cached")
+                response = await client.get(f"{settings.health_service_url}/api/health/cached")
                 if response.status_code == 200:
                     return response.json()
                 return {}
@@ -212,17 +200,17 @@ class MetricsAggregator:
             logger.error(f"Failed to fetch health metrics: {e}")
             return {}
     
-    async def _fetch_gateway_test_ips(self) -> Dict[str, Any]:
+    async def _fetch_gateway_test_ips(self) -> dict[str, Any]:
         """Fetch all gateway test IP metrics (with status) from health service."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Use the metrics endpoint which includes status, not just config
-                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/gateway/test-ips/all/metrics")
+                response = await client.get(f"{settings.health_service_url}/api/health/gateway/test-ips/all/metrics")
                 if response.status_code == 200:
                     return response.json()
                 # Fallback to old endpoint if new one doesn't exist
                 logger.warning("New metrics endpoint not available, falling back to config endpoint")
-                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/gateway/test-ips/all")
+                response = await client.get(f"{settings.health_service_url}/api/health/gateway/test-ips/all")
                 if response.status_code == 200:
                     return response.json()
                 return {}
@@ -233,11 +221,11 @@ class MetricsAggregator:
             logger.error(f"Failed to fetch gateway test IPs: {e}")
             return {}
     
-    async def _fetch_speed_test_results(self) -> Dict[str, Any]:
+    async def _fetch_speed_test_results(self) -> dict[str, Any]:
         """Fetch all stored speed test results from health service."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/speedtest/all")
+                response = await client.get(f"{settings.health_service_url}/api/health/speedtest/all")
                 if response.status_code == 200:
                     return response.json()
                 return {}
@@ -248,11 +236,11 @@ class MetricsAggregator:
             logger.error(f"Failed to fetch speed test results: {e}")
             return {}
     
-    async def _fetch_monitoring_status(self) -> Optional[Dict[str, Any]]:
+    async def _fetch_monitoring_status(self) -> dict[str, Any] | None:
         """Fetch monitoring status from health service."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{HEALTH_SERVICE_URL}/api/health/monitoring/status")
+                response = await client.get(f"{settings.health_service_url}/api/health/monitoring/status")
                 if response.status_code == 200:
                     return response.json()
                 return None
@@ -265,7 +253,7 @@ class MetricsAggregator:
     
     # ==================== Data Transformation ====================
     
-    def _parse_device_role(self, role_str: Optional[str]) -> Optional[DeviceRole]:
+    def _parse_device_role(self, role_str: str | None) -> DeviceRole | None:
         """Parse a device role string to DeviceRole enum."""
         if not role_str:
             return None
@@ -286,7 +274,7 @@ class MetricsAggregator:
         except Exception:
             return DeviceRole.UNKNOWN
     
-    def _parse_health_status(self, status_str: Optional[str]) -> HealthStatus:
+    def _parse_health_status(self, status_str: str | None) -> HealthStatus:
         """Parse a health status string to HealthStatus enum."""
         if not status_str:
             return HealthStatus.UNKNOWN
@@ -295,7 +283,7 @@ class MetricsAggregator:
         except ValueError:
             return HealthStatus.UNKNOWN
     
-    def _transform_ping_metrics(self, ping_data: Optional[Dict]) -> Optional[PingMetrics]:
+    def _transform_ping_metrics(self, ping_data: dict | None) -> PingMetrics | None:
         """Transform ping data from health service to PingMetrics model."""
         if not ping_data:
             return None
@@ -309,7 +297,7 @@ class MetricsAggregator:
             jitter_ms=ping_data.get("jitter_ms"),
         )
     
-    def _transform_dns_metrics(self, dns_data: Optional[Dict]) -> Optional[DnsMetrics]:
+    def _transform_dns_metrics(self, dns_data: dict | None) -> DnsMetrics | None:
         """Transform DNS data from health service to DnsMetrics model."""
         if not dns_data:
             return None
@@ -320,7 +308,7 @@ class MetricsAggregator:
             resolution_time_ms=dns_data.get("resolution_time_ms"),
         )
     
-    def _transform_check_history(self, history_data: List[Dict]) -> List[CheckHistoryEntry]:
+    def _transform_check_history(self, history_data: list[dict]) -> list[CheckHistoryEntry]:
         """Transform check history from health service."""
         result = []
         for entry in history_data or []:
@@ -337,7 +325,7 @@ class MetricsAggregator:
                 logger.debug(f"Failed to parse history entry: {e}")
         return result
     
-    def _transform_uptime_metrics(self, health_data: Dict) -> UptimeMetrics:
+    def _transform_uptime_metrics(self, health_data: dict) -> UptimeMetrics:
         """Extract uptime metrics from health data."""
         last_seen = health_data.get("last_seen_online")
         if isinstance(last_seen, str):
@@ -355,7 +343,7 @@ class MetricsAggregator:
             consecutive_failures=health_data.get("consecutive_failures", 0),
         )
     
-    def _transform_test_ip_metrics(self, test_ip_data: Dict) -> TestIPMetrics:
+    def _transform_test_ip_metrics(self, test_ip_data: dict) -> TestIPMetrics:
         """Transform test IP metrics from health service."""
         last_check = test_ip_data.get("last_check")
         if isinstance(last_check, str):
@@ -381,7 +369,7 @@ class MetricsAggregator:
             check_history=self._transform_check_history(test_ip_data.get("check_history", [])),
         )
     
-    def _transform_lan_ports(self, lan_ports_data: Optional[Dict]) -> Optional[LanPortsConfig]:
+    def _transform_lan_ports(self, lan_ports_data: dict | None) -> LanPortsConfig | None:
         """Transform LAN ports configuration from layout data."""
         if not lan_ports_data:
             return None
@@ -445,13 +433,13 @@ class MetricsAggregator:
     
     def _process_node(
         self,
-        node_data: Dict,
-        health_metrics: Dict[str, Any],
-        gateway_test_ips: Dict[str, Any],
-        speed_test_results: Dict[str, Any],
+        node_data: dict,
+        health_metrics: dict[str, Any],
+        gateway_test_ips: dict[str, Any],
+        speed_test_results: dict[str, Any],
         depth: int = 0,
-        parent_id: Optional[str] = None,
-    ) -> tuple[NodeMetrics, List[NodeConnection], List[Dict]]:
+        parent_id: str | None = None,
+    ) -> tuple[NodeMetrics, list[NodeConnection], list[dict]]:
         """
         Process a single node from the layout and merge with health data.
         Returns (NodeMetrics, connections, child_nodes_data)
@@ -589,17 +577,17 @@ class MetricsAggregator:
     
     def _process_tree(
         self,
-        root_data: Dict,
-        health_metrics: Dict[str, Any],
-        gateway_test_ips: Dict[str, Any],
-        speed_test_results: Dict[str, Any],
-    ) -> tuple[Dict[str, NodeMetrics], List[NodeConnection], str]:
+        root_data: dict,
+        health_metrics: dict[str, Any],
+        gateway_test_ips: dict[str, Any],
+        speed_test_results: dict[str, Any],
+    ) -> tuple[dict[str, NodeMetrics], list[NodeConnection], str]:
         """
         Process the entire node tree recursively.
         Returns (nodes_dict, connections_list, root_node_id)
         """
-        nodes: Dict[str, NodeMetrics] = {}
-        connections: List[NodeConnection] = []
+        nodes: dict[str, NodeMetrics] = {}
+        connections: list[NodeConnection] = []
         
         # BFS to process all nodes
         queue = [(root_data, 0, None)]  # (node_data, depth, parent_id)
@@ -634,7 +622,7 @@ class MetricsAggregator:
     
     # ==================== Snapshot Generation ====================
     
-    async def generate_snapshot(self, network_id: Optional[str] = None) -> Optional[NetworkTopologySnapshot]:
+    async def generate_snapshot(self, network_id: str | None = None) -> NetworkTopologySnapshot | None:
         """
         Generate a complete network topology snapshot by aggregating
         data from all sources.
@@ -721,7 +709,7 @@ class MetricsAggregator:
     
     # ==================== Publishing ====================
     
-    async def generate_all_snapshots(self) -> Dict[str, NetworkTopologySnapshot]:
+    async def generate_all_snapshots(self) -> dict[str, NetworkTopologySnapshot]:
         """Generate snapshots for all networks in the system.
         
         This fetches the list of all networks and generates a snapshot for each.
@@ -730,7 +718,7 @@ class MetricsAggregator:
         Returns:
             Dict mapping network_id (UUID string) to generated snapshot.
         """
-        snapshots: Dict[str, NetworkTopologySnapshot] = {}
+        snapshots: dict[str, NetworkTopologySnapshot] = {}
         
         # Fetch all network IDs
         network_ids = await self._fetch_all_network_ids()
@@ -760,7 +748,7 @@ class MetricsAggregator:
         
         return snapshots
     
-    async def publish_snapshot(self, network_id: Optional[str] = None) -> bool:
+    async def publish_snapshot(self, network_id: str | None = None) -> bool:
         """Generate and publish a network topology snapshot.
         
         Args:
@@ -848,13 +836,13 @@ class MetricsAggregator:
     
     # ==================== Speed Test Integration ====================
     
-    async def trigger_speed_test(self, gateway_ip: str) -> Optional[SpeedTestMetrics]:
+    async def trigger_speed_test(self, gateway_ip: str) -> SpeedTestMetrics | None:
         """
         Trigger a speed test via the health service and publish the result.
         """
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(f"{HEALTH_SERVICE_URL}/api/health/speedtest")
+                response = await client.post(f"{settings.health_service_url}/api/health/speedtest")
                 if response.status_code == 200:
                     data = response.json()
                     
@@ -917,7 +905,7 @@ class MetricsAggregator:
             "last_snapshot_timestamp": self._last_snapshot.timestamp.isoformat() if self._last_snapshot else None,
         }
     
-    def get_last_snapshot(self, network_id: Optional[str] = None) -> Optional[NetworkTopologySnapshot]:
+    def get_last_snapshot(self, network_id: str | None = None) -> NetworkTopologySnapshot | None:
         """Get the last generated snapshot for a specific network.
         
         Args:

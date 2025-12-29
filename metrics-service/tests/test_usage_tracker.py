@@ -204,13 +204,14 @@ class TestUsageTrackerRedisIntegration:
             1, 1, 1.0, 1, True, True, True, True, None, None, None, None, 1, 1, 1, 1.0, True, True
         ])
         mock.sismember = AsyncMock(return_value=True)
-        mock.smembers = AsyncMock(return_value={b"health-service"})
+        # Redis client uses decode_responses=True, so returns strings not bytes
+        mock.smembers = AsyncMock(return_value={"health-service"})
         mock.hgetall = AsyncMock(return_value={
-            b"total_requests": b"10",
-            b"total_successes": b"8",
-            b"total_errors": b"2",
-            b"total_response_time_ms": b"450.0",
-            b"last_updated": datetime.now(timezone.utc).isoformat().encode()
+            "total_requests": "10",
+            "total_successes": "8",
+            "total_errors": "2",
+            "total_response_time_ms": "450.0",
+            "last_updated": datetime.now(timezone.utc).isoformat()
         })
         return mock
     
@@ -258,20 +259,21 @@ class TestUsageTrackerRedisIntegration:
     
     async def test_get_usage_stats_from_redis(self, tracker, mock_redis):
         """Should get stats from Redis"""
-        mock_redis.smembers.return_value = {b"health-service"}
+        # Redis client uses decode_responses=True, so returns strings not bytes
+        mock_redis.smembers.return_value = {"health-service"}
         mock_redis.hgetall.side_effect = [
             # Metadata
             {
-                b"collection_started": datetime.now(timezone.utc).isoformat().encode(),
-                b"last_updated": datetime.now(timezone.utc).isoformat().encode()
+                "collection_started": datetime.now(timezone.utc).isoformat(),
+                "last_updated": datetime.now(timezone.utc).isoformat()
             },
             # Service summary
             {
-                b"total_requests": b"100",
-                b"total_successes": b"95",
-                b"total_errors": b"5",
-                b"total_response_time_ms": b"4500.0",
-                b"last_updated": datetime.now(timezone.utc).isoformat().encode()
+                "total_requests": "100",
+                "total_successes": "95",
+                "total_errors": "5",
+                "total_response_time_ms": "4500.0",
+                "last_updated": datetime.now(timezone.utc).isoformat()
             },
         ]
         
@@ -285,15 +287,16 @@ class TestUsageTrackerRedisIntegration:
     async def test_get_usage_stats_filtered_by_service(self, tracker, mock_redis):
         """Should filter by service name"""
         mock_redis.sismember.return_value = True
+        # Redis client uses decode_responses=True, so returns strings not bytes
         mock_redis.hgetall.side_effect = [
             # Metadata
             {},
             # Service summary
             {
-                b"total_requests": b"50",
-                b"total_successes": b"48",
-                b"total_errors": b"2",
-                b"total_response_time_ms": b"1000.0",
+                "total_requests": "50",
+                "total_successes": "48",
+                "total_errors": "2",
+                "total_response_time_ms": "1000.0",
             }
         ]
         mock_redis.smembers.return_value = set()
@@ -357,7 +360,8 @@ class TestUsageTrackerReset:
     async def test_reset_stats_with_redis(self, tracker):
         """Should reset Redis data"""
         mock_redis = AsyncMock()
-        mock_redis.smembers = AsyncMock(return_value={b"health-service", b"metrics-service"})
+        # Redis client uses decode_responses=True, so returns strings not bytes
+        mock_redis.smembers = AsyncMock(return_value={"health-service", "metrics-service"})
         mock_redis.pipeline = MagicMock(return_value=AsyncMock())
         mock_redis.pipeline.return_value.execute = AsyncMock(return_value=[])
         
@@ -517,12 +521,13 @@ class TestGetServiceSummary:
     async def test_get_service_summary_with_data(self, tracker):
         """Should return summary with data"""
         mock_redis = AsyncMock()
+        # Redis client uses decode_responses=True, so returns strings not bytes
         mock_redis.hgetall = AsyncMock(return_value={
-            b"total_requests": b"100",
-            b"total_successes": b"90",
-            b"total_errors": b"10",
-            b"total_response_time_ms": b"5000.0",
-            b"last_updated": datetime.now(timezone.utc).isoformat().encode()
+            "total_requests": "100",
+            "total_successes": "90",
+            "total_errors": "10",
+            "total_response_time_ms": "5000.0",
+            "last_updated": datetime.now(timezone.utc).isoformat()
         })
         mock_redis.smembers = AsyncMock(return_value=set())
         
@@ -565,20 +570,21 @@ class TestGetEndpointUsage:
         """Should return endpoint usage with all fields"""
         now = datetime.now(timezone.utc)
         mock_redis = AsyncMock()
+        # Redis client uses decode_responses=True, so returns strings not bytes
         mock_redis.hgetall = AsyncMock(return_value={
-            b"endpoint": b"/api/test",
-            b"method": b"GET",
-            b"service": b"test-service",
-            b"request_count": b"50",
-            b"success_count": b"45",
-            b"error_count": b"5",
-            b"total_response_time_ms": b"2500.0",
-            b"min_response_time_ms": b"10.0",
-            b"max_response_time_ms": b"200.0",
-            b"last_accessed": now.isoformat().encode(),
-            b"first_accessed": now.isoformat().encode(),
-            b"status:200": b"45",
-            b"status:500": b"5",
+            "endpoint": "/api/test",
+            "method": "GET",
+            "service": "test-service",
+            "request_count": "50",
+            "success_count": "45",
+            "error_count": "5",
+            "total_response_time_ms": "2500.0",
+            "min_response_time_ms": "10.0",
+            "max_response_time_ms": "200.0",
+            "last_accessed": now.isoformat(),
+            "first_accessed": now.isoformat(),
+            "status:200": "45",
+            "status:500": "5",
         })
         
         result = await tracker._get_endpoint_usage(mock_redis, "usage:test:GET:api_test")
@@ -650,7 +656,8 @@ class TestResetStatsWithService:
     async def test_reset_single_service_with_redis(self, tracker):
         """Should reset only specified service in Redis"""
         mock_redis = AsyncMock()
-        mock_redis.smembers = AsyncMock(return_value={b"usage:service-a:GET:api_test"})
+        # Redis client uses decode_responses=True, so returns strings not bytes
+        mock_redis.smembers = AsyncMock(return_value={"usage:service-a:GET:api_test"})
         mock_pipe = AsyncMock()
         mock_pipe.delete = MagicMock()
         mock_pipe.srem = MagicMock()

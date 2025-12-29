@@ -11,13 +11,13 @@ This service:
 - Provides WebSocket endpoint for real-time updates
 """
 
-import os
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .config import settings
 from .routers.metrics import router as metrics_router
 from .services.redis_publisher import redis_publisher
 from .services.metrics_aggregator import metrics_aggregator
@@ -96,10 +96,6 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    
-    # Check if docs should be disabled (default: enabled)
-    disable_docs = os.environ.get("DISABLE_DOCS", "false").lower() == "true"
-    
     app = FastAPI(
         title="Cartographer Metrics Service",
         description="""
@@ -125,13 +121,13 @@ by other services and real-time dashboards.
         """,
         version="0.1.0",
         lifespan=lifespan,
-        docs_url=None if disable_docs else "/docs",
-        redoc_url=None if disable_docs else "/redoc",
-        openapi_url=None if disable_docs else "/openapi.json",
+        docs_url=None if settings.disable_docs else "/docs",
+        redoc_url=None if settings.disable_docs else "/redoc",
+        openapi_url=None if settings.disable_docs else "/openapi.json",
     )
     
     # CORS middleware
-    allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+    allowed_origins = settings.cors_origins.split(",")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,

@@ -5,17 +5,17 @@ Handles publishing metrics events to Redis pub/sub channels
 and managing subscriptions for consuming services.
 """
 
-import os
-import json
 import asyncio
+import json
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Optional, Callable, List, Dict, Any
-from contextlib import asynccontextmanager
+from typing import Any
 
 import redis.asyncio as redis
 from pydantic import BaseModel
 
+from ..config import settings
 from ..models import (
     MetricsEvent,
     MetricsEventType,
@@ -25,10 +25,6 @@ from ..models import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Redis configuration from environment
-REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = int(os.environ.get("REDIS_DB", "0"))
 
 # Default channels
 CHANNEL_TOPOLOGY = "metrics:topology"
@@ -45,10 +41,10 @@ class RedisPublisher:
     """
     
     def __init__(self):
-        self._redis: Optional[redis.Redis] = None
-        self._pubsub: Optional[redis.client.PubSub] = None
-        self._subscriber_tasks: List[asyncio.Task] = []
-        self._message_handlers: Dict[str, List[Callable]] = {}
+        self._redis: redis.Redis | None = None
+        self._pubsub: redis.client.PubSub | None = None
+        self._subscriber_tasks: list[asyncio.Task] = []
+        self._message_handlers: dict[str, list[Callable]] = {}
         self._connected = False
     
     async def connect(self) -> bool:
@@ -58,8 +54,8 @@ class RedisPublisher:
         """
         try:
             self._redis = redis.Redis.from_url(
-                REDIS_URL,
-                db=REDIS_DB,
+                settings.redis_url,
+                db=settings.redis_db,
                 decode_responses=True,
                 socket_timeout=5.0,
                 socket_connect_timeout=5.0,
@@ -67,7 +63,7 @@ class RedisPublisher:
             # Test connection
             await self._redis.ping()
             self._connected = True
-            logger.info(f"Connected to Redis at {REDIS_URL}")
+            logger.info(f"Connected to Redis at {settings.redis_url}")
             return True
         except redis.ConnectionError as e:
             logger.error(f"Failed to connect to Redis: {e}")
@@ -117,7 +113,7 @@ class RedisPublisher:
         """Serialize a MetricsEvent to JSON string."""
         return event.model_dump_json()
     
-    def _serialize_payload(self, payload: Any) -> str:
+    def _serialize_payload(self, payload: Any) -> str:  # noqa: ANN401
         """Serialize any payload to JSON string."""
         if isinstance(payload, BaseModel):
             return payload.model_dump_json()
@@ -297,7 +293,7 @@ class RedisPublisher:
     
     # ==================== Utility Methods ====================
     
-    async def get_last_snapshot(self) -> Optional[NetworkTopologySnapshot]:
+    async def get_last_snapshot(self) -> NetworkTopologySnapshot | None:
         """
         Get the last published topology snapshot from Redis.
         We store the latest snapshot in a Redis key for new subscribers.
@@ -333,8 +329,8 @@ class RedisPublisher:
     async def get_connection_info(self) -> dict:
         """Get Redis connection information for debugging."""
         return {
-            "url": REDIS_URL,
-            "db": REDIS_DB,
+            "url": settings.redis_url,
+            "db": settings.redis_db,
             "connected": self.is_connected,
             "channels": list(self._message_handlers.keys())
         }

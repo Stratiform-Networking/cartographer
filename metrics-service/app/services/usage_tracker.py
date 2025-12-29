@@ -7,8 +7,6 @@ Uses Redis for persistent storage and real-time aggregation.
 
 import logging
 from datetime import datetime
-from typing import Dict, Optional
-import json
 
 from ..models import (
     EndpointUsage,
@@ -35,9 +33,9 @@ class UsageTracker:
     """
     
     def __init__(self):
-        self._local_cache: Dict[str, ServiceUsageSummary] = {}
-        self._collection_started: Optional[datetime] = None
-        self._last_updated: Optional[datetime] = None
+        self._local_cache: dict[str, ServiceUsageSummary] = {}
+        self._collection_started: datetime | None = None
+        self._last_updated: datetime | None = None
     
     def _get_endpoint_key(self, service: str, method: str, endpoint: str) -> str:
         """Generate a unique Redis key for an endpoint."""
@@ -165,7 +163,7 @@ class UsageTracker:
             self._collection_started = record.timestamp
         self._last_updated = record.timestamp
     
-    async def get_usage_stats(self, service: Optional[str] = None) -> UsageStatsResponse:
+    async def get_usage_stats(self, service: str | None = None) -> UsageStatsResponse:
         """
         Get aggregated usage statistics.
         
@@ -183,18 +181,19 @@ class UsageTracker:
             response = UsageStatsResponse()
             
             # Get metadata
+            # Note: Redis client uses decode_responses=True, so keys/values are strings
             meta = await redis.hgetall(USAGE_META_KEY)
             if meta:
-                if b"collection_started" in meta:
-                    response.collection_started = datetime.fromisoformat(meta[b"collection_started"].decode())
-                if b"last_updated" in meta:
-                    response.last_updated = datetime.fromisoformat(meta[b"last_updated"].decode())
+                if "collection_started" in meta:
+                    response.collection_started = datetime.fromisoformat(meta["collection_started"])
+                if "last_updated" in meta:
+                    response.last_updated = datetime.fromisoformat(meta["last_updated"])
             
             # Get all services or filter by specific service
             if service:
                 services = [service] if await redis.sismember(USAGE_SERVICE_KEY, service) else []
             else:
-                services = [s.decode() for s in await redis.smembers(USAGE_SERVICE_KEY)]
+                services = list(await redis.smembers(USAGE_SERVICE_KEY))
             
             response.total_services = len(services)
             
@@ -210,7 +209,7 @@ class UsageTracker:
             logger.error(f"Failed to get usage stats: {e}")
             return self._get_local_stats(service)
     
-    async def _get_service_summary(self, redis, service: str) -> Optional[ServiceUsageSummary]:
+    async def _get_service_summary(self, redis, service: str) -> ServiceUsageSummary | None:
         """Get usage summary for a specific service."""
         try:
             service_key = f"{USAGE_KEY_PREFIX}{service}:summary"
@@ -219,25 +218,26 @@ class UsageTracker:
             if not summary_data:
                 return None
             
-            total_requests = int(summary_data.get(b"total_requests", 0))
-            total_response_time = float(summary_data.get(b"total_response_time_ms", 0))
+            # Note: Redis client uses decode_responses=True, so keys/values are strings
+            total_requests = int(summary_data.get("total_requests", 0))
+            total_response_time = float(summary_data.get("total_response_time_ms", 0))
             
             summary = ServiceUsageSummary(
                 service=service,
                 total_requests=total_requests,
-                total_successes=int(summary_data.get(b"total_successes", 0)),
-                total_errors=int(summary_data.get(b"total_errors", 0)),
+                total_successes=int(summary_data.get("total_successes", 0)),
+                total_errors=int(summary_data.get("total_errors", 0)),
                 avg_response_time_ms=total_response_time / total_requests if total_requests > 0 else None,
             )
             
-            if b"last_updated" in summary_data:
-                summary.last_updated = datetime.fromisoformat(summary_data[b"last_updated"].decode())
+            if "last_updated" in summary_data:
+                summary.last_updated = datetime.fromisoformat(summary_data["last_updated"])
             
             # Get all endpoints for this service
             endpoint_keys = await redis.smembers(f"{USAGE_KEY_PREFIX}{service}:endpoints")
             
             for key in endpoint_keys:
-                endpoint = await self._get_endpoint_usage(redis, key.decode())
+                endpoint = await self._get_endpoint_usage(redis, key)
                 if endpoint:
                     summary.endpoints.append(endpoint)
             
@@ -250,7 +250,7 @@ class UsageTracker:
             logger.error(f"Failed to get service summary for {service}: {e}")
             return None
     
-    async def _get_endpoint_usage(self, redis, key: str) -> Optional[EndpointUsage]:
+    async def _get_endpoint_usage(self, redis, key: str) -> EndpointUsage | None:
         """Get usage statistics for a specific endpoint."""
         try:
             data = await redis.hgetall(key)
@@ -258,40 +258,40 @@ class UsageTracker:
             if not data:
                 return None
             
-            request_count = int(data.get(b"request_count", 0))
-            total_time = float(data.get(b"total_response_time_ms", 0))
+            # Note: Redis client uses decode_responses=True, so keys/values are strings
+            request_count = int(data.get("request_count", 0))
+            total_time = float(data.get("total_response_time_ms", 0))
             
             # Parse status codes
             status_codes = {}
             for k, v in data.items():
-                k_str = k.decode() if isinstance(k, bytes) else k
-                if k_str.startswith("status:"):
-                    code = k_str.replace("status:", "")
+                if k.startswith("status:"):
+                    code = k.replace("status:", "")
                     status_codes[code] = int(v)
             
             endpoint = EndpointUsage(
-                endpoint=data.get(b"endpoint", b"").decode(),
-                method=data.get(b"method", b"").decode(),
-                service=data.get(b"service", b"").decode(),
+                endpoint=data.get("endpoint", ""),
+                method=data.get("method", ""),
+                service=data.get("service", ""),
                 request_count=request_count,
-                success_count=int(data.get(b"success_count", 0)),
-                error_count=int(data.get(b"error_count", 0)),
+                success_count=int(data.get("success_count", 0)),
+                error_count=int(data.get("error_count", 0)),
                 total_response_time_ms=total_time,
                 avg_response_time_ms=total_time / request_count if request_count > 0 else None,
                 status_codes=status_codes,
             )
             
-            if b"min_response_time_ms" in data:
-                endpoint.min_response_time_ms = float(data[b"min_response_time_ms"])
+            if "min_response_time_ms" in data:
+                endpoint.min_response_time_ms = float(data["min_response_time_ms"])
             
-            if b"max_response_time_ms" in data:
-                endpoint.max_response_time_ms = float(data[b"max_response_time_ms"])
+            if "max_response_time_ms" in data:
+                endpoint.max_response_time_ms = float(data["max_response_time_ms"])
             
-            if b"last_accessed" in data:
-                endpoint.last_accessed = datetime.fromisoformat(data[b"last_accessed"].decode())
+            if "last_accessed" in data:
+                endpoint.last_accessed = datetime.fromisoformat(data["last_accessed"])
             
-            if b"first_accessed" in data:
-                endpoint.first_accessed = datetime.fromisoformat(data[b"first_accessed"].decode())
+            if "first_accessed" in data:
+                endpoint.first_accessed = datetime.fromisoformat(data["first_accessed"])
             
             return endpoint
             
@@ -299,7 +299,7 @@ class UsageTracker:
             logger.error(f"Failed to get endpoint usage for {key}: {e}")
             return None
     
-    def _get_local_stats(self, service: Optional[str] = None) -> UsageStatsResponse:
+    def _get_local_stats(self, service: str | None = None) -> UsageStatsResponse:
         """Get statistics from local cache when Redis is unavailable."""
         response = UsageStatsResponse(
             collection_started=self._collection_started,
@@ -318,7 +318,7 @@ class UsageTracker:
         
         return response
     
-    async def reset_stats(self, service: Optional[str] = None) -> bool:
+    async def reset_stats(self, service: str | None = None) -> bool:
         """
         Reset usage statistics.
         
@@ -335,11 +335,12 @@ class UsageTracker:
                 # Reset specific service
                 if redis:
                     # Get all endpoint keys for this service
+                    # Note: Redis client uses decode_responses=True, so keys are already strings
                     endpoint_keys = await redis.smembers(f"{USAGE_KEY_PREFIX}{service}:endpoints")
                     
                     pipe = redis.pipeline()
                     for key in endpoint_keys:
-                        pipe.delete(key.decode())
+                        pipe.delete(key)
                     
                     pipe.delete(f"{USAGE_KEY_PREFIX}{service}:endpoints")
                     pipe.delete(f"{USAGE_KEY_PREFIX}{service}:summary")
@@ -353,15 +354,15 @@ class UsageTracker:
                 # Reset all stats
                 if redis:
                     # Get all services
+                    # Note: Redis client uses decode_responses=True, so keys are already strings
                     services = await redis.smembers(USAGE_SERVICE_KEY)
                     
                     pipe = redis.pipeline()
-                    for svc in services:
-                        svc_name = svc.decode()
+                    for svc_name in services:
                         endpoint_keys = await redis.smembers(f"{USAGE_KEY_PREFIX}{svc_name}:endpoints")
                         
                         for key in endpoint_keys:
-                            pipe.delete(key.decode())
+                            pipe.delete(key)
                         
                         pipe.delete(f"{USAGE_KEY_PREFIX}{svc_name}:endpoints")
                         pipe.delete(f"{USAGE_KEY_PREFIX}{svc_name}:summary")

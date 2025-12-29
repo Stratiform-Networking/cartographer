@@ -3,21 +3,22 @@ Unit tests for the metrics-service Usage Tracking Middleware.
 Tests request interception, timing, buffer management, and local recording.
 """
 
-import pytest
 import asyncio
+from collections import deque
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from collections import deque
 
-from app.services.usage_middleware import (
-    UsageTrackingMiddleware,
-    UsageRecord,
-    SERVICE_NAME,
-    BATCH_SIZE,
-    EXCLUDED_PATHS,
-    USAGE_PATHS,
-)
+import pytest
+
+from app.config import settings
 from app.models import EndpointUsageRecord
+from app.services.usage_middleware import (
+    EXCLUDED_PATHS,
+    SERVICE_NAME,
+    USAGE_PATHS,
+    UsageRecord,
+    UsageTrackingMiddleware,
+)
 
 
 class TestUsageRecord:
@@ -229,13 +230,13 @@ class TestFlushBuffer:
             await middleware._flush_buffer()
     
     async def test_flush_buffer_respects_batch_size(self):
-        """Should process at most BATCH_SIZE records per flush"""
+        """Should process at most settings.usage_batch_size records per flush"""
         app = MagicMock()
         middleware = UsageTrackingMiddleware(app)
         
         # Add more records than batch size
         now = datetime.utcnow()
-        for i in range(BATCH_SIZE + 5):
+        for i in range(settings.usage_batch_size + 5):
             middleware._buffer.append(UsageRecord(
                 endpoint=f"/api/test/{i}",
                 method="GET",
@@ -250,8 +251,8 @@ class TestFlushBuffer:
         with patch.object(middleware, '_get_usage_tracker', return_value=mock_tracker):
             await middleware._flush_buffer()
             
-            # Should have processed BATCH_SIZE records
-            assert mock_tracker.record_usage.call_count == BATCH_SIZE
+            # Should have processed settings.usage_batch_size records
+            assert mock_tracker.record_usage.call_count == settings.usage_batch_size
             # Should have remaining records in buffer
             assert len(middleware._buffer) == 5
 
@@ -388,14 +389,14 @@ class TestDispatch:
         assert record.timestamp is not None
     
     async def test_dispatch_triggers_flush_when_buffer_full(self):
-        """Should trigger flush when buffer reaches BATCH_SIZE"""
+        """Should trigger flush when buffer reaches settings.usage_batch_size"""
         app = MagicMock()
         middleware = UsageTrackingMiddleware(app)
         middleware._running = True
         
         # Pre-fill buffer to just below threshold
         now = datetime.utcnow()
-        for i in range(BATCH_SIZE - 1):
+        for i in range(settings.usage_batch_size - 1):
             middleware._buffer.append(UsageRecord(
                 endpoint=f"/api/existing/{i}",
                 method="GET",

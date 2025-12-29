@@ -5,25 +5,24 @@ Tracks endpoint usage statistics locally without making external HTTP calls
 since this is the metrics service itself that handles usage data.
 """
 
-import time
 import asyncio
 import logging
-from datetime import datetime
-from typing import Callable, List
+import time
 from collections import deque
+from collections.abc import Callable
+from datetime import datetime
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from ..config import settings
 from ..models import EndpointUsageRecord
 
 logger = logging.getLogger(__name__)
 
 # Configuration
 SERVICE_NAME = "metrics-service"
-BATCH_SIZE = 10  # Process records in batches
-BATCH_INTERVAL_SECONDS = 5.0  # Process batch every N seconds
 EXCLUDED_PATHS = {"/healthz", "/ready", "/", "/docs", "/openapi.json", "/redoc"}
 # Also exclude usage endpoints to prevent infinite loops
 USAGE_PATHS = {"/api/metrics/usage/record", "/api/metrics/usage/record/batch"}
@@ -74,7 +73,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         """Background loop that periodically flushes the buffer."""
         while self._running:
             try:
-                await asyncio.sleep(BATCH_INTERVAL_SECONDS)
+                await asyncio.sleep(settings.usage_batch_interval_seconds)
                 await self._flush_buffer()
             except asyncio.CancelledError:
                 break
@@ -89,8 +88,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         tracker = self._get_usage_tracker()
         
         # Collect records to process
-        records_to_process: List[UsageRecord] = []
-        while self._buffer and len(records_to_process) < BATCH_SIZE:
+        records_to_process: list[UsageRecord] = []
+        while self._buffer and len(records_to_process) < settings.usage_batch_size:
             records_to_process.append(self._buffer.popleft())
         
         if not records_to_process:
@@ -147,7 +146,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         self._buffer.append(record)
         
         # Trigger immediate flush if buffer is getting full
-        if len(self._buffer) >= BATCH_SIZE:
+        if len(self._buffer) >= settings.usage_batch_size:
             asyncio.create_task(self._flush_buffer())
         
         return response

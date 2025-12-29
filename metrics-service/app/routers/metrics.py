@@ -10,24 +10,27 @@ API endpoints for the metrics service, including:
 
 import asyncio
 import logging
-from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..models import (
-    NetworkTopologySnapshot,
-    MetricsEvent,
-    MetricsEventType,
-    PublishConfig,
     EndpointUsageRecord,
+    MetricsEvent,
+    NetworkTopologySnapshot,
+    PublishConfig,
     UsageRecordBatch,
     UsageStatsResponse,
 )
-from ..services.redis_publisher import redis_publisher, CHANNEL_TOPOLOGY, CHANNEL_HEALTH, CHANNEL_SPEED_TEST
 from ..services.metrics_aggregator import metrics_aggregator
+from ..services.redis_publisher import (
+    CHANNEL_HEALTH,
+    CHANNEL_SPEED_TEST,
+    CHANNEL_TOPOLOGY,
+    redis_publisher,
+)
 from ..services.usage_tracker import usage_tracker
 
 logger = logging.getLogger(__name__)
@@ -40,8 +43,8 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 class SnapshotResponse(BaseModel):
     """Response containing a network topology snapshot"""
     success: bool
-    snapshot: Optional[NetworkTopologySnapshot] = None
-    message: Optional[str] = None
+    snapshot: NetworkTopologySnapshot | None = None
+    message: str | None = None
 
 
 class ConfigResponse(BaseModel):
@@ -50,8 +53,8 @@ class ConfigResponse(BaseModel):
     publishing_enabled: bool
     publish_interval_seconds: int
     is_running: bool
-    last_snapshot_id: Optional[str] = None
-    last_snapshot_timestamp: Optional[str] = None
+    last_snapshot_id: str | None = None
+    last_snapshot_timestamp: str | None = None
 
 
 class TriggerResponse(BaseModel):
@@ -68,7 +71,7 @@ class SpeedTestRequest(BaseModel):
 # ==================== Snapshot Endpoints ====================
 
 @router.get("/snapshot", response_model=SnapshotResponse)
-async def get_current_snapshot(network_id: Optional[str] = Query(None, description="Network ID (UUID) to get snapshot for")):
+async def get_current_snapshot(network_id: str | None = Query(None, description="Network ID (UUID) to get snapshot for")):
     """
     Get the current/latest network topology snapshot.
     Returns the last generated snapshot from memory.
@@ -92,7 +95,7 @@ async def get_current_snapshot(network_id: Optional[str] = Query(None, descripti
 
 
 @router.post("/snapshot/generate", response_model=SnapshotResponse)
-async def generate_snapshot(network_id: Optional[str] = Query(None, description="Network ID (UUID) to generate snapshot for")):
+async def generate_snapshot(network_id: str | None = Query(None, description="Network ID (UUID) to generate snapshot for")):
     """
     Trigger immediate generation of a new network topology snapshot.
     This will fetch fresh data from all services and create a new snapshot.
@@ -120,7 +123,7 @@ async def generate_snapshot(network_id: Optional[str] = Query(None, description=
 
 
 @router.post("/snapshot/publish", response_model=TriggerResponse)
-async def publish_snapshot(network_id: Optional[str] = Query(None, description="Network ID (UUID) to publish snapshot for")):
+async def publish_snapshot(network_id: str | None = Query(None, description="Network ID (UUID) to publish snapshot for")):
     """
     Generate and publish a new snapshot to Redis.
     This will make the snapshot available to all subscribers.
@@ -392,7 +395,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # ==================== Summary Endpoints ====================
 
 @router.get("/summary")
-async def get_summary(network_id: Optional[str] = Query(None, description="Network ID (UUID) to get summary for")):
+async def get_summary(network_id: str | None = Query(None, description="Network ID (UUID) to get summary for")):
     """
     Get a summary of the current network state without full details.
     Lighter weight than full snapshot for dashboards.
@@ -444,7 +447,7 @@ async def get_summary(network_id: Optional[str] = Query(None, description="Netwo
 
 
 @router.get("/nodes/{node_id}")
-async def get_node_metrics(node_id: str, network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
+async def get_node_metrics(node_id: str, network_id: str | None = Query(None, description="Network ID (UUID)")):
     """Get metrics for a specific node by ID.
     
     Args:
@@ -464,7 +467,7 @@ async def get_node_metrics(node_id: str, network_id: Optional[str] = Query(None,
 
 
 @router.get("/connections")
-async def get_connections(network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
+async def get_connections(network_id: str | None = Query(None, description="Network ID (UUID)")):
     """Get all node connections from the current snapshot.
     
     Args:
@@ -486,7 +489,7 @@ async def get_connections(network_id: Optional[str] = Query(None, description="N
 
 
 @router.get("/gateways")
-async def get_gateways(network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
+async def get_gateways(network_id: str | None = Query(None, description="Network ID (UUID)")):
     """Get ISP information for all gateway devices.
     
     Args:
@@ -508,7 +511,7 @@ async def get_gateways(network_id: Optional[str] = Query(None, description="Netw
 
 
 @router.get("/debug/layout")
-async def debug_layout(network_id: Optional[str] = Query(None, description="Network ID (UUID)")):
+async def debug_layout(network_id: str | None = Query(None, description="Network ID (UUID)")):
     """Debug endpoint to see raw layout data from backend.
     
     Args:
@@ -589,7 +592,7 @@ async def record_usage_batch(batch: UsageRecordBatch):
 
 
 @router.get("/usage/stats", response_model=UsageStatsResponse)
-async def get_usage_stats(service: Optional[str] = Query(None, description="Filter by service name")):
+async def get_usage_stats(service: str | None = Query(None, description="Filter by service name")):
     """
     Get aggregated endpoint usage statistics.
     
@@ -604,7 +607,7 @@ async def get_usage_stats(service: Optional[str] = Query(None, description="Filt
 
 
 @router.delete("/usage/stats")
-async def reset_usage_stats(service: Optional[str] = Query(None, description="Service to reset, or all if not specified")):
+async def reset_usage_stats(service: str | None = Query(None, description="Service to reset, or all if not specified")):
     """
     Reset usage statistics.
     

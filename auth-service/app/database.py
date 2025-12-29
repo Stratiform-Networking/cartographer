@@ -3,31 +3,19 @@ Database configuration and session management for auth service.
 Uses the same PostgreSQL database as the main application.
 """
 
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
+from .config import settings
 
-class DatabaseSettings:
-    """Database settings loaded from environment variables."""
-    
-    @property
-    def database_url(self) -> str:
-        return os.environ.get(
-            "DATABASE_URL",
-            "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
-        )
-
-
-db_settings = DatabaseSettings()
 
 # Create async engine with appropriate settings based on database type
-_engine_kwargs = {
+_engine_kwargs: dict = {
     "echo": False,
 }
 
 # Only add pool settings for PostgreSQL (not SQLite)
-if "sqlite" not in db_settings.database_url:
+if "sqlite" not in settings.database_url:
     _engine_kwargs.update({
         "pool_pre_ping": True,
         "pool_size": 5,
@@ -35,7 +23,7 @@ if "sqlite" not in db_settings.database_url:
     })
 
 engine = create_async_engine(
-    db_settings.database_url,
+    settings.database_url,
     **_engine_kwargs
 )
 
@@ -52,7 +40,7 @@ class Base(DeclarativeBase):
     pass
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncSession:  # type: ignore[misc]
     """Dependency to get database session."""
     async with async_session_maker() as session:
         try:

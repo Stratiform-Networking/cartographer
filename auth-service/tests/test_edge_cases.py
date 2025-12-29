@@ -254,26 +254,18 @@ class TestEmailService:
     def test_is_email_configured_false(self):
         """Should return False when not configured"""
         from app.services import email_service
+        from app.config import settings
         
-        original = email_service.RESEND_API_KEY
-        email_service.RESEND_API_KEY = ""
-        
-        try:
+        with patch.object(settings, 'resend_api_key', ''):
             assert email_service.is_email_configured() is False
-        finally:
-            email_service.RESEND_API_KEY = original
     
     def test_is_email_configured_true(self):
         """Should return True when configured"""
         from app.services import email_service
+        from app.config import settings
         
-        original = email_service.RESEND_API_KEY
-        email_service.RESEND_API_KEY = "test-api-key"
-        
-        try:
+        with patch.object(settings, 'resend_api_key', 'test-api-key'):
             assert email_service.is_email_configured() is True
-        finally:
-            email_service.RESEND_API_KEY = original
 
 
 class TestMoreRouterEndpoints:
@@ -613,7 +605,84 @@ class TestRegistrationEndpoint:
     
     def test_register_disabled(self, app, client):
         """Should return 403 when registration is disabled"""
-        with patch.dict(os.environ, {"ALLOW_OPEN_REGISTRATION": "false"}):
+        from app.config import settings
+        
+        with patch.object(settings, 'allow_open_registration', False):
+            with patch('app.routers.auth.auth_service') as mock_service:
+                mock_service.register_user = AsyncMock(side_effect=ValueError("Open registration is disabled"))
+                
+                response = client.post("/api/auth/register", json={
+                    "username": "newuser",
+                    "first_name": "New",
+                    "last_name": "User",
+                    "email": "new@test.com",
+                    "password": "password123"
+                })
+                
+                assert response.status_code == 403
+    
+    def test_register_username_taken(self, app, client):
+        """Should return 400 if username taken"""
+        with patch('app.routers.auth.auth_service') as mock_service:
+            mock_service.register_user = AsyncMock(side_effect=ValueError("Username already taken"))
+            
+            response = client.post("/api/auth/register", json={
+                "username": "existinguser",
+                "first_name": "New",
+                "last_name": "User",
+                "email": "new@test.com",
+                "password": "password123"
+            })
+            
+            assert response.status_code == 400
+            assert "Username already taken" in response.json()["detail"]
+    
+    def test_register_email_taken(self, app, client):
+        """Should return 400 if email taken"""
+        with patch('app.routers.auth.auth_service') as mock_service:
+            mock_service.register_user = AsyncMock(side_effect=ValueError("Email already in use"))
+            
+            response = client.post("/api/auth/register", json={
+                "username": "newuser",
+                "first_name": "New",
+                "last_name": "User",
+                "email": "existing@test.com",
+                "password": "password123"
+            })
+            
+            assert response.status_code == 400
+            assert "Email already in use" in response.json()["detail"]
+    
+    def test_register_success(self, app, client, mock_db_session):
+        """Should register user successfully"""
+        from app.models import UserResponse
+        
+        now = datetime.now(timezone.utc)
+        mock_user = MagicMock()
+        mock_user.id = "new-user-123"
+        mock_user.username = "newuser"
+        mock_user.first_name = "New"
+        mock_user.last_name = "User"
+        mock_user.email = "new@test.com"
+        mock_user.role = UserRole.MEMBER
+        mock_user.created_at = now
+        mock_user.updated_at = now
+        
+        mock_response = UserResponse(
+            id="new-user-123",
+            username="newuser",
+            first_name="New",
+            last_name="User",
+            email="new@test.com",
+            role=UserRole.MEMBER,
+            created_at=now,
+            updated_at=now
+        )
+        
+        with patch('app.routers.auth.auth_service') as mock_service:
+            mock_service.register_user = AsyncMock(return_value=(mock_user, "token123", 3600))
+            mock_service._to_response.return_value = mock_response
+            
             response = client.post("/api/auth/register", json={
                 "username": "newuser",
                 "first_name": "New",
@@ -622,98 +691,24 @@ class TestRegistrationEndpoint:
                 "password": "password123"
             })
             
-            assert response.status_code == 403
-    
-    def test_register_username_taken(self, app, client):
-        """Should return 400 if username taken"""
-        with patch.dict(os.environ, {"ALLOW_OPEN_REGISTRATION": "true"}):
-            with patch('app.routers.auth.auth_service') as mock_service:
-                mock_service.get_user_by_username = AsyncMock(return_value=MagicMock())
-                
-                response = client.post("/api/auth/register", json={
-                    "username": "existinguser",
-                    "first_name": "New",
-                    "last_name": "User",
-                    "email": "new@test.com",
-                    "password": "password123"
-                })
-                
-                assert response.status_code == 400
-                assert "Username already taken" in response.json()["detail"]
-    
-    def test_register_email_taken(self, app, client):
-        """Should return 400 if email taken"""
-        with patch.dict(os.environ, {"ALLOW_OPEN_REGISTRATION": "true"}):
-            with patch('app.routers.auth.auth_service') as mock_service:
-                mock_service.get_user_by_username = AsyncMock(return_value=None)
-                mock_service.get_user_by_email = AsyncMock(return_value=MagicMock())
-                
-                response = client.post("/api/auth/register", json={
-                    "username": "newuser",
-                    "first_name": "New",
-                    "last_name": "User",
-                    "email": "existing@test.com",
-                    "password": "password123"
-                })
-                
-                assert response.status_code == 400
-                assert "Email already in use" in response.json()["detail"]
-    
-    def test_register_success(self, app, client, mock_db_session):
-        """Should register user successfully"""
-        from app.models import UserResponse
-        
-        with patch.dict(os.environ, {"ALLOW_OPEN_REGISTRATION": "true"}):
-            with patch('app.routers.auth.auth_service') as mock_service, \
-                 patch('app.routers.auth.hash_password_async', new_callable=AsyncMock) as mock_hash:
-                mock_service.get_user_by_username = AsyncMock(return_value=None)
-                mock_service.get_user_by_email = AsyncMock(return_value=None)
-                mock_hash.return_value = "hashed_password"
-                
-                now = datetime.now(timezone.utc)
-                mock_response = UserResponse(
-                    id="new-user-123",
-                    username="newuser",
-                    first_name="New",
-                    last_name="User",
-                    email="new@test.com",
-                    role=UserRole.MEMBER,
-                    created_at=now,
-                    updated_at=now
-                )
-                mock_service._to_response.return_value = mock_response
-                mock_service.create_access_token.return_value = ("token123", 3600)
-                
-                response = client.post("/api/auth/register", json={
-                    "username": "newuser",
-                    "first_name": "New",
-                    "last_name": "User",
-                    "email": "new@test.com",
-                    "password": "password123"
-                })
-                
-                assert response.status_code == 201
-                data = response.json()
-                assert data["access_token"] == "token123"
+            assert response.status_code == 201
+            data = response.json()
+            assert data["access_token"] == "token123"
     
     def test_register_exception(self, app, client, mock_db_session):
         """Should return 500 on exception"""
-        with patch.dict(os.environ, {"ALLOW_OPEN_REGISTRATION": "true"}):
-            with patch('app.routers.auth.auth_service') as mock_service, \
-                 patch('app.routers.auth.hash_password_async', new_callable=AsyncMock) as mock_hash:
-                mock_service.get_user_by_username = AsyncMock(return_value=None)
-                mock_service.get_user_by_email = AsyncMock(return_value=None)
-                mock_hash.side_effect = Exception("Test error")
-                
-                response = client.post("/api/auth/register", json={
-                    "username": "newuser",
-                    "first_name": "New",
-                    "last_name": "User",
-                    "email": "new@test.com",
-                    "password": "password123"
-                })
-                
-                assert response.status_code == 500
+        with patch('app.routers.auth.auth_service') as mock_service:
+            mock_service.register_user = AsyncMock(side_effect=Exception("Test error"))
+            
+            response = client.post("/api/auth/register", json={
+                "username": "newuser",
+                "first_name": "New",
+                "last_name": "User",
+                "email": "new@test.com",
+                "password": "password123"
+            })
+            
+            assert response.status_code == 500
 
 
 class TestGetInviteEndpoint:

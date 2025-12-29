@@ -6,6 +6,8 @@ import os
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
+from app.config import settings
+
 
 class TestCreateApp:
     """Tests for create_app function"""
@@ -20,8 +22,8 @@ class TestCreateApp:
         assert app.title == "Cartographer Auth Service"
     
     def test_create_app_with_docs_disabled(self):
-        """Should disable docs when DISABLE_DOCS is true"""
-        with patch.dict(os.environ, {"DISABLE_DOCS": "true"}):
+        """Should disable docs when disable_docs is true"""
+        with patch.object(settings, 'disable_docs', True):
             from app.main import create_app
             
             app = create_app()
@@ -31,8 +33,8 @@ class TestCreateApp:
             assert app.openapi_url is None
     
     def test_create_app_cors_origins(self):
-        """Should configure CORS from environment"""
-        with patch.dict(os.environ, {"CORS_ORIGINS": "http://localhost:3000,http://localhost:5173"}):
+        """Should configure CORS from settings"""
+        with patch.object(settings, 'cors_origins', 'http://localhost:3000,http://localhost:5173'):
             from app.main import create_app
             
             app = create_app()

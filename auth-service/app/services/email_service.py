@@ -1,29 +1,25 @@
 """
 Email service using Resend for sending invitation emails.
 """
-import os
+
 import logging
-from typing import Optional
+
+from ..config import settings
 
 logger = logging.getLogger(__name__)
-
-# Resend configuration
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "Cartographer <noreply@cartographer.app>")
-APPLICATION_URL = os.environ.get("APPLICATION_URL", "http://localhost:5173")
 
 # Only import resend if API key is configured
 _resend = None
 
 
 def _get_resend():
-    """Lazy load resend module"""
+    """Lazy load resend module."""
     global _resend
     if _resend is None:
         try:
             import resend
-            if RESEND_API_KEY:
-                resend.api_key = RESEND_API_KEY
+            if settings.resend_api_key:
+                resend.api_key = settings.resend_api_key
             _resend = resend
         except ImportError:
             logger.warning("Resend module not installed")
@@ -32,8 +28,8 @@ def _get_resend():
 
 
 def is_email_configured() -> bool:
-    """Check if email sending is configured"""
-    return bool(RESEND_API_KEY)
+    """Check if email sending is configured."""
+    return bool(settings.resend_api_key)
 
 
 def send_invitation_email(
@@ -42,7 +38,7 @@ def send_invitation_email(
     invited_by_name: str,
     role: str,
     expires_hours: int = 72
-) -> Optional[str]:
+) -> str | None:
     """
     Send an invitation email to a new user.
     
@@ -51,20 +47,20 @@ def send_invitation_email(
     if not is_email_configured():
         logger.warning(f"Email not configured - invitation for {to_email} not sent")
         return None
-    
+
     resend = _get_resend()
     if not resend:
         return None
-    
+
     # Build the invitation URL
-    invite_url = f"{APPLICATION_URL}/accept-invite?token={invite_token}"
-    
+    invite_url = f"{settings.application_url}/accept-invite?token={invite_token}"
+
     # Role display name
     role_display = {
         "member": "Member",
         "admin": "Admin"
     }.get(role, role)
-    
+
     # HTML email template
     html_content = f"""
 <!DOCTYPE html>
@@ -138,7 +134,7 @@ def send_invitation_email(
 </body>
 </html>
 """
-    
+
     # Plain text fallback
     text_content = f"""
 You're Invited to Cartographer!
@@ -155,22 +151,22 @@ If you didn't expect this invitation, you can safely ignore this email.
 ---
 Cartographer - Network Mapping Tool
 """
-    
+
     try:
         params = {
-            "from": EMAIL_FROM,
+            "from": settings.email_from,
             "to": [to_email],
             "subject": f"{invited_by_name} invited you to Cartographer",
             "html": html_content,
             "text": text_content,
         }
-        
+
         result = resend.Emails.send(params)
         email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
-        
+
         logger.info(f"Invitation email sent to {to_email} (ID: {email_id})")
         return email_id
-        
+
     except Exception as e:
         logger.error(f"Failed to send invitation email to {to_email}: {e}")
         return None

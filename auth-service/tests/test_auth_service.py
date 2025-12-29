@@ -6,13 +6,12 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock, AsyncMock
 
+from app.config import settings
 from app.models import UserRole, UserResponse
 from app.services.auth_service import (
     AuthService, 
     hash_password_async, 
     verify_password_async,
-    JWT_SECRET, 
-    JWT_ALGORITHM
 )
 
 
@@ -112,7 +111,7 @@ class TestTokenOperations:
             "iat": now - timedelta(hours=48),
             "exp": now - timedelta(hours=24)  # Expired 24 hours ago
         }
-        expired_token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        expired_token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         result = service.verify_token(expired_token)
         

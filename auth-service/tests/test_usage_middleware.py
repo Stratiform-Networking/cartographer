@@ -300,6 +300,8 @@ class TestUsageTrackingMiddleware:
     @pytest.mark.asyncio
     async def test_flush_loop(self):
         """Should run flush loop"""
+        from app.config import settings
+        
         app = MagicMock()
         middleware = UsageTrackingMiddleware(app)
         middleware._running = True
@@ -316,7 +318,7 @@ class TestUsageTrackingMiddleware:
         
         middleware._flush_buffer = mock_flush
         
-        with patch('app.services.usage_middleware.BATCH_INTERVAL_SECONDS', 0.01):
+        with patch.object(settings, 'usage_batch_interval_seconds', 0.01):
             await middleware._flush_loop()
         
         assert flush_count >= 1

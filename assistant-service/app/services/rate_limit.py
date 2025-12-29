@@ -1,26 +1,15 @@
-import os
+"""Rate limiting service using Redis for per-user daily limits."""
+
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Set
 
 from fastapi import HTTPException
 from redis.asyncio import Redis
 from sqlalchemy import select
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-REDIS_DB = int(os.getenv("REDIS_DB", "1"))
-
-# Roles that are exempt from rate limiting (comma-separated list)
-# Valid values: member, admin, owner
-# Example: "admin,owner" means admins and owners have unlimited requests
-_EXEMPT_ROLES_STR = os.getenv("ASSISTANT_RATE_LIMIT_EXEMPT_ROLES", "")
-RATE_LIMIT_EXEMPT_ROLES: Set[str] = {
-    role.strip().lower() 
-    for role in _EXEMPT_ROLES_STR.split(",") 
-    if role.strip()
-}
 
 # Unlimited limit value in database
 UNLIMITED_LIMIT = -1
@@ -32,8 +21,8 @@ async def get_redis() -> Redis:
     global _redis
     if _redis is None:
         _redis = Redis.from_url(
-            REDIS_URL,
-            db=REDIS_DB,
+            settings.redis_url,
+            db=settings.redis_db,
             decode_responses=True,
         )
     return _redis
@@ -65,10 +54,10 @@ return v
 
 def is_role_exempt(user_role: str) -> bool:
     """Check if a user role is exempt from rate limiting."""
-    return user_role.lower() in RATE_LIMIT_EXEMPT_ROLES
+    return user_role.lower() in settings.rate_limit_exempt_roles
 
 
-async def get_user_limit(user_id: str, default_limit: int, user_role: Optional[str] = None) -> int:
+async def get_user_limit(user_id: str, default_limit: int, user_role: str | None = None) -> int:
     """
     Get the effective daily limit for a user.
     
@@ -159,7 +148,7 @@ async def get_user_limit(user_id: str, default_limit: int, user_role: Optional[s
         return default_limit
 
 
-async def check_rate_limit(user_id: str, endpoint: str, limit: int, user_role: Optional[str] = None) -> None:
+async def check_rate_limit(user_id: str, endpoint: str, limit: int, user_role: str | None = None) -> None:
     """
     Check if user has exceeded their daily rate limit.
     Raises HTTPException with 429 if limit exceeded.
@@ -198,7 +187,7 @@ async def check_rate_limit(user_id: str, endpoint: str, limit: int, user_role: O
         )
 
 
-async def get_rate_limit_status(user_id: str, endpoint: str, limit: int, user_role: Optional[str] = None) -> dict:
+async def get_rate_limit_status(user_id: str, endpoint: str, limit: int, user_role: str | None = None) -> dict:
     """
     Get the current rate limit status for a user.
     
@@ -246,7 +235,7 @@ async def get_rate_limit_status(user_id: str, endpoint: str, limit: int, user_ro
     }
 
 
-async def set_user_limit(user_id: str, daily_limit: Optional[int], is_manual: bool = True) -> dict:
+async def set_user_limit(user_id: str, daily_limit: int | None, is_manual: bool = True) -> dict:
     """
     Set a custom daily limit for a user.
     

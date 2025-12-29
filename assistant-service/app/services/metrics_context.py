@@ -2,18 +2,16 @@
 Service for fetching and formatting network context from the metrics service.
 """
 
-import os
 import asyncio
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
 from datetime import datetime
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from ..config import settings
 
-# Metrics service URL
-METRICS_SERVICE_URL = os.environ.get("METRICS_SERVICE_URL", "http://localhost:8003")
+logger = logging.getLogger(__name__)
 
 
 class MetricsContextService:
@@ -22,38 +20,38 @@ class MetricsContextService:
     def __init__(self):
         self.timeout = 10.0
         # Multi-tenant cache: network_id -> (context, summary, timestamp)
-        self._context_cache: Dict[Optional[int], tuple[str, Dict[str, Any], datetime]] = {}
+        self._context_cache: dict[str | None, tuple[str, dict[str, Any], datetime]] = {}
         self._cache_ttl_seconds = 30  # Cache for 30 seconds
         
         # Loading state tracking (per network_id)
-        self._snapshot_available: Dict[Optional[int], bool] = {}
-        self._last_check_time: Optional[datetime] = None
+        self._snapshot_available: dict[str | None, bool] = {}
+        self._last_check_time: datetime | None = None
         self._check_interval_seconds = 5  # Recheck every 5 seconds when no snapshot
         self._max_wait_attempts = 6  # Max attempts when waiting for snapshot (30 seconds total)
     
     # Backwards compatibility properties
     @property
-    def _cached_context(self) -> Optional[str]:
+    def _cached_context(self) -> str | None:
         """Backwards compatibility: get legacy cached context."""
         if None in self._context_cache:
             return self._context_cache[None][0]
         return None
     
     @property
-    def _cached_summary(self) -> Optional[Dict[str, Any]]:
+    def _cached_summary(self) -> dict[str, Any] | None:
         """Backwards compatibility: get legacy cached summary."""
         if None in self._context_cache:
             return self._context_cache[None][1]
         return None
     
     @property
-    def _cache_timestamp(self) -> Optional[datetime]:
+    def _cache_timestamp(self) -> datetime | None:
         """Backwards compatibility: get legacy cache timestamp."""
         if None in self._context_cache:
             return self._context_cache[None][2]
         return None
     
-    async def fetch_network_snapshot(self, force_refresh: bool = False, network_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def fetch_network_snapshot(self, force_refresh: bool = False, network_id: str | None = None) -> dict[str, Any] | None:
         """Fetch the current network topology snapshot
         
         Args:
@@ -74,9 +72,9 @@ class MetricsContextService:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 if force_refresh:
                     # Ask metrics service to generate a fresh snapshot with latest data
-                    response = await client.post(f"{METRICS_SERVICE_URL}/api/metrics/snapshot/generate", params=params)
+                    response = await client.post(f"{settings.metrics_service_url}/api/metrics/snapshot/generate", params=params)
                 else:
-                    response = await client.get(f"{METRICS_SERVICE_URL}/api/metrics/snapshot", params=params)
+                    response = await client.get(f"{settings.metrics_service_url}/api/metrics/snapshot", params=params)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -99,14 +97,14 @@ class MetricsContextService:
                 
         except httpx.ConnectError:
             self._snapshot_available[network_id] = False
-            logger.warning(f"Cannot connect to metrics service at {METRICS_SERVICE_URL}")
+            logger.warning(f"Cannot connect to metrics service at {settings.metrics_service_url}")
             return None
         except Exception as e:
             self._snapshot_available[network_id] = False
             logger.error(f"Error fetching network snapshot: {e}")
             return None
     
-    async def wait_for_snapshot(self, max_attempts: Optional[int] = None, network_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def wait_for_snapshot(self, max_attempts: int | None = None, network_id: str | None = None) -> dict[str, Any] | None:
         """
         Wait for a snapshot to become available, retrying periodically.
         
@@ -132,7 +130,7 @@ class MetricsContextService:
         logger.warning(f"Snapshot for network_id={network_id} not available after {attempts} attempts")
         return None
     
-    def is_snapshot_available(self, network_id: Optional[str] = None) -> bool:
+    def is_snapshot_available(self, network_id: str | None = None) -> bool:
         """Check if a snapshot has ever been successfully fetched for a network"""
         return self._snapshot_available.get(network_id, False)
     
@@ -147,7 +145,7 @@ class MetricsContextService:
         elapsed = (datetime.utcnow() - self._last_check_time).total_seconds()
         return elapsed >= self._check_interval_seconds
     
-    async def fetch_network_summary(self, network_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    async def fetch_network_summary(self, network_id: str | None = None) -> dict[str, Any] | None:
         """Fetch network summary (lighter weight than full snapshot)
         
         Args:
@@ -159,7 +157,7 @@ class MetricsContextService:
                 params["network_id"] = network_id
             
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(f"{METRICS_SERVICE_URL}/api/metrics/summary", params=params)
+                response = await client.get(f"{settings.metrics_service_url}/api/metrics/summary", params=params)
                 
                 if response.status_code == 200:
                     return response.json()
@@ -170,7 +168,7 @@ class MetricsContextService:
             logger.error(f"Error fetching network summary: {e}")
             return None
     
-    def _format_node_info(self, node: Dict[str, Any]) -> str:
+    def _format_node_info(self, node: dict[str, Any]) -> str:
         """Format a single node's information"""
         lines = []
         
@@ -224,7 +222,7 @@ class MetricsContextService:
         
         return "\n".join(lines)
     
-    def _format_lan_ports(self, lan_ports: Dict[str, Any]) -> str:
+    def _format_lan_ports(self, lan_ports: dict[str, Any]) -> str:
         """Format LAN ports configuration for a device"""
         lines = []
         
@@ -269,7 +267,7 @@ class MetricsContextService:
         
         return "\n".join(lines)
     
-    def _get_port_label(self, port: Dict[str, Any], lan_ports: Dict[str, Any]) -> str:
+    def _get_port_label(self, port: dict[str, Any], lan_ports: dict[str, Any]) -> str:
         """Get the display label for a port"""
         if port.get("port_number"):
             return str(port.get("port_number"))
@@ -282,7 +280,7 @@ class MetricsContextService:
         
         return str((row - 1) * cols + col + start_num - 1)
     
-    def _format_gateway_info(self, gateway: Dict[str, Any], nodes: Dict[str, Any]) -> str:
+    def _format_gateway_info(self, gateway: dict[str, Any], nodes: dict[str, Any]) -> str:
         """Format gateway/ISP information, including notes from the gateway node"""
         lines = []
         
@@ -386,7 +384,7 @@ class MetricsContextService:
         
         return "\n".join(lines)
     
-    async def build_context_string(self, wait_for_data: bool = True, force_refresh: bool = False, network_id: Optional[str] = None) -> tuple[str, Dict[str, Any]]:
+    async def build_context_string(self, wait_for_data: bool = True, force_refresh: bool = False, network_id: str | None = None) -> tuple[str, dict[str, Any]]:
         """
         Build a context string for the AI assistant with network information.
         Returns (context_string, summary_dict)
@@ -447,7 +445,7 @@ class MetricsContextService:
         # Organize nodes by role
         # Filter out group nodes to match frontend's device count
         nodes = snapshot.get("nodes", {})
-        nodes_by_role = {}
+        nodes_by_role: dict[str, list[dict[str, Any]]] = {}
         for node_id, node in nodes.items():
             role = node.get("role", "unknown")
             # Normalize role string (handle both enum value and potential variations)
@@ -599,7 +597,7 @@ class MetricsContextService:
         
         return context, summary
     
-    def _build_loading_context(self) -> tuple[str, Dict[str, Any]]:
+    def _build_loading_context(self) -> tuple[str, dict[str, Any]]:
         """Build context when waiting for initial snapshot"""
         context = """
 ========================================
@@ -626,7 +624,7 @@ Once the network scan completes, I'll have full visibility into your topology.
         }
         return context.strip(), summary
     
-    def _build_fallback_context(self) -> tuple[str, Dict[str, Any]]:
+    def _build_fallback_context(self) -> tuple[str, dict[str, Any]]:
         """Build fallback context when metrics service is unavailable"""
         context = """
 ========================================
@@ -653,7 +651,7 @@ based on the information you provide directly.
         }
         return context.strip(), summary
     
-    def clear_cache(self, network_id: Optional[str] = None):
+    def clear_cache(self, network_id: str | None = None):
         """Clear the cached context for a specific network or all networks.
         
         Args:
@@ -665,7 +663,7 @@ based on the information you provide directly.
         else:
             self._context_cache.clear()
     
-    def reset_state(self, network_id: Optional[str] = None):
+    def reset_state(self, network_id: str | None = None):
         """Reset all state including snapshot availability.
         
         Args:
@@ -679,7 +677,7 @@ based on the information you provide directly.
             self._snapshot_available.clear()
         self._last_check_time = None
     
-    def get_status(self, network_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_status(self, network_id: str | None = None) -> dict[str, Any]:
         """Get current service status.
         
         Args:

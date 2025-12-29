@@ -3,16 +3,16 @@ Base provider interface for AI model providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 
 @dataclass
 class ProviderConfig:
     """Configuration passed to providers"""
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
-    model: Optional[str] = None
+    api_key: str | None = None
+    base_url: str | None = None
+    model: str | None = None
     temperature: float = 0.7
     max_tokens: int = 2048
 
@@ -50,8 +50,8 @@ class BaseProvider(ABC):
     @abstractmethod
     async def stream_chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream chat completion response"""
         pass
@@ -59,12 +59,12 @@ class BaseProvider(ABC):
     @abstractmethod
     async def chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> str:
         """Non-streaming chat completion"""
         pass
     
-    async def list_models(self) -> List[str]:
+    async def list_models(self) -> list[str]:
         """List available models (optional implementation)"""
         return [self.default_model]

@@ -2,11 +2,12 @@
 OpenAI provider implementation.
 """
 
-import os
 import logging
-from openai import AsyncOpenAI
-from typing import AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
 
+from openai import AsyncOpenAI
+
+from ..config import settings
 from .base import BaseProvider, ProviderConfig, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -25,9 +26,8 @@ class OpenAIProvider(BaseProvider):
     
     def _get_client(self):
         """Get OpenAI client"""
-        
-        api_key = self.config.api_key or os.environ.get("OPENAI_API_KEY")
-        base_url = self.config.base_url or os.environ.get("OPENAI_BASE_URL")
+        api_key = self.config.api_key or settings.openai_api_key
+        base_url = self.config.base_url or settings.openai_base_url
         
         return AsyncOpenAI(
             api_key=api_key,
@@ -36,13 +36,13 @@ class OpenAIProvider(BaseProvider):
     
     async def is_available(self) -> bool:
         """Check if OpenAI is configured"""
-        api_key = self.config.api_key or os.environ.get("OPENAI_API_KEY")
+        api_key = self.config.api_key or settings.openai_api_key
         return bool(api_key)
     
     async def stream_chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream chat completion from OpenAI"""
         client = self._get_client()
@@ -75,8 +75,8 @@ class OpenAIProvider(BaseProvider):
     
     async def chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> str:
         """Non-streaming chat completion"""
         client = self._get_client()
@@ -98,7 +98,7 @@ class OpenAIProvider(BaseProvider):
         
         return response.choices[0].message.content or ""
     
-    async def list_models(self) -> List[str]:
+    async def list_models(self) -> list[str]:
         """List available OpenAI models from the API"""
         client = self._get_client()
         models_response = await client.models.list()

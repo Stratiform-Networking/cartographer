@@ -17,10 +17,9 @@ from app.services.usage_middleware import (
     UsageRecord,
     UsageTrackingMiddleware,
     SERVICE_NAME,
-    BATCH_SIZE,
-    BATCH_INTERVAL_SECONDS,
     EXCLUDED_PATHS,
 )
+from app.config import settings
 
 
 class TestUsageRecord:
@@ -309,7 +308,7 @@ class TestUsageTrackingMiddlewareFlushLoop:
         
         middleware._flush_buffer = mock_flush
         
-        with patch('app.services.usage_middleware.BATCH_INTERVAL_SECONDS', 0.01):
+        with patch.object(settings, 'usage_batch_interval_seconds', 0.01):
             await middleware._flush_loop()
         
         assert call_count >= 1
@@ -350,7 +349,7 @@ class TestUsageTrackingMiddlewareFlushLoop:
         
         middleware._flush_buffer = mock_flush
         
-        with patch('app.services.usage_middleware.BATCH_INTERVAL_SECONDS', 0.01):
+        with patch.object(settings, 'usage_batch_interval_seconds', 0.01):
             await middleware._flush_loop()
         
         assert call_count >= 2
@@ -432,7 +431,7 @@ class TestUsageTrackingMiddlewareDispatch:
         client = TestClient(app)
         
         # Make enough requests to fill the buffer and trigger flush
-        for i in range(BATCH_SIZE + 5):
+        for i in range(settings.usage_batch_size + 5):
             response = client.get(f"/api/item/{i}")
             assert response.status_code == 200
 
@@ -578,11 +577,10 @@ class TestExcludedPaths:
     
     def test_batch_size_constant(self):
         """Should have reasonable batch size"""
-        assert BATCH_SIZE > 0
-        assert BATCH_SIZE <= 100
+        assert settings.usage_batch_size > 0
+        assert settings.usage_batch_size <= 100
     
     def test_batch_interval_constant(self):
         """Should have reasonable batch interval"""
-        assert BATCH_INTERVAL_SECONDS > 0
-        assert BATCH_INTERVAL_SECONDS <= 60
-
+        assert settings.usage_batch_interval_seconds > 0
+        assert settings.usage_batch_interval_seconds <= 60

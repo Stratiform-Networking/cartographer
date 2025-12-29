@@ -10,6 +10,7 @@ from app.providers.openai_provider import OpenAIProvider
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.gemini_provider import GeminiProvider
 from app.providers.ollama_provider import OllamaProvider
+from app.config import settings
 
 
 class TestProviderConfig:
@@ -61,9 +62,9 @@ class TestOpenAIProvider:
             assert await provider.is_available() is False
     
     async def test_is_available_from_env(self):
-        """Should use API key from environment"""
+        """Should use API key from settings"""
         config = ProviderConfig()
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+        with patch.object(settings, 'openai_api_key', "test-key"):
             provider = OpenAIProvider(config)
             assert await provider.is_available() is True
     
@@ -236,7 +237,7 @@ class TestGeminiProvider:
     
     async def test_is_available_with_key(self, provider_config):
         """Should be available with API key"""
-        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
+        with patch.object(type(settings), 'effective_google_api_key', property(lambda self: "test-key")):
             config = ProviderConfig()
             provider = GeminiProvider(config)
             assert await provider.is_available() is True

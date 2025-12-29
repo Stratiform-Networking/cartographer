@@ -14,6 +14,8 @@ os.environ["REDIS_URL"] = "redis://localhost:6379"
 
 import jwt
 
+from app.config import settings
+
 
 class TestAuthenticatedUser:
     """Tests for AuthenticatedUser model"""
@@ -62,14 +64,14 @@ class TestServiceTokenVerification:
     
     def test_valid_service_token(self):
         """Should verify valid service token"""
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token
         
         payload = {
             "service": True,
             "sub": "metrics-service",
             "username": "metrics"
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -79,10 +81,10 @@ class TestServiceTokenVerification:
     
     def test_non_service_token(self):
         """Should return None for non-service token"""
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token
         
         payload = {"sub": "user-123", "username": "testuser"}
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -90,14 +92,14 @@ class TestServiceTokenVerification:
     
     def test_expired_service_token(self):
         """Should return None for expired token"""
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token
         
         payload = {
             "service": True,
             "sub": "service",
             "exp": datetime.utcnow() - timedelta(hours=1)
         }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -230,11 +232,11 @@ class TestGetCurrentUser:
     
     async def test_header_credentials(self):
         """Should use header credentials"""
-        from app.dependencies.auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import get_current_user
         from fastapi.security import HTTPAuthorizationCredentials
         
         payload = {"service": True, "sub": "service"}
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
         
@@ -245,10 +247,10 @@ class TestGetCurrentUser:
     
     async def test_query_token_fallback(self):
         """Should fall back to query token"""
-        from app.dependencies.auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import get_current_user
         
         payload = {"service": True, "sub": "service"}
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = await get_current_user(None, token)
         
@@ -306,29 +308,18 @@ class TestRateLimitHelpers:
         """Should identify exempt roles"""
         from app.services import rate_limit
         
-        # Mock the exempt roles
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin", "owner"}
-        
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin", "owner"})):
             assert rate_limit.is_role_exempt("admin") is True
             assert rate_limit.is_role_exempt("ADMIN") is True
             assert rate_limit.is_role_exempt("owner") is True
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     def test_is_role_exempt_false(self):
         """Should identify non-exempt roles"""
         from app.services import rate_limit
         
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin"}
-        
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin"})):
             assert rate_limit.is_role_exempt("member") is False
             assert rate_limit.is_role_exempt("guest") is False
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
 
 
 class TestGetUserLimit:
@@ -336,20 +327,13 @@ class TestGetUserLimit:
     
     async def test_exempt_role_no_database(self):
         """Should return unlimited for exempt role without database"""
-        from app.services import rate_limit
         from app.services.rate_limit import get_user_limit, UNLIMITED_LIMIT
         
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin"}
-        
-        try:
-            # With no database configured - patch at database module level
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin"})):
             with patch('app.database.AsyncSessionLocal', None):
                 result = await get_user_limit("user-1", 100, user_role="admin")
             
             assert result == UNLIMITED_LIMIT
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     async def test_non_exempt_no_database(self):
         """Should return default for non-exempt without database"""
@@ -663,11 +647,11 @@ class TestAuthEdgeCases:
     
     def test_verify_service_token_missing_defaults(self):
         """Should handle missing optional fields in service token"""
-        from app.dependencies.auth import verify_service_token, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import verify_service_token
         
         # Token with service=True but missing sub and username
         payload = {"service": True}
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         user = verify_service_token(token)
         
@@ -699,11 +683,11 @@ class TestGetCurrentUserEdgeCases:
     
     async def test_service_token_logs_debug(self):
         """Should log debug message for service auth"""
-        from app.dependencies.auth import get_current_user, JWT_SECRET, JWT_ALGORITHM
+        from app.dependencies.auth import get_current_user
         from fastapi.security import HTTPAuthorizationCredentials
         
         payload = {"service": True, "sub": "test-service"}
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
         
         credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
         
@@ -732,11 +716,7 @@ class TestGetUserLimitWithDatabase:
     
     async def test_create_new_exempt_user(self):
         """Should create unlimited record for exempt user"""
-        from app.services import rate_limit
         from app.services.rate_limit import get_user_limit, UNLIMITED_LIMIT
-        
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin"}
         
         mock_session = AsyncMock()
         mock_result = MagicMock()
@@ -749,13 +729,11 @@ class TestGetUserLimitWithDatabase:
         mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
         
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin"})):
             with patch('app.database.AsyncSessionLocal', mock_session_maker):
                 result = await get_user_limit("user-1", 100, user_role="admin")
             
             assert result == UNLIMITED_LIMIT
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     async def test_create_new_normal_user(self):
         """Should create default record for normal user"""
@@ -779,11 +757,7 @@ class TestGetUserLimitWithDatabase:
     
     async def test_user_becomes_exempt(self):
         """Should update user when they become exempt"""
-        from app.services import rate_limit
         from app.services.rate_limit import get_user_limit, UNLIMITED_LIMIT
-        
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin"}
         
         # Existing non-exempt user
         mock_user_limit = MagicMock()
@@ -800,23 +774,17 @@ class TestGetUserLimitWithDatabase:
         mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
         
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin"})):
             with patch('app.database.AsyncSessionLocal', mock_session_maker):
                 result = await get_user_limit("user-1", 100, user_role="admin")
             
             assert result == UNLIMITED_LIMIT
             assert mock_user_limit.daily_limit == UNLIMITED_LIMIT
             assert mock_user_limit.is_role_exempt is True
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     async def test_user_loses_exemption(self):
         """Should update user when they lose exemption"""
-        from app.services import rate_limit
         from app.services.rate_limit import get_user_limit
-        
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = set()  # No exempt roles
         
         # Existing exempt user
         mock_user_limit = MagicMock()
@@ -833,23 +801,17 @@ class TestGetUserLimitWithDatabase:
         mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
         
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: set())):
             with patch('app.database.AsyncSessionLocal', mock_session_maker):
                 result = await get_user_limit("user-1", 100, user_role="member")
             
             assert result == 100  # Back to default
             assert mock_user_limit.daily_limit is None
             assert mock_user_limit.is_role_exempt is False
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     async def test_existing_exempt_user(self):
         """Should keep unlimited for existing exempt user"""
-        from app.services import rate_limit
         from app.services.rate_limit import get_user_limit, UNLIMITED_LIMIT
-        
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin"}
         
         mock_user_limit = MagicMock()
         mock_user_limit.is_role_exempt = True
@@ -864,13 +826,11 @@ class TestGetUserLimitWithDatabase:
         mock_session_maker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session_maker.return_value.__aexit__ = AsyncMock(return_value=None)
         
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin"})):
             with patch('app.database.AsyncSessionLocal', mock_session_maker):
                 result = await get_user_limit("user-1", 100, user_role="admin")
             
             assert result == UNLIMITED_LIMIT
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     async def test_user_with_custom_limit(self):
         """Should use custom limit when set"""
@@ -896,22 +856,16 @@ class TestGetUserLimitWithDatabase:
     
     async def test_database_error_falls_back(self):
         """Should fall back to role check on database error"""
-        from app.services import rate_limit
         from app.services.rate_limit import get_user_limit, UNLIMITED_LIMIT
-        
-        original_exempt = rate_limit.RATE_LIMIT_EXEMPT_ROLES
-        rate_limit.RATE_LIMIT_EXEMPT_ROLES = {"admin"}
         
         mock_session_maker = MagicMock()
         mock_session_maker.return_value.__aenter__ = AsyncMock(side_effect=Exception("DB error"))
         
-        try:
+        with patch.object(type(settings), 'rate_limit_exempt_roles', property(lambda self: {"admin"})):
             with patch('app.database.AsyncSessionLocal', mock_session_maker):
                 result = await get_user_limit("user-1", 100, user_role="admin")
             
             assert result == UNLIMITED_LIMIT  # Falls back to role check
-        finally:
-            rate_limit.RATE_LIMIT_EXEMPT_ROLES = original_exempt
     
     async def test_database_error_non_exempt(self):
         """Should fall back to default on database error for non-exempt"""

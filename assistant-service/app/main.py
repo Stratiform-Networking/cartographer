@@ -10,13 +10,13 @@ This service:
 - Provides contextual answers about network topology and health
 """
 
-import os
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .config import settings
 from .routers.assistant import router as assistant_router
 from .services.usage_middleware import UsageTrackingMiddleware
 
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("Starting Cartographer Assistant Service...")
-    logger.info(f"Metrics service URL: {os.environ.get('METRICS_SERVICE_URL', 'http://localhost:8003')}")
+    logger.info(f"Metrics service URL: {settings.metrics_service_url}")
     
     # Initialize database
     from .database import init_db
@@ -70,9 +70,6 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     
-    # Check if docs should be disabled (default: enabled)
-    disable_docs = os.environ.get("DISABLE_DOCS", "false").lower() == "true"
-    
     app = FastAPI(
         title="Cartographer Assistant Service",
         description="""
@@ -100,13 +97,13 @@ This service provides intelligent assistance by:
         """,
         version="0.1.0",
         lifespan=lifespan,
-        docs_url=None if disable_docs else "/docs",
-        redoc_url=None if disable_docs else "/redoc",
-        openapi_url=None if disable_docs else "/openapi.json",
+        docs_url=None if settings.disable_docs else "/docs",
+        redoc_url=None if settings.disable_docs else "/redoc",
+        openapi_url=None if settings.disable_docs else "/openapi.json",
     )
     
     # CORS middleware
-    allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
+    allowed_origins = settings.cors_origins.split(",")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,

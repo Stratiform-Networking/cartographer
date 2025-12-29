@@ -2,11 +2,12 @@
 Google Gemini provider implementation.
 """
 
-import os
 import logging
-import google.generativeai as genai
-from typing import AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
 
+import google.generativeai as genai
+
+from ..config import settings
 from .base import BaseProvider, ProviderConfig, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -25,24 +26,19 @@ class GeminiProvider(BaseProvider):
     
     def _configure_genai(self):
         """Configure Google Generative AI"""
-        
-        api_key = self.config.api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+        api_key = self.config.api_key or settings.effective_google_api_key
         genai.configure(api_key=api_key)
         return genai
     
     async def is_available(self) -> bool:
         """Check if Gemini is configured"""
-        api_key = (
-            self.config.api_key or 
-            os.environ.get("GOOGLE_API_KEY") or 
-            os.environ.get("GEMINI_API_KEY")
-        )
+        api_key = self.config.api_key or settings.effective_google_api_key
         return bool(api_key)
     
     async def stream_chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream chat completion from Gemini"""
         genai = self._configure_genai()
@@ -86,8 +82,8 @@ class GeminiProvider(BaseProvider):
     
     async def chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> str:
         """Non-streaming chat completion"""
         genai = self._configure_genai()
@@ -116,7 +112,7 @@ class GeminiProvider(BaseProvider):
         response = await chat.send_message_async(last_message)
         return response.text
     
-    async def list_models(self) -> List[str]:
+    async def list_models(self) -> list[str]:
         """List available Gemini models from the API"""
         genai = self._configure_genai()
         

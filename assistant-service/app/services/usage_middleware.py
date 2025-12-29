@@ -5,26 +5,24 @@ Automatically tracks endpoint usage statistics and reports them
 to the metrics service for aggregation.
 """
 
-import os
 import time
 import asyncio
 import logging
 from datetime import datetime
-from typing import Callable, List
 from collections import deque
+from collections.abc import Callable
 
 import httpx
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
 
 # Configuration
 SERVICE_NAME = "assistant-service"
-METRICS_SERVICE_URL = os.environ.get("METRICS_SERVICE_URL", "http://localhost:8003")
-BATCH_SIZE = 10  # Send records in batches
-BATCH_INTERVAL_SECONDS = 5.0  # Send batch every N seconds
 EXCLUDED_PATHS = {"/healthz", "/ready", "/", "/docs", "/openapi.json", "/redoc"}
 
 
@@ -72,7 +70,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         """Get or create HTTP client."""
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
-                base_url=METRICS_SERVICE_URL,
+                base_url=settings.metrics_service_url,
                 timeout=5.0,
             )
         return self._client
@@ -87,7 +85,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         """Background loop that periodically flushes the buffer."""
         while self._running:
             try:
-                await asyncio.sleep(BATCH_INTERVAL_SECONDS)
+                await asyncio.sleep(settings.usage_batch_interval_seconds)
                 await self._flush_buffer()
             except asyncio.CancelledError:
                 break
@@ -100,8 +98,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             return
         
         # Collect records to send
-        records_to_send: List[dict] = []
-        while self._buffer and len(records_to_send) < BATCH_SIZE:
+        records_to_send: list[dict] = []
+        while self._buffer and len(records_to_send) < settings.usage_batch_size:
             records_to_send.append(self._buffer.popleft().to_dict())
         
         if not records_to_send:
@@ -172,7 +170,7 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         self._buffer.append(record)
         
         # Trigger immediate flush if buffer is getting full
-        if len(self._buffer) >= BATCH_SIZE:
+        if len(self._buffer) >= settings.usage_batch_size:
             asyncio.create_task(self._flush_buffer())
         
         return response
@@ -194,4 +192,3 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         
         if self._client:
             await self._client.aclose()
-

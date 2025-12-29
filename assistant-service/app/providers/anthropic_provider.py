@@ -2,12 +2,14 @@
 Anthropic (Claude) provider implementation.
 """
 
-import os
+import asyncio
 import logging
+from collections.abc import AsyncIterator
+
 from anthropic import Anthropic
 from anthropic import AsyncAnthropic
-from typing import AsyncIterator, List, Optional
 
+from ..config import settings
 from .base import BaseProvider, ProviderConfig, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -26,9 +28,8 @@ class AnthropicProvider(BaseProvider):
     
     def _get_client(self):
         """Get Anthropic client"""
-        
-        api_key = self.config.api_key or os.environ.get("ANTHROPIC_API_KEY")
-        base_url = self.config.base_url or os.environ.get("ANTHROPIC_BASE_URL")
+        api_key = self.config.api_key or settings.anthropic_api_key
+        base_url = self.config.base_url or settings.anthropic_base_url
         
         kwargs = {"api_key": api_key}
         if base_url:
@@ -38,9 +39,8 @@ class AnthropicProvider(BaseProvider):
     
     def _get_sync_client(self):
         """Get sync Anthropic client for operations that work better synchronously"""
-        
-        api_key = self.config.api_key or os.environ.get("ANTHROPIC_API_KEY")
-        base_url = self.config.base_url or os.environ.get("ANTHROPIC_BASE_URL")
+        api_key = self.config.api_key or settings.anthropic_api_key
+        base_url = self.config.base_url or settings.anthropic_base_url
         
         kwargs = {"api_key": api_key}
         if base_url:
@@ -50,13 +50,13 @@ class AnthropicProvider(BaseProvider):
     
     async def is_available(self) -> bool:
         """Check if Anthropic is configured"""
-        api_key = self.config.api_key or os.environ.get("ANTHROPIC_API_KEY")
+        api_key = self.config.api_key or settings.anthropic_api_key
         return bool(api_key)
     
     async def stream_chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream chat completion from Anthropic"""
         client = self._get_client()
@@ -84,8 +84,8 @@ class AnthropicProvider(BaseProvider):
     
     async def chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> str:
         """Non-streaming chat completion"""
         client = self._get_client()
@@ -109,10 +109,8 @@ class AnthropicProvider(BaseProvider):
             if hasattr(block, 'text')
         )
     
-    async def list_models(self) -> List[str]:
+    async def list_models(self) -> list[str]:
         """List available Anthropic models using the Models API"""
-        import asyncio
-        
         # Use sync client in a thread pool to avoid async issues with the models API
         def fetch_models_sync():
             client = self._get_sync_client()

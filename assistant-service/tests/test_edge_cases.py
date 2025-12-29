@@ -745,13 +745,14 @@ class TestAdditionalCoverage:
             mock_class.assert_called_once()
     
     async def test_gemini_using_env_key(self):
-        """Should use GEMINI_API_KEY from env"""
+        """Should use GEMINI_API_KEY from settings"""
         from app.providers.gemini_provider import GeminiProvider
         from app.providers.base import ProviderConfig
+        from app.config import settings
         
         config = ProviderConfig()
         
-        with patch.dict(os.environ, {"GOOGLE_API_KEY": "", "GEMINI_API_KEY": "test-gemini-key"}):
+        with patch.object(type(settings), 'effective_google_api_key', property(lambda self: "test-gemini-key")):
             provider = GeminiProvider(config)
             assert await provider.is_available() is True
     

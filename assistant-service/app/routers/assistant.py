@@ -4,17 +4,18 @@ Assistant Router
 API endpoints for the AI assistant, including streaming chat.
 """
 
-import os
 import json
 import logging
 import asyncio
-from typing import Optional, Dict, List, Tuple
+from typing import Any
 from datetime import datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from ..config import settings
 from ..dependencies import AuthenticatedUser, require_auth, require_auth_with_rate_limit
 from ..models import (
     ModelProvider,
@@ -47,11 +48,11 @@ class ModelCache:
     """Cache for provider model lists to avoid repeated API calls"""
     
     def __init__(self, ttl_seconds: int = 300):  # 5 minute cache
-        self._cache: Dict[str, Tuple[List[str], datetime]] = {}
+        self._cache: dict[str, tuple[list[str], datetime]] = {}
         self._ttl = timedelta(seconds=ttl_seconds)
         self._lock = asyncio.Lock()
     
-    async def get_models(self, provider: ModelProvider, provider_instance: BaseProvider) -> List[str]:
+    async def get_models(self, provider: ModelProvider, provider_instance: BaseProvider) -> list[str]:
         """Get models for a provider, using cache if available"""
         cache_key = provider.value
         now = datetime.utcnow()
@@ -76,7 +77,7 @@ class ModelCache:
             logger.info(f"Cached {len(models)} models for {provider.value}")
             return models
     
-    def invalidate(self, provider: Optional[ModelProvider] = None):
+    def invalidate(self, provider: ModelProvider | None = None):
         """Invalidate cache for a specific provider or all providers"""
         if provider:
             self._cache.pop(provider.value, None)
@@ -86,9 +87,6 @@ class ModelCache:
 
 # Global model cache
 model_cache = ModelCache()
-
-# Chat limit per day
-CHAT_LIMIT_PER_DAY = int(os.getenv("ASSISTANT_CHAT_LIMIT_PER_DAY", "99999"))
 
 
 # System prompt for the assistant
@@ -112,7 +110,7 @@ Guidelines:
 """
 
 
-def get_provider(provider_type: ModelProvider, config: Optional[ProviderConfig] = None) -> BaseProvider:
+def get_provider(provider_type: ModelProvider, config: ProviderConfig | None = None) -> BaseProvider:
     """Get the appropriate provider instance"""
     if config is None:
         config = ProviderConfig()
@@ -295,7 +293,7 @@ async def refresh_all_models(user: AuthenticatedUser = Depends(require_auth)):
 
 @router.get("/context", response_model=NetworkContextSummary)
 async def get_network_context(
-    network_id: Optional[str] = Query(None, description="Network ID for multi-tenant mode"),
+    network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Get the current network context that would be provided to the assistant. Requires authentication.
@@ -318,7 +316,7 @@ async def get_network_context(
 
 @router.post("/context/refresh")
 async def refresh_context(
-    network_id: Optional[str] = Query(None, description="Network ID for multi-tenant mode"),
+    network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Clear cached context and fetch fresh data from the metrics service. Requires authentication.
@@ -355,7 +353,7 @@ async def get_context_status(user: AuthenticatedUser = Depends(require_auth)):
 
 @router.get("/context/debug")
 async def get_context_debug(
-    network_id: Optional[str] = Query(None, description="Network ID for multi-tenant mode"),
+    network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug endpoint to see the full context string being sent to AI. Requires authentication.
@@ -375,7 +373,7 @@ async def get_context_debug(
 
 @router.get("/context/raw")
 async def get_context_raw(
-    network_id: Optional[str] = Query(None, description="Network ID for multi-tenant mode"),
+    network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
     user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug endpoint to see raw snapshot data from metrics service. Requires authentication.
@@ -383,11 +381,6 @@ async def get_context_raw(
     Args:
         network_id: Optional network ID for multi-tenant mode.
     """
-    import httpx
-    import os
-    
-    METRICS_SERVICE_URL = os.environ.get("METRICS_SERVICE_URL", "http://localhost:8003")
-    
     # First, let's get the raw snapshot from metrics service
     snapshot = await metrics_context_service.fetch_network_snapshot(network_id=network_id)
     
@@ -395,10 +388,10 @@ async def get_context_raw(
     layout_data = None
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            params = {}
+            params: dict[str, Any] = {}
             if network_id is not None:
                 params["network_id"] = network_id
-            response = await client.get(f"{METRICS_SERVICE_URL}/api/metrics/debug/layout", params=params)
+            response = await client.get(f"{settings.metrics_service_url}/api/metrics/debug/layout", params=params)
             if response.status_code == 200:
                 layout_data = response.json()
     except Exception as e:
@@ -474,7 +467,7 @@ async def get_context_raw(
 # ==================== Chat Endpoints ====================
 
 # Create a rate-limited auth dependency for chat endpoints
-require_chat_auth = require_auth_with_rate_limit(CHAT_LIMIT_PER_DAY, "chat")
+require_chat_auth = require_auth_with_rate_limit(settings.assistant_chat_limit_per_day, "chat")
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -611,7 +604,9 @@ async def get_chat_limit_status(user: AuthenticatedUser = Depends(require_auth))
     
     Users with roles in ASSISTANT_RATE_LIMIT_EXEMPT_ROLES have unlimited access.
     """
-    status = await get_rate_limit_status(user.user_id, "chat", CHAT_LIMIT_PER_DAY, user_role=user.role.value)
+    status = await get_rate_limit_status(
+        user.user_id, "chat", settings.assistant_chat_limit_per_day, user_role=user.role.value
+    )
     
     # If user is exempt, they have unlimited access
     if status.get("is_exempt"):

@@ -2,11 +2,12 @@
 Ollama (local models) provider implementation.
 """
 
-import os
 import logging
-from ollama import AsyncClient
-from typing import AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
 
+from ollama import AsyncClient
+
+from ..config import settings
 from .base import BaseProvider, ProviderConfig, ChatMessage
 
 logger = logging.getLogger(__name__)
@@ -25,14 +26,7 @@ class OllamaProvider(BaseProvider):
     
     def _get_client(self):
         """Get Ollama client"""
-        
-        base_url = (
-            self.config.base_url or 
-            os.environ.get("OLLAMA_BASE_URL") or 
-            os.environ.get("OLLAMA_HOST") or
-            "http://localhost:11434"
-        )
-        
+        base_url = self.config.base_url or settings.effective_ollama_url
         return AsyncClient(host=base_url)
     
     async def is_available(self) -> bool:
@@ -48,8 +42,8 @@ class OllamaProvider(BaseProvider):
     
     async def stream_chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> AsyncIterator[str]:
         """Stream chat completion from Ollama"""
         client = self._get_client()
@@ -84,8 +78,8 @@ class OllamaProvider(BaseProvider):
     
     async def chat(
         self,
-        messages: List[ChatMessage],
-        system_prompt: Optional[str] = None,
+        messages: list[ChatMessage],
+        system_prompt: str | None = None,
     ) -> str:
         """Non-streaming chat completion"""
         client = self._get_client()
@@ -110,7 +104,7 @@ class OllamaProvider(BaseProvider):
         
         return response.get("message", {}).get("content", "")
     
-    async def list_models(self) -> List[str]:
+    async def list_models(self) -> list[str]:
         """List available Ollama models"""
         client = self._get_client()
         response = await client.list()

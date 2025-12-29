@@ -1,13 +1,14 @@
 """Database connection and session management for assistant service."""
 
-import os
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
+from .config import settings
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+DATABASE_URL = settings.database_url
 
 # Convert postgres:// to postgresql+asyncpg:// for async support
 if DATABASE_URL.startswith("postgres://"):
@@ -59,4 +60,3 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     
     async with AsyncSessionLocal() as session:
         yield session
-

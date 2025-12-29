@@ -2,24 +2,19 @@
 Auth dependencies for assistant service routes.
 Verifies tokens by calling the auth service or validating service tokens locally.
 """
-import os
+
 import logging
-from typing import Optional
 from enum import Enum
 
 import httpx
 import jwt
-from fastapi import HTTPException, Depends, Header, Query
+from fastapi import HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
-
-AUTH_SERVICE_URL = os.environ.get("AUTH_SERVICE_URL", "http://localhost:8002")
-
-# JWT Configuration for service token validation (must match other services)
-JWT_SECRET = os.environ.get("JWT_SECRET", "cartographer-dev-secret-change-in-production")
-JWT_ALGORITHM = "HS256"
 
 # Security scheme for JWT
 security = HTTPBearer(auto_error=False)
@@ -46,13 +41,13 @@ class AuthenticatedUser(BaseModel):
         return self.role in [UserRole.OWNER, UserRole.ADMIN]
 
 
-def verify_service_token(token: str) -> Optional[AuthenticatedUser]:
+def verify_service_token(token: str) -> AuthenticatedUser | None:
     """Verify a service-to-service JWT token locally.
     
     Service tokens are self-signed with the shared JWT_SECRET and have 'service: true' in the payload.
     """
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         
         # Check if this is a service token
         if not payload.get("service"):
@@ -75,12 +70,12 @@ def verify_service_token(token: str) -> Optional[AuthenticatedUser]:
         return None
 
 
-async def verify_token_with_auth_service(token: str) -> Optional[AuthenticatedUser]:
+async def verify_token_with_auth_service(token: str) -> AuthenticatedUser | None:
     """Verify a token by calling the auth service"""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{AUTH_SERVICE_URL}/api/auth/verify",
+                f"{settings.auth_service_url}/api/auth/verify",
                 headers={"Authorization": f"Bearer {token}"}
             )
             
@@ -98,13 +93,13 @@ async def verify_token_with_auth_service(token: str) -> Optional[AuthenticatedUs
                 role=UserRole(data["role"])
             )
     except httpx.ConnectError:
-        logger.error(f"Failed to connect to auth service at {AUTH_SERVICE_URL}")
+        logger.error(f"Failed to connect to auth service at {settings.auth_service_url}")
         raise HTTPException(
             status_code=503,
             detail="Auth service unavailable"
         )
     except httpx.TimeoutException:
-        logger.error(f"Timeout connecting to auth service")
+        logger.error("Timeout connecting to auth service")
         raise HTTPException(
             status_code=504,
             detail="Auth service timeout"
@@ -115,9 +110,9 @@ async def verify_token_with_auth_service(token: str) -> Optional[AuthenticatedUs
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    token: Optional[str] = Query(None, description="JWT token (for SSE/EventSource which doesn't support headers)")
-) -> Optional[AuthenticatedUser]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Query(None, description="JWT token (for SSE/EventSource which doesn't support headers)")
+) -> AuthenticatedUser | None:
     """Get current user from JWT token (returns None if not authenticated).
     
     Supports both:
@@ -149,7 +144,7 @@ async def get_current_user(
 
 
 async def require_auth(
-    user: Optional[AuthenticatedUser] = Depends(get_current_user)
+    user: AuthenticatedUser | None = Depends(get_current_user)
 ) -> AuthenticatedUser:
     """Require authenticated user"""
     if not user:
@@ -182,4 +177,3 @@ def require_auth_with_rate_limit(limit: int, endpoint: str):
         return user
     
     return _dependency
-

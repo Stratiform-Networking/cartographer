@@ -37,26 +37,29 @@ def upgrade() -> None:
     connection.execute(text("COMMIT"))
     
     # Username lookups (login endpoint)
+    # Filter to active users only for better index selectivity
     connection.execute(
         text("""
         CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_username_active
-        ON users(username) WHERE deleted_at IS NULL
+        ON users(username) WHERE is_active = true
         """)
     )
     
     # Email lookups (invite, password reset)
+    # Filter to active users only for better index selectivity
     connection.execute(
         text("""
         CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email_active
-        ON users(email) WHERE deleted_at IS NULL
+        ON users(email) WHERE is_active = true
         """)
     )
     
     # Active invites lookup
+    # Filter to pending invites for faster lookups
     connection.execute(
         text("""
         CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_invites_email_status
-        ON invites(email, status)
+        ON invites(email, status) WHERE status = 'pending'
         """)
     )
 

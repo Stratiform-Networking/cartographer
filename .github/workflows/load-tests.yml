@@ -263,36 +263,62 @@ jobs:
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8002 --log-level warning &
           echo $! > /tmp/auth-service.pid
+        env:
+          DATABASE_URL: postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_auth
+          JWT_SECRET: test_jwt_secret_for_load_testing_only
+          JWT_ALGORITHM: HS256
+          JWT_EXPIRATION_HOURS: 24
       
       - name: Start health service
         working-directory: health-service
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8001 --log-level warning &
           echo $! > /tmp/health-service.pid
+        env:
+          AUTH_SERVICE_URL: http://localhost:8002/api/auth
+          METRICS_SERVICE_URL: http://localhost:8003/api/metrics
+          REDIS_URL: redis://localhost:6379
       
       - name: Start metrics service
         working-directory: metrics-service
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8003 --log-level warning &
           echo $! > /tmp/metrics-service.pid
+        env:
+          AUTH_SERVICE_URL: http://localhost:8002/api/auth
+          REDIS_URL: redis://localhost:6379
       
       - name: Start assistant service
         working-directory: assistant-service
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8004 --log-level warning &
           echo $! > /tmp/assistant-service.pid
+        env:
+          AUTH_SERVICE_URL: http://localhost:8002/api/auth
+          METRICS_SERVICE_URL: http://localhost:8003/api/metrics
       
       - name: Start notification service
         working-directory: notification-service
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8005 --log-level warning &
           echo $! > /tmp/notification-service.pid
+        env:
+          DATABASE_URL: postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_notifications
+          AUTH_SERVICE_URL: http://localhost:8002/api/auth
+          REDIS_URL: redis://localhost:6379
       
       - name: Start backend
         working-directory: backend
         run: |
           uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level warning &
           echo $! > /tmp/backend.pid
+        env:
+          DATABASE_URL: postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer
+          AUTH_SERVICE_URL: http://localhost:8002
+          HEALTH_SERVICE_URL: http://localhost:8001
+          METRICS_SERVICE_URL: http://localhost:8003
+          ASSISTANT_SERVICE_URL: http://localhost:8004
+          NOTIFICATION_SERVICE_URL: http://localhost:8005
       
       # Wait for services to be ready
       - name: Wait for services to start

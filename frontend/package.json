@@ -1,6 +1,6 @@
 {
   "name": "cartographer-frontend",
-  "version": "0.17.17",
+  "version": "0.17.18",
   "private": true,
   "type": "module",
   "scripts": {

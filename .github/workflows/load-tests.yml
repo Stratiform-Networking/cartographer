@@ -1,27 +1,82 @@
 name: Load Tests
 
 # This workflow runs load tests against Cartographer services:
-# - Nightly at 2 AM UTC (automatic baseline testing)
-# - On-demand via workflow_dispatch (manual testing with custom parameters)
+# - Nightly at 2 AM UTC (capacity discovery: find max sustainable load)
+# - On-demand via workflow_dispatch (capacity discovery or fixed load)
+#
+# CAPACITY DISCOVERY (Default - Recommended):
+#   Automatically finds system capacity by ramping load until performance degrades.
+#   Answers: "What can my system handle right now?"
+#   
+#   Algorithm:
+#     1. Start with initial_users (default: 10)
+#     2. Add ramp_step users (default: +10) every ramp_interval seconds (default: 90s)
+#     3. Monitor: P95 latency < 200ms AND error rate < 1%
+#     4. Stop when thresholds exceeded or max_users reached
+#     5. Report the "knee point" = maximum sustainable capacity
+#
+#   Configuration:
+#     - Initial Users:     10 (starting point)
+#     - Ramp Step:         +10 users per interval
+#     - Ramp Interval:     90s (1.5 minutes between ramps)
+#     - Max Users:         200 (safety limit)
+#     - P95 Threshold:     200ms
+#     - Error Threshold:   1%
+#
+# FIXED LOAD (Legacy):
+#   Traditional load test with fixed user count and duration.
+#   
+#   Profiles:
+#     Light:    10-25 users,  1-2/s spawn,  60-120s   (Quick smoke test)
+#     Moderate: 50-100 users, 5-10/s spawn, 300-600s  (Baseline performance)
+#     High:     100-200 users, 10-20/s spawn, 900-1800s (Stress test)
 
 on:
   # Run on demand via workflow_dispatch
   workflow_dispatch:
     inputs:
+      test_type:
+        description: 'Test type'
+        required: false
+        default: 'capacity_discovery'
+        type: choice
+        options:
+          - capacity_discovery
+          - fixed_load
       users:
-        description: 'Number of concurrent users'
+        description: '[Fixed Load] Number of concurrent users (moderate: 50-100, high: 100-200)'
+        required: false
+        default: '100'
+        type: string
+      spawn_rate:
+        description: 'User spawn rate per second (recommended: 5-10)'
+        required: false
+        default: '5'
+        type: string
+      duration:
+        description: '[Fixed Load] Test duration in seconds (moderate: 300-600, high: 900-1800)'
+        required: false
+        default: '300'
+        type: string
+      ramp_initial_users:
+        description: '[Capacity Discovery] Initial users'
         required: false
         default: '10'
         type: string
-      spawn_rate:
-        description: 'User spawn rate per second'
+      ramp_step:
+        description: '[Capacity Discovery] Users to add per step'
         required: false
-        default: '2'
+        default: '10'
         type: string
-      duration:
-        description: 'Test duration in seconds'
+      ramp_interval:
+        description: '[Capacity Discovery] Seconds between ramps'
         required: false
-        default: '60'
+        default: '90'
+        type: string
+      ramp_max_users:
+        description: '[Capacity Discovery] Maximum users before stopping'
+        required: false
+        default: '200'
         type: string
       service:
         description: 'Service to test (all, auth, health, metrics, assistant, notifications)'
@@ -36,7 +91,7 @@ on:
           - assistant
           - notifications
   
-  # Run nightly at 2 AM UTC (automatically uses defaults: 10 users, 60s duration)
+  # Run nightly at 2 AM UTC with capacity discovery
   schedule:
     - cron: '0 2 * * *'
   
@@ -48,7 +103,7 @@ on:
 jobs:
   load-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45  # Increased for longer load tests
     
     # Use service containers for dependencies
     services:
@@ -360,52 +415,122 @@ jobs:
       - name: Run load tests
         working-directory: load-tests
         run: |
+          TEST_TYPE="${{ github.event.inputs.test_type || 'capacity_discovery' }}"
           SERVICE="${{ github.event.inputs.service || 'all' }}"
-          USERS="${{ github.event.inputs.users || '10' }}"
-          SPAWN_RATE="${{ github.event.inputs.spawn_rate || '2' }}"
-          DURATION="${{ github.event.inputs.duration || '60' }}"
           
-          echo "Running load tests..."
+          echo "🧪 Starting load tests..."
+          echo "  Test Type: $TEST_TYPE"
           echo "  Service: $SERVICE"
-          echo "  Users: $USERS"
-          echo "  Spawn Rate: $SPAWN_RATE/s"
-          echo "  Duration: ${DURATION}s"
           echo ""
           
-          python run_load_tests.py \
-            --service "$SERVICE" \
-            --users "$USERS" \
-            --spawn-rate "$SPAWN_RATE" \
-            --time "$DURATION" \
-            --html load_test_report.html \
-            --username loadtest_admin \
-            --password "LoadTest123!"
+          if [ "$TEST_TYPE" = "capacity_discovery" ]; then
+            # Capacity Discovery Mode
+            RAMP_INITIAL="${{ github.event.inputs.ramp_initial_users || '10' }}"
+            RAMP_STEP="${{ github.event.inputs.ramp_step || '10' }}"
+            RAMP_INTERVAL="${{ github.event.inputs.ramp_interval || '90' }}"
+            RAMP_MAX="${{ github.event.inputs.ramp_max_users || '200' }}"
+            SPAWN_RATE="${{ github.event.inputs.spawn_rate || '5' }}"
+            
+            echo "🔍 CAPACITY DISCOVERY MODE"
+            echo "  Initial Users:  $RAMP_INITIAL"
+            echo "  Ramp Step:      +$RAMP_STEP users every ${RAMP_INTERVAL}s"
+            echo "  Max Users:      $RAMP_MAX"
+            echo "  Spawn Rate:     $SPAWN_RATE/s"
+            echo "  Stop when:      P95 > 200ms OR Error rate > 1%"
+            echo ""
+            
+            # Run capacity discovery test using locust directly
+            locust -f locustfile_capacity_discovery.py \
+              --host http://localhost:8000 \
+              --html capacity_discovery_report.html \
+              --headless \
+              --only-summary \
+              --stop-timeout 10
+            
+          else
+            # Fixed Load Mode (legacy)
+            USERS="${{ github.event.inputs.users || '50' }}"
+            SPAWN_RATE="${{ github.event.inputs.spawn_rate || '5' }}"
+            DURATION="${{ github.event.inputs.duration || '300' }}"
+            
+            echo "📊 FIXED LOAD MODE"
+            echo "  Users:       $USERS"
+            echo "  Spawn Rate:  $SPAWN_RATE/s"
+            echo "  Duration:    ${DURATION}s"
+            echo ""
+            
+            python run_load_tests.py \
+              --service "$SERVICE" \
+              --users "$USERS" \
+              --spawn-rate "$SPAWN_RATE" \
+              --time "$DURATION" \
+              --html load_test_report.html \
+              --username loadtest_admin \
+              --password "LoadTest123!"
+          fi
         env:
           LOADTEST_USERNAME: loadtest_admin
           LOADTEST_PASSWORD: LoadTest123!
+          RAMP_INITIAL_USERS: ${{ github.event.inputs.ramp_initial_users || '10' }}
+          RAMP_STEP: ${{ github.event.inputs.ramp_step || '10' }}
+          RAMP_INTERVAL: ${{ github.event.inputs.ramp_interval || '90' }}
+          RAMP_MAX_USERS: ${{ github.event.inputs.ramp_max_users || '200' }}
+          RAMP_P95_THRESHOLD: '200'
+          RAMP_ERROR_THRESHOLD: '0.01'
+          RAMP_SPAWN_RATE: ${{ github.event.inputs.spawn_rate || '5' }}
       
       # Upload results
       - name: Upload load test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: load-test-report-${{ github.event.inputs.service || 'all' }}-${{ github.event_name == 'schedule' && format('nightly-{0}', github.run_number) || format('manual-{0}', github.run_number) }}
-          path: load-tests/load_test_report.html
+          name: load-test-report-${{ github.event.inputs.test_type || 'capacity_discovery' }}-${{ github.event.inputs.service || 'all' }}-${{ github.event_name == 'schedule' && format('nightly-{0}', github.run_number) || format('manual-{0}', github.run_number) }}
+          path: load-tests/*_report.html
           retention-days: ${{ github.event_name == 'schedule' && 90 || 30 }}
       
       # Parse and check results for scheduled runs
       - name: Check for performance issues
         if: github.event_name == 'schedule'
         run: |
-          echo "📊 Checking load test results for performance issues..."
+          echo "📊 Analyzing capacity discovery results..."
+          echo ""
+          echo "🎯 Capacity Discovery Test - Nightly Run"
+          echo "   Goal: Find the 'knee point' = maximum sustainable load"
+          echo ""
+          echo "Expected Behavior:"
+          echo "  ✓ Ramp: 10 → 20 → 30 → ... users (+10 every 90s)"
+          echo "  ✓ Stop when: P95 > 200ms OR Error rate > 1%"
+          echo "  ✓ Report: Knee point (max capacity before degradation)"
+          echo ""
+          echo "Performance Thresholds:"
+          echo "  ✓ Success Rate:    >99%"
+          echo "  ✓ P95 Response:    <200ms"
+          echo "  ✓ Error Threshold: <1%"
+          echo ""
+          
+          # Check if capacity discovery report exists
+          if [ -f "load-tests/capacity_discovery_report.html" ]; then
+            echo "✓ Capacity discovery report found"
+            echo ""
+            echo "📈 Review the report to see:"
+            echo "   • Maximum sustainable concurrent users (knee point)"
+            echo "   • Performance degradation pattern"
+            echo "   • Specific bottleneck (latency vs errors)"
+            echo "   • Comparison with previous nightly runs"
+          else
+            echo "⚠️  Capacity discovery report not found"
+          fi
+          echo ""
           
           # Note: This is a placeholder for future enhancement
-          # You could parse the HTML report or Locust stats to check for:
-          # - Failure rate > threshold
-          # - Response times > threshold
-          # - Comparison with baseline metrics
+          # You could parse the HTML report or Locust stats to:
+          # - Extract knee point automatically
+          # - Compare with historical baseline
+          # - Alert if capacity decreased significantly (e.g., >20%)
+          # - Identify degraded endpoints
+          # - Track capacity trends over time
           
-          echo "✓ Performance check complete (manual review recommended)"
+          echo "✓ Capacity analysis complete (manual review recommended)"
       
       # Cleanup
       - name: Stop services
@@ -437,13 +562,36 @@ jobs:
             echo "🚀 **Run Type**: Manual Trigger" >> $GITHUB_STEP_SUMMARY
           fi
           
+          TEST_TYPE="${{ github.event.inputs.test_type || 'capacity_discovery' }}"
+          
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Test Type**: $TEST_TYPE" >> $GITHUB_STEP_SUMMARY
           echo "- **Service**: ${{ github.event.inputs.service || 'all' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Users**: ${{ github.event.inputs.users || '10' }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Spawn Rate**: ${{ github.event.inputs.spawn_rate || '2' }}/s" >> $GITHUB_STEP_SUMMARY
-          echo "- **Duration**: ${{ github.event.inputs.duration || '60' }}s" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$TEST_TYPE" = "capacity_discovery" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔍 Capacity Discovery Settings" >> $GITHUB_STEP_SUMMARY
+            echo "- **Initial Users**: ${{ github.event.inputs.ramp_initial_users || '10' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Ramp Step**: +${{ github.event.inputs.ramp_step || '10' }} users" >> $GITHUB_STEP_SUMMARY
+            echo "- **Ramp Interval**: ${{ github.event.inputs.ramp_interval || '90' }}s" >> $GITHUB_STEP_SUMMARY
+            echo "- **Max Users**: ${{ github.event.inputs.ramp_max_users || '200' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Spawn Rate**: ${{ github.event.inputs.spawn_rate || '5' }}/s" >> $GITHUB_STEP_SUMMARY
+            echo "- **P95 Threshold**: 200ms" >> $GITHUB_STEP_SUMMARY
+            echo "- **Error Threshold**: 1%" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Goal**: Find the 'knee point' = maximum sustainable capacity" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📊 Fixed Load Settings" >> $GITHUB_STEP_SUMMARY
+            echo "- **Users**: ${{ github.event.inputs.users || '50' }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Spawn Rate**: ${{ github.event.inputs.spawn_rate || '5' }}/s" >> $GITHUB_STEP_SUMMARY
+            echo "- **Duration**: ${{ github.event.inputs.duration || '300' }}s (~$(( ${{ github.event.inputs.duration || '300' }} / 60 )) minutes)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "Download the HTML report from the workflow artifacts to view detailed results." >> $GITHUB_STEP_SUMMARY
           echo "### Results" >> $GITHUB_STEP_SUMMARY
           echo "📊 Download the HTML report from the artifacts to view detailed metrics:" >> $GITHUB_STEP_SUMMARY
           echo "- Request rates (RPS)" >> $GITHUB_STEP_SUMMARY

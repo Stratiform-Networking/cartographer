@@ -37,9 +37,9 @@ async def add_performance_indexes():
             "name": "idx_networks_owner_id_active",
             "sql": """
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_networks_owner_id_active
-                ON networks(owner_id) WHERE deleted_at IS NULL
+                ON networks(user_id) WHERE is_active = true
             """,
-            "description": "Speed up network list queries by owner"
+            "description": "Speed up network list queries by owner (active networks only)"
         },
         {
             "name": "idx_network_permissions_network_user",
@@ -50,20 +50,12 @@ async def add_performance_indexes():
             "description": "Speed up permission lookup queries"
         },
         {
-            "name": "idx_embeds_network_id_active",
+            "name": "idx_network_notification_settings_network",
             "sql": """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_embeds_network_id_active
-                ON embeds(network_id) WHERE deleted_at IS NULL
+                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_network_notification_settings_network
+                ON network_notification_settings(network_id)
             """,
-            "description": "Speed up embed queries by network"
-        },
-        {
-            "name": "idx_network_layouts_network_id",
-            "sql": """
-                CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_network_layouts_network_id
-                ON network_layouts(network_id)
-            """,
-            "description": "Speed up layout persistence queries"
+            "description": "Speed up notification settings lookup by network"
         },
     ]
     

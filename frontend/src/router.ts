@@ -5,34 +5,34 @@ import EmbedPage from './pages/EmbedPage.vue';
 import AcceptInvitePage from './pages/AcceptInvitePage.vue';
 
 const routes = [
-	{
-		path: '/',
-		name: 'home',
-		component: HomePage
-	},
-	{
-		path: '/network/:id',
-		name: 'network',
-		component: NetworkPage,
-		props: true
-	},
-	{
-		path: '/embed/:embedId',
-		name: 'embed',
-		component: EmbedPage,
-		props: true
-	},
-	{
-		path: '/accept-invite',
-		name: 'accept-invite',
-		component: AcceptInvitePage
-	}
+  {
+    path: '/',
+    name: 'home',
+    component: HomePage,
+  },
+  {
+    path: '/network/:id',
+    name: 'network',
+    component: NetworkPage,
+    props: true,
+  },
+  {
+    path: '/embed/:embedId',
+    name: 'embed',
+    component: EmbedPage,
+    props: true,
+  },
+  {
+    path: '/accept-invite',
+    name: 'accept-invite',
+    component: AcceptInvitePage,
+  },
 ];
 
 const router = createRouter({
-	// Use BASE_URL from Vite (set via VITE_BASE_PATH env var, defaults to /)
-	history: createWebHistory(import.meta.env.BASE_URL),
-	routes
+  // Use BASE_URL from Vite (set via VITE_BASE_PATH env var, defaults to /)
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
 });
 
 export default router;

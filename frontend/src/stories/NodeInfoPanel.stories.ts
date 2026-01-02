@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import NodeInfoPanel from '../components/NodeInfoPanel.vue'
-import type { TreeNode, DeviceMetrics } from '../types/network'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import NodeInfoPanel from '../components/NodeInfoPanel.vue';
+import type { TreeNode, DeviceMetrics } from '../types/network';
 
 // Sample node data
 const createMockNode = (overrides: Partial<TreeNode> = {}): TreeNode => ({
@@ -18,14 +18,14 @@ const createMockNode = (overrides: Partial<TreeNode> = {}): TreeNode => ({
   updatedAt: '2024-06-15T12:00:00Z',
   version: 3,
   ...overrides,
-})
+});
 
 const createMockDevices = (): TreeNode[] => [
   { id: '192.168.1.1', name: 'Gateway', ip: '192.168.1.1', role: 'gateway/router' },
   { id: '192.168.1.2', name: 'Core Switch', ip: '192.168.1.2', role: 'switch/ap' },
   { id: '192.168.1.10', name: 'Web Server', ip: '192.168.1.10', role: 'server' },
   { id: '192.168.1.20', name: 'NAS', ip: '192.168.1.20', role: 'nas' },
-]
+];
 
 const meta = {
   title: 'Components/NodeInfoPanel',
@@ -35,7 +35,8 @@ const meta = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'Panel showing detailed information about a selected network node including health metrics, connection info, notes, and LAN port configuration.',
+        component:
+          'Panel showing detailed information about a selected network node including health metrics, connection info, notes, and LAN port configuration.',
       },
     },
   },
@@ -62,10 +63,10 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof NodeInfoPanel>
+} satisfies Meta<typeof NodeInfoPanel>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default server node
 export const Default: Story = {
@@ -78,7 +79,7 @@ export const Default: Story = {
     onUpdateNotes: fn(),
     onUpdateLanPorts: fn(),
   },
-}
+};
 
 // Gateway node
 export const GatewayNode: Story = {
@@ -95,7 +96,7 @@ export const GatewayNode: Story = {
     allDevices: createMockDevices(),
     onClose: fn(),
   },
-}
+};
 
 // Switch/AP node with LAN ports
 export const SwitchWithPorts: Story = {
@@ -125,7 +126,7 @@ export const SwitchWithPorts: Story = {
     allDevices: createMockDevices(),
     onClose: fn(),
   },
-}
+};
 
 // Client device
 export const ClientDevice: Story = {
@@ -142,7 +143,7 @@ export const ClientDevice: Story = {
     allDevices: createMockDevices(),
     onClose: fn(),
   },
-}
+};
 
 // Read-only mode
 export const ReadOnly: Story = {
@@ -152,7 +153,7 @@ export const ReadOnly: Story = {
     allDevices: createMockDevices(),
     onClose: fn(),
   },
-}
+};
 
 // Monitoring disabled
 export const MonitoringDisabled: Story = {
@@ -164,7 +165,7 @@ export const MonitoringDisabled: Story = {
     allDevices: createMockDevices(),
     onClose: fn(),
   },
-}
+};
 
 // Unknown device type
 export const UnknownDevice: Story = {
@@ -180,5 +181,4 @@ export const UnknownDevice: Story = {
     allDevices: createMockDevices(),
     onClose: fn(),
   },
-}
-
+};

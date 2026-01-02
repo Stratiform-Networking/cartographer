@@ -1,2 +1,1 @@
 # Assistant service unit tests
-

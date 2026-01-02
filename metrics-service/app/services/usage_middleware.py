@@ -30,9 +30,17 @@ USAGE_PATHS = {"/api/metrics/usage/record", "/api/metrics/usage/record/batch"}
 
 class UsageRecord:
     """Simple record class for usage data."""
+
     __slots__ = ["endpoint", "method", "status_code", "response_time_ms", "timestamp"]
-    
-    def __init__(self, endpoint: str, method: str, status_code: int, response_time_ms: float, timestamp: datetime):
+
+    def __init__(
+        self,
+        endpoint: str,
+        method: str,
+        status_code: int,
+        response_time_ms: float,
+        timestamp: datetime,
+    ):
         self.endpoint = endpoint
         self.method = method
         self.status_code = status_code
@@ -43,11 +51,11 @@ class UsageRecord:
 class UsageTrackingMiddleware(BaseHTTPMiddleware):
     """
     Middleware that tracks endpoint usage for the metrics service itself.
-    
+
     Records directly to the usage tracker without HTTP calls to avoid
     circular dependencies.
     """
-    
+
     def __init__(self, app, service_name: str = SERVICE_NAME):
         super().__init__(app)
         self.service_name = service_name
@@ -55,20 +63,21 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
         self._flush_task: asyncio.Task | None = None
         self._running = False
         self._usage_tracker = None  # Lazy load to avoid circular import
-    
+
     def _get_usage_tracker(self):
         """Lazy load usage tracker to avoid circular imports."""
         if self._usage_tracker is None:
             from .usage_tracker import usage_tracker
+
             self._usage_tracker = usage_tracker
         return self._usage_tracker
-    
+
     async def _start_flush_task(self):
         """Start the background flush task if not running."""
         if not self._running:
             self._running = True
             self._flush_task = asyncio.create_task(self._flush_loop())
-    
+
     async def _flush_loop(self):
         """Background loop that periodically flushes the buffer."""
         while self._running:
@@ -79,22 +88,22 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
                 break
             except Exception as e:
                 logger.debug(f"Flush loop error: {e}")
-    
+
     async def _flush_buffer(self):
         """Process accumulated records directly."""
         if not self._buffer:
             return
-        
+
         tracker = self._get_usage_tracker()
-        
+
         # Collect records to process
         records_to_process: list[UsageRecord] = []
         while self._buffer and len(records_to_process) < settings.usage_batch_size:
             records_to_process.append(self._buffer.popleft())
-        
+
         if not records_to_process:
             return
-        
+
         try:
             for record in records_to_process:
                 usage_record = EndpointUsageRecord(
@@ -108,31 +117,33 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
                 await tracker.record_usage(usage_record)
         except Exception as e:
             logger.debug(f"Failed to record metrics service usage: {e}")
-    
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Process request and track usage."""
         # Start flush task on first request
         if not self._running:
             asyncio.create_task(self._start_flush_task())
-        
+
         # Skip excluded paths and usage endpoints (prevent infinite loop)
         path = request.url.path
-        if (path in EXCLUDED_PATHS or 
-            path in USAGE_PATHS or 
-            path.startswith("/docs") or 
-            path.startswith("/openapi") or
-            path.startswith("/api/metrics/usage")):
+        if (
+            path in EXCLUDED_PATHS
+            or path in USAGE_PATHS
+            or path.startswith("/docs")
+            or path.startswith("/openapi")
+            or path.startswith("/api/metrics/usage")
+        ):
             return await call_next(request)
-        
+
         # Track timing
         start_time = time.perf_counter()
-        
+
         # Process request
         response = await call_next(request)
-        
+
         # Calculate response time
         response_time_ms = (time.perf_counter() - start_time) * 1000
-        
+
         # Create usage record
         record = UsageRecord(
             endpoint=path,
@@ -141,28 +152,27 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             response_time_ms=response_time_ms,
             timestamp=datetime.utcnow(),
         )
-        
+
         # Add to buffer (non-blocking)
         self._buffer.append(record)
-        
+
         # Trigger immediate flush if buffer is getting full
         if len(self._buffer) >= settings.usage_batch_size:
             asyncio.create_task(self._flush_buffer())
-        
+
         return response
-    
+
     async def shutdown(self):
         """Clean shutdown - flush remaining records."""
         self._running = False
-        
+
         if self._flush_task:
             self._flush_task.cancel()
             try:
                 await self._flush_task
             except asyncio.CancelledError:
                 pass
-        
+
         # Final flush
         while self._buffer:
             await self._flush_buffer()
-

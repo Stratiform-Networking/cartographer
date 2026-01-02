@@ -19,14 +19,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .routers.metrics import router as metrics_router
-from .services.redis_publisher import redis_publisher
 from .services.metrics_aggregator import metrics_aggregator
+from .services.redis_publisher import redis_publisher
 from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -35,28 +34,28 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """
     Manage application startup and shutdown events.
-    
+
     On startup:
     - Connect to Redis
     - Generate initial snapshot immediately
     - Start the background metrics publishing loop
-    
+
     On shutdown:
     - Stop publishing
     - Disconnect from Redis
     """
     import asyncio
-    
+
     # Startup
     logger.info("Starting Cartographer Metrics Service...")
-    
+
     # Connect to Redis first
     redis_connected = await redis_publisher.connect()
     if redis_connected:
         logger.info("Connected to Redis successfully")
     else:
         logger.warning("Failed to connect to Redis - will retry on publish")
-    
+
     # Generate initial snapshots for ALL networks IMMEDIATELY (before starting background loop)
     # This ensures snapshots are available as soon as the service starts accepting requests
     logger.info("Generating initial snapshots for all networks...")
@@ -65,30 +64,34 @@ async def lifespan(app: FastAPI):
         initial_snapshots = await metrics_aggregator.generate_all_snapshots()
         if initial_snapshots:
             total_nodes = sum(s.total_nodes for s in initial_snapshots.values())
-            logger.info(f"Initial snapshots ready for {len(initial_snapshots)} networks with {total_nodes} total nodes")
+            logger.info(
+                f"Initial snapshots ready for {len(initial_snapshots)} networks with {total_nodes} total nodes"
+            )
             if redis_connected:
                 for network_id, snapshot in initial_snapshots.items():
                     await redis_publisher.store_last_snapshot(snapshot)
                     await redis_publisher.publish_topology_snapshot(snapshot)
                     logger.debug(f"Published initial snapshot for network {network_id}")
         else:
-            logger.warning("No initial snapshots generated - networks may not exist yet or have no layouts")
+            logger.warning(
+                "No initial snapshots generated - networks may not exist yet or have no layouts"
+            )
     except Exception as e:
         logger.warning(f"Failed to generate initial snapshots: {e}")
-    
+
     # Start background publishing loop (will wait for interval before first publish)
     metrics_aggregator.start_publishing(skip_initial=True)
     logger.info("Background metrics publishing started")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Cartographer Metrics Service...")
-    
+
     # Stop publishing
     metrics_aggregator.stop_publishing()
     logger.info("Background publishing stopped")
-    
+
     # Disconnect from Redis
     await redis_publisher.disconnect()
     logger.info("Disconnected from Redis")
@@ -125,7 +128,7 @@ by other services and real-time dashboards.
         redoc_url=None if settings.disable_docs else "/redoc",
         openapi_url=None if settings.disable_docs else "/openapi.json",
     )
-    
+
     # CORS middleware
     allowed_origins = settings.cors_origins.split(",")
     app.add_middleware(
@@ -135,13 +138,13 @@ by other services and real-time dashboards.
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Usage tracking middleware - tracks own endpoint usage
     app.add_middleware(UsageTrackingMiddleware, service_name="metrics-service")
-    
+
     # Include routers
     app.include_router(metrics_router, prefix="/api")
-    
+
     # Root endpoint
     @app.get("/")
     def root():
@@ -155,9 +158,9 @@ by other services and real-time dashboards.
                 "metrics": "/api/metrics",
                 "docs": "/docs",
                 "health": "/healthz",
-            }
+            },
         }
-    
+
     # Health check endpoint
     @app.get("/healthz")
     async def healthz():
@@ -167,14 +170,14 @@ by other services and real-time dashboards.
         """
         redis_info = await redis_publisher.get_connection_info()
         config = metrics_aggregator.get_config()
-        
+
         return {
             "status": "healthy",
             "redis_connected": redis_info["connected"],
             "publishing_enabled": config["publishing_enabled"],
             "is_publishing": config["is_running"],
         }
-    
+
     # Readiness check endpoint
     @app.get("/ready")
     async def readyz():
@@ -183,15 +186,15 @@ by other services and real-time dashboards.
         Returns ready only when the service can fulfill requests.
         """
         redis_info = await redis_publisher.get_connection_info()
-        
+
         # Service is ready if Redis is connected
         is_ready = redis_info["connected"]
-        
+
         return {
             "ready": is_ready,
             "redis_connected": redis_info["connected"],
         }
-    
+
     return app
 
 

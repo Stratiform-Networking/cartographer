@@ -1,0 +1,32 @@
+[flake8]
+max-line-length = 100
+extend-ignore = 
+    # E203: whitespace before ':' (conflicts with Black)
+    E203,
+    # W503: line break before binary operator (conflicts with Black)
+    W503,
+    # E501: line too long (Black handles this)
+    E501
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    env,
+    .eggs,
+    *.egg,
+    build,
+    dist,
+    migrations,
+    htmlcov,
+    node_modules,
+    .mypy_cache,
+    .pytest_cache,
+    .tox
+per-file-ignores =
+    # Ignore unused imports in __init__.py files
+    __init__.py:F401
+    # Ignore complexity and unused variables in tests
+    tests/*:C901,F401,F841,E402,F811
+max-complexity = 10
+

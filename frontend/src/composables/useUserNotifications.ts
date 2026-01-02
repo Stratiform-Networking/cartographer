@@ -1,6 +1,6 @@
 /**
  * User notifications composable
- * 
+ *
  * Manages user-specific notification preferences.
  * For individual user configuration (not admin/owner settings).
  */
@@ -74,7 +74,9 @@ export function useUserNotifications() {
     }
   }
 
-  async function updateGlobalPreferences(update: Partial<import('../types/notifications').GlobalPreferences>) {
+  async function updateGlobalPreferences(
+    update: Partial<import('../types/notifications').GlobalPreferences>
+  ) {
     error.value = null;
     try {
       return await notificationsApi.updateUserGlobalPreferences(update);
@@ -106,7 +108,10 @@ export function useUserNotifications() {
   }
 
   // Discord OAuth - Context-aware (per-network or global)
-  async function initiateDiscordOAuth(contextType: 'network' | 'global' = 'global', networkId?: string) {
+  async function initiateDiscordOAuth(
+    contextType: 'network' | 'global' = 'global',
+    networkId?: string
+  ) {
     error.value = null;
     try {
       return await notificationsApi.initiateDiscordOAuth(contextType, networkId);

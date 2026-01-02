@@ -1,6 +1,6 @@
 /**
  * Networks API module
- * 
+ *
  * All network management API calls.
  * Types are defined in types/networks.ts - import from there for type definitions.
  */
@@ -13,7 +13,6 @@ import type {
   UpdateNetworkData,
   NetworkPermission,
   CreateNetworkPermission,
-  NetworkPermissionRole,
 } from '../types/networks';
 import type { SavedLayout } from '../types/layout';
 
@@ -23,7 +22,6 @@ export type {
   NetworkLayoutResponse,
   CreateNetworkData,
   UpdateNetworkData,
-  NetworkPermissionRole,
   NetworkPermission,
   CreateNetworkPermission,
 } from '../types/networks';
@@ -69,7 +67,10 @@ export async function getNetworkLayout(id: string): Promise<NetworkLayoutRespons
   return response.data;
 }
 
-export async function saveNetworkLayout(id: string, layoutData: SavedLayout): Promise<NetworkLayoutResponse> {
+export async function saveNetworkLayout(
+  id: string,
+  layoutData: SavedLayout
+): Promise<NetworkLayoutResponse> {
   const response = await client.post<NetworkLayoutResponse>(`/api/networks/${id}/layout`, {
     layout_data: layoutData,
   });
@@ -87,7 +88,10 @@ export async function addNetworkPermission(
   networkId: string,
   data: CreateNetworkPermission
 ): Promise<NetworkPermission> {
-  const response = await client.post<NetworkPermission>(`/api/networks/${networkId}/permissions`, data);
+  const response = await client.post<NetworkPermission>(
+    `/api/networks/${networkId}/permissions`,
+    data
+  );
   return response.data;
 }
 

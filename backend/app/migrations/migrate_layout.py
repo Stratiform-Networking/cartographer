@@ -17,11 +17,11 @@ import logging
 from pathlib import Path
 
 import httpx
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
-from ..database import async_session_maker, engine, Base
-from ..models.network import Network
 from ..config import get_settings
+from ..database import Base, async_session_maker, engine
+from ..models.network import Network
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

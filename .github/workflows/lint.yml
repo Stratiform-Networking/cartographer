@@ -1,0 +1,45 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install -r assistant-service/requirements.txt
+          pip install -r auth-service/requirements.txt
+          pip install -r health-service/requirements.txt
+          pip install -r metrics-service/requirements.txt
+          pip install -r notification-service/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Lint Backend
+        run: npm run lint:backend
+
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Lint Frontend
+        run: npm run lint:frontend
+

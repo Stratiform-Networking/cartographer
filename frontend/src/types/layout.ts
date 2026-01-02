@@ -10,4 +10,3 @@ export interface SavedLayout {
   positions: Record<string, { x: number; y: number }>;
   root?: TreeNode;
 }
-

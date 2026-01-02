@@ -3,8 +3,8 @@ Application configuration using pydantic-settings.
 All configuration is read from environment variables.
 """
 
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Database
-    database_url: str = "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
+    database_url: str = (
+        "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
+    )
 
     # Service URLs (for microservice communication)
     health_service_url: str = "http://localhost:8001"
@@ -54,4 +56,3 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
-

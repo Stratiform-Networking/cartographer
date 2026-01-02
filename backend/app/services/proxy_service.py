@@ -11,6 +11,7 @@ Features:
 - Configurable path prefixes per service
 - Service-specific timeout defaults
 """
+
 from typing import Any
 
 from fastapi import Request
@@ -39,10 +40,10 @@ SERVICE_TIMEOUTS: dict[str, float] = {
 def extract_auth_headers(request: Request) -> dict[str, str]:
     """
     Extract authorization header from request for forwarding to downstream services.
-    
+
     Args:
         request: The incoming FastAPI request
-        
+
     Returns:
         Dictionary with Authorization header if present, empty dict otherwise
     """
@@ -67,12 +68,12 @@ async def proxy_request(
 ) -> Any:
     """
     Forward a request to a downstream microservice using the shared HTTP client pool.
-    
+
     This is the unified proxy function used by all proxy routers. It handles:
     - Path prefix construction based on service
     - Default timeouts per service
     - Request forwarding via the shared client pool with circuit breaker
-    
+
     Args:
         service_name: Name of the target service (auth, health, metrics, assistant, notification)
         method: HTTP method (GET, POST, PUT, PATCH, DELETE)
@@ -83,10 +84,10 @@ async def proxy_request(
         timeout: Request timeout in seconds (uses service default if not specified)
         use_prefix: Whether to prepend the service path prefix (default True)
         custom_prefix: Override the service path prefix with a custom one
-        
+
     Returns:
         The response from the downstream service (typically dict or list)
-        
+
     Raises:
         HTTPException: If the downstream service returns an error
     """
@@ -98,11 +99,11 @@ async def proxy_request(
         full_path = f"{prefix}{path}"
     else:
         full_path = path
-    
+
     # Use service-specific default timeout if not specified
     if timeout is None:
         timeout = SERVICE_TIMEOUTS.get(service_name, 30.0)
-    
+
     return await http_pool.request(
         service_name=service_name,
         method=method,
@@ -116,6 +117,7 @@ async def proxy_request(
 
 # Convenience functions for common patterns
 
+
 async def proxy_auth_request(
     method: str,
     path: str,
@@ -124,19 +126,19 @@ async def proxy_auth_request(
 ) -> Any:
     """
     Proxy a request to the auth service, forwarding the Authorization header.
-    
+
     Args:
         method: HTTP method
         path: Path after /api/auth (e.g., "/users" -> "/api/auth/users")
         request: The incoming FastAPI request (for extracting auth headers)
         body: Optional JSON body for POST/PUT/PATCH
-        
+
     Returns:
         Response from auth service
     """
     headers = extract_auth_headers(request)
     headers["Content-Type"] = "application/json"
-    
+
     return await proxy_request(
         service_name="auth",
         method=method,
@@ -155,14 +157,14 @@ async def proxy_health_request(
 ) -> Any:
     """
     Proxy a request to the health service.
-    
+
     Args:
         method: HTTP method
         path: Path after /api/health (e.g., "/check/192.168.1.1")
         params: Query parameters
         json_body: Optional JSON body
         timeout: Request timeout (default 30s)
-        
+
     Returns:
         Response from health service
     """
@@ -185,14 +187,14 @@ async def proxy_metrics_request(
 ) -> Any:
     """
     Proxy a request to the metrics service.
-    
+
     Args:
         method: HTTP method
         path: Path after /api/metrics (e.g., "/snapshot")
         params: Query parameters
         json_body: Optional JSON body
         timeout: Request timeout (default 30s)
-        
+
     Returns:
         Response from metrics service
     """
@@ -216,7 +218,7 @@ async def proxy_assistant_request(
 ) -> Any:
     """
     Proxy a request to the assistant service, forwarding the Authorization header.
-    
+
     Args:
         method: HTTP method
         path: Path after /api/assistant (e.g., "/chat")
@@ -224,12 +226,12 @@ async def proxy_assistant_request(
         params: Query parameters
         json_body: Optional JSON body
         timeout: Request timeout (default 60s for AI operations)
-        
+
     Returns:
         Response from assistant service
     """
     headers = extract_auth_headers(request)
-    
+
     return await proxy_request(
         service_name="assistant",
         method=method,
@@ -253,7 +255,7 @@ async def proxy_notification_request(
 ) -> Any:
     """
     Proxy a request to the notification service.
-    
+
     Args:
         method: HTTP method
         path: Path after prefix (e.g., "/preferences")
@@ -262,7 +264,7 @@ async def proxy_notification_request(
         headers: Additional headers (e.g., X-User-Id)
         timeout: Request timeout (default 30s)
         use_user_path: If True, use /api prefix instead of /api/notifications
-        
+
     Returns:
         Response from notification service
     """
@@ -271,7 +273,7 @@ async def proxy_notification_request(
         custom_prefix = "/api"
     else:
         custom_prefix = None
-    
+
     return await proxy_request(
         service_name="notification",
         method=method,
@@ -293,17 +295,17 @@ async def proxy_cartographer_status_request(
 ) -> Any:
     """
     Proxy a request to the Cartographer status service (notification service).
-    
+
     This uses a different path prefix (/api/cartographer-status) than the
     main notification service endpoints.
-    
+
     Args:
         method: HTTP method
         path: Path after /api/cartographer-status (e.g., "/subscription")
         json_body: Optional JSON body
         user_id: User ID to include in X-User-Id header
         user_email: User email to include in X-User-Email header
-        
+
     Returns:
         Response from notification service
     """
@@ -312,7 +314,7 @@ async def proxy_cartographer_status_request(
         headers["X-User-Id"] = user_id
     if user_email:
         headers["X-User-Email"] = user_email
-    
+
     return await proxy_request(
         service_name="notification",
         method=method,
@@ -321,4 +323,3 @@ async def proxy_cartographer_status_request(
         headers=headers if headers else None,
         custom_prefix="/api/cartographer-status",
     )
-

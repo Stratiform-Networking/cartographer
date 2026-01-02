@@ -1,6 +1,6 @@
 /**
  * Network data composable
- * 
+ *
  * Pure transformation logic for parsing network map data and node manipulation.
  * No API calls - this is a utility composable.
  */
@@ -34,8 +34,9 @@ function parseDevices(section: string): DeviceEntry[] {
   const lines = section.split('\n');
   for (const line of lines) {
     // 172.16.191.1    | routerboard.com.lan                 | role=gateway/router  | depth=0
-    const m =
-      /^\s*([0-9.]+)\s*\|\s*([^\|]+?)\s*\|\s*role=([a-z\/-]+)\s*\|\s*depth=(\d+)/i.exec(line);
+    const m = /^\s*([0-9.]+)\s*\|\s*([^\|]+?)\s*\|\s*role=([a-z\/-]+)\s*\|\s*depth=(\d+)/i.exec(
+      line
+    );
     if (m) {
       const ip = m[1].trim();
       const hostnameRaw = m[2].trim();
@@ -98,16 +99,16 @@ function parseHeuristicTree(
 function initializeNodeVersion(node: TreeNode, source: 'manual' | 'mapper' = 'manual'): void {
   const now = new Date().toISOString();
   if (!node.createdAt) {
-  node.createdAt = now;
-  node.version = 1;
-  node.history = [
-    {
-      version: 1,
-      timestamp: now,
+    node.createdAt = now;
+    node.version = 1;
+    node.history = [
+      {
+        version: 1,
+        timestamp: now,
         changes: [`Node created (${source})`],
-    },
-  ];
-}
+      },
+    ];
+  }
   node.updatedAt = now;
 }
 
@@ -230,9 +231,7 @@ function findGroupByPrefix(root: TreeNode, prefix: string): TreeNode | undefined
 /**
  * Get target group info for a given role.
  */
-function getTargetGroupForRole(
-  role: DeviceRole
-): { prefix: string; name: string } | undefined {
+function getTargetGroupForRole(role: DeviceRole): { prefix: string; name: string } | undefined {
   switch (role) {
     case 'firewall':
     case 'switch/ap':

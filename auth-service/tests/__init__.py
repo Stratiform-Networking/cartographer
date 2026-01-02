@@ -1,2 +1,1 @@
 # Auth service unit tests
-

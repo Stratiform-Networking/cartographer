@@ -6,18 +6,17 @@ Handles email-related notification endpoints:
 - Network test notifications
 - User-specific test notifications
 """
-from fastapi import APIRouter, Request, Depends
 
-from ...dependencies import (
-    AuthenticatedUser,
-    require_auth,
-)
+from fastapi import APIRouter, Depends, Request
+
+from ...dependencies import AuthenticatedUser, require_auth
 from ...services.proxy_service import proxy_notification_request
 
 router = APIRouter(tags=["notification-email"])
 
 
 # ==================== Test Notifications ====================
+
 
 @router.post("/test")
 async def send_test_notification(
@@ -79,4 +78,3 @@ async def test_user_global_notification(
         json_body=body,
         use_user_path=True,
     )
-

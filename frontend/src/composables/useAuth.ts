@@ -1,6 +1,6 @@
 /**
  * Auth composable
- * 
+ *
  * Manages authentication state and orchestrates auth API calls.
  */
 

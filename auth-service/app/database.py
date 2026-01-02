@@ -3,11 +3,10 @@ Database configuration and session management for auth service.
 Uses the same PostgreSQL database as the main application.
 """
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from .config import settings
-
 
 # Create async engine with appropriate settings based on database type
 _engine_kwargs: dict = {
@@ -16,16 +15,15 @@ _engine_kwargs: dict = {
 
 # Only add pool settings for PostgreSQL (not SQLite)
 if "sqlite" not in settings.database_url:
-    _engine_kwargs.update({
-        "pool_pre_ping": True,
-        "pool_size": 5,
-        "max_overflow": 10,
-    })
+    _engine_kwargs.update(
+        {
+            "pool_pre_ping": True,
+            "pool_size": 5,
+            "max_overflow": 10,
+        }
+    )
 
-engine = create_async_engine(
-    settings.database_url,
-    **_engine_kwargs
-)
+engine = create_async_engine(settings.database_url, **_engine_kwargs)
 
 # Session factory
 async_session_maker = async_sessionmaker(
@@ -37,6 +35,7 @@ async_session_maker = async_sessionmaker(
 
 class Base(DeclarativeBase):
     """Base class for all database models in auth service."""
+
     pass
 
 

@@ -1,5 +1,5 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { ref, defineComponent } from 'vue'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { ref, defineComponent } from 'vue';
 
 // Simple mocked NotificationSettings component
 const MockedNotificationSettings = defineComponent({
@@ -180,7 +180,7 @@ const MockedNotificationSettings = defineComponent({
       </div>
     </div>
   `,
-})
+});
 
 const meta: Meta<typeof MockedNotificationSettings> = {
   title: 'Modals/NotificationSettings',
@@ -190,7 +190,8 @@ const meta: Meta<typeof MockedNotificationSettings> = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'Comprehensive notification settings modal for configuring email, Discord alerts, quiet hours, and notification type preferences. Owner users can also broadcast messages to all users.',
+        component:
+          'Comprehensive notification settings modal for configuring email, Discord alerts, quiet hours, and notification type preferences. Owner users can also broadcast messages to all users.',
       },
     },
   },
@@ -199,16 +200,16 @@ const meta: Meta<typeof MockedNotificationSettings> = {
       template: '<div style="min-height: 100vh; background: #1e293b;"><story /></div>',
     }),
   ],
-}
+};
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 export const Loading: Story = {
   args: {
     isLoading: true,
   },
-}
+};
 
 export const EnabledWithEmail: Story = {
   args: {
@@ -216,13 +217,13 @@ export const EnabledWithEmail: Story = {
     emailEnabled: true,
     emailConfigured: true,
   },
-}
+};
 
 export const Disabled: Story = {
   args: {
     enabled: false,
   },
-}
+};
 
 export const DiscordEnabled: Story = {
   args: {
@@ -230,14 +231,14 @@ export const DiscordEnabled: Story = {
     discordConfigured: true,
     discordEnabled: true,
   },
-}
+};
 
 export const DiscordNotConfigured: Story = {
   args: {
     enabled: true,
     discordConfigured: false,
   },
-}
+};
 
 export const OwnerWithBroadcast: Story = {
   args: {
@@ -249,11 +250,12 @@ export const OwnerWithBroadcast: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Owner users see additional broadcast notification controls to send messages to all users.',
+        story:
+          'Owner users see additional broadcast notification controls to send messages to all users.',
       },
     },
   },
-}
+};
 
 export const FullFeatured: Story = {
   args: {
@@ -264,4 +266,4 @@ export const FullFeatured: Story = {
     discordEnabled: true,
     isOwner: true,
   },
-}
+};

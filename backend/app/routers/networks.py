@@ -8,24 +8,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..dependencies.auth import AuthenticatedUser, require_auth
-from ..models.network import Network, NetworkPermission, PermissionRole, NetworkNotificationSettings
+from ..models.network import Network, NetworkNotificationSettings, NetworkPermission, PermissionRole
 from ..schemas import (
     NetworkCreate,
-    NetworkUpdate,
-    NetworkResponse,
     NetworkLayoutResponse,
     NetworkLayoutSave,
-    PermissionCreate,
-    PermissionResponse,
     NetworkNotificationSettingsCreate,
     NetworkNotificationSettingsResponse,
+    NetworkResponse,
+    NetworkUpdate,
+    PermissionCreate,
+    PermissionResponse,
 )
-from ..services.network_service import (
-    generate_agent_key,
-    get_network_with_access,
-    get_network_member_user_ids,
-    is_service_token,
-)
+from ..services.network_service import generate_agent_key, get_network_with_access, is_service_token
 
 router = APIRouter(prefix="/networks", tags=["Networks"])
 
@@ -70,12 +65,12 @@ def _build_network_response(
     permission: PermissionRole | None = None,
 ) -> NetworkResponse:
     """Build a NetworkResponse from a Network model.
-    
+
     Args:
         network: The Network model instance
         is_owner: Whether the current user owns this network
         permission: The permission role if shared (None for owners)
-        
+
     Returns:
         NetworkResponse with ownership info populated
     """
@@ -92,29 +87,27 @@ async def list_networks(
     db: AsyncSession = Depends(get_db),
 ):
     """List all networks accessible to the current user.
-    
+
     For service tokens (internal service-to-service calls), returns ALL active networks
     in the system to support metrics generation across all networks.
     """
     is_service = is_service_token(current_user.user_id)
-    
+
     if is_service:
         # Service tokens get access to ALL networks for metrics generation
         result = await db.execute(
-            select(Network)
-            .where(Network.is_active == True)
-            .order_by(Network.created_at.desc())
+            select(Network).where(Network.is_active.is_(True)).order_by(Network.created_at.desc())
         )
         all_networks = result.scalars().all()
         return [
             _build_network_response(network, is_owner=False, permission=PermissionRole.EDITOR)
             for network in all_networks
         ]
-    
+
     # Regular user: Get networks owned by user
     owned_result = await db.execute(
         select(Network)
-        .where(Network.user_id == current_user.user_id, Network.is_active == True)
+        .where(Network.user_id == current_user.user_id, Network.is_active.is_(True))
         .order_by(Network.created_at.desc())
     )
     owned_networks = owned_result.scalars().all()
@@ -125,17 +118,14 @@ async def list_networks(
         .join(NetworkPermission, Network.id == NetworkPermission.network_id)
         .where(
             NetworkPermission.user_id == current_user.user_id,
-            Network.is_active == True,
+            Network.is_active.is_(True),
         )
         .order_by(Network.created_at.desc())
     )
     shared_networks = shared_result.all()
 
     # Build consolidated response list using list comprehensions
-    return [
-        _build_network_response(network, is_owner=True)
-        for network in owned_networks
-    ] + [
+    return [_build_network_response(network, is_owner=True) for network in owned_networks] + [
         _build_network_response(network, is_owner=False, permission=role)
         for network, role in shared_networks
     ]
@@ -370,9 +360,7 @@ async def create_permission(
     return PermissionResponse.model_validate(new_perm)
 
 
-@router.delete(
-    "/{network_id}/permissions/{user_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{network_id}/permissions/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_permission(
     network_id: str,
     user_id: str,
@@ -519,4 +507,3 @@ async def update_network_notification_settings(
     await db.refresh(settings)
 
     return NetworkNotificationSettingsResponse.model_validate(settings)
-

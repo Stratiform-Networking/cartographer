@@ -150,9 +150,7 @@ describe('useMapLayout', () => {
       const root: TreeNode = {
         id: 'root',
         name: 'Network',
-        children: [
-          { id: '192.168.1.1', name: 'Router' },
-        ],
+        children: [{ id: '192.168.1.1', name: 'Router' }],
       };
 
       // Add position via updatePosition
@@ -193,8 +191,8 @@ describe('useMapLayout', () => {
         version: 1,
         timestamp: '2024-06-15T12:00:00Z',
         positions: {
-          'node1': { x: 100, y: 200 },
-          'node2': { x: 300, y: 400 },
+          node1: { x: 100, y: 200 },
+          node2: { x: 300, y: 400 },
         },
         root: { id: 'root', name: 'Network' },
       };
@@ -243,10 +241,15 @@ describe('useMapLayout', () => {
         id: 'root',
         name: 'Network',
         children: [
-          { id: 'group1', name: 'Group 1', role: 'group', children: [
-            { id: '192.168.1.1', name: 'Device 1', role: 'server', parentId: 'root' },
-            { id: '192.168.1.2', name: 'Device 2', role: 'server', parentId: 'root' },
-          ]},
+          {
+            id: 'group1',
+            name: 'Group 1',
+            role: 'group',
+            children: [
+              { id: '192.168.1.1', name: 'Device 1', role: 'server', parentId: 'root' },
+              { id: '192.168.1.2', name: 'Device 2', role: 'server', parentId: 'root' },
+            ],
+          },
         ],
       };
 
@@ -288,10 +291,15 @@ describe('useMapLayout', () => {
         id: 'root',
         name: 'Network',
         children: [
-          { id: 'group1', name: 'Group 1', role: 'group', children: [
-            { id: '192.168.1.1', name: 'Router', role: 'gateway/router', parentId: 'root' },
-            { id: '192.168.1.10', name: 'Switch', role: 'switch/ap', parentId: '192.168.1.1' },
-          ]},
+          {
+            id: 'group1',
+            name: 'Group 1',
+            role: 'group',
+            children: [
+              { id: '192.168.1.1', name: 'Router', role: 'gateway/router', parentId: 'root' },
+              { id: '192.168.1.10', name: 'Switch', role: 'switch/ap', parentId: '192.168.1.1' },
+            ],
+          },
         ],
       };
 
@@ -310,11 +318,34 @@ describe('useMapLayout', () => {
         id: 'root',
         name: 'Network',
         children: [
-          { id: 'group1', name: 'Group 1', role: 'group', children: [
-            { id: '192.168.1.100', name: 'Device C', ip: '192.168.1.100', role: 'server', parentId: 'root' },
-            { id: '192.168.1.1', name: 'Device A', ip: '192.168.1.1', role: 'server', parentId: 'root' },
-            { id: '192.168.1.50', name: 'Device B', ip: '192.168.1.50', role: 'server', parentId: 'root' },
-          ]},
+          {
+            id: 'group1',
+            name: 'Group 1',
+            role: 'group',
+            children: [
+              {
+                id: '192.168.1.100',
+                name: 'Device C',
+                ip: '192.168.1.100',
+                role: 'server',
+                parentId: 'root',
+              },
+              {
+                id: '192.168.1.1',
+                name: 'Device A',
+                ip: '192.168.1.1',
+                role: 'server',
+                parentId: 'root',
+              },
+              {
+                id: '192.168.1.50',
+                name: 'Device B',
+                ip: '192.168.1.50',
+                role: 'server',
+                parentId: 'root',
+              },
+            ],
+          },
         ],
       };
 
@@ -346,10 +377,15 @@ describe('useMapLayout', () => {
         id: 'root',
         name: 'Network',
         children: [
-          { id: 'group1', name: 'Group 1', role: 'group', children: [
-            { id: 'node1', name: 'Node 1', role: 'server', parentId: 'node2' },
-            { id: 'node2', name: 'Node 2', role: 'server', parentId: 'node1' },
-          ]},
+          {
+            id: 'group1',
+            name: 'Group 1',
+            role: 'group',
+            children: [
+              { id: 'node1', name: 'Node 1', role: 'server', parentId: 'node2' },
+              { id: 'node2', name: 'Node 2', role: 'server', parentId: 'node1' },
+            ],
+          },
         ],
       };
 
@@ -362,9 +398,14 @@ describe('useMapLayout', () => {
         id: 'root',
         name: 'Network',
         children: [
-          { id: 'group1', name: 'Group 1', role: 'group', children: [
-            { id: '192.168.1.1', name: 'Device 1', role: 'server' }, // No parentId
-          ]},
+          {
+            id: 'group1',
+            name: 'Group 1',
+            role: 'group',
+            children: [
+              { id: '192.168.1.1', name: 'Device 1', role: 'server' }, // No parentId
+            ],
+          },
         ],
       };
 
@@ -375,4 +416,3 @@ describe('useMapLayout', () => {
     });
   });
 });
-

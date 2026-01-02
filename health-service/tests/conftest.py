@@ -1,11 +1,13 @@
 """
 Shared test fixtures for health service unit tests.
 """
+
 import os
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime
 from collections import deque
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Set test environment variables before imports
 os.environ["NOTIFICATION_SERVICE_URL"] = "http://test-notification:8005"
@@ -16,6 +18,7 @@ os.environ["HEALTH_DATA_DIR"] = "/tmp/test-health-data"
 def mock_ping_success():
     """Mock successful ping result"""
     from app.models import PingResult
+
     return PingResult(
         success=True,
         latency_ms=25.5,
@@ -23,7 +26,7 @@ def mock_ping_success():
         min_latency_ms=20.0,
         max_latency_ms=30.0,
         avg_latency_ms=25.5,
-        jitter_ms=2.0
+        jitter_ms=2.0,
     )
 
 
@@ -31,21 +34,20 @@ def mock_ping_success():
 def mock_ping_failure():
     """Mock failed ping result"""
     from app.models import PingResult
-    return PingResult(
-        success=False,
-        packet_loss_percent=100.0
-    )
+
+    return PingResult(success=False, packet_loss_percent=100.0)
 
 
 @pytest.fixture
 def mock_dns_success():
     """Mock successful DNS result"""
     from app.models import DnsResult
+
     return DnsResult(
         success=True,
         resolved_hostname="router.local",
         reverse_dns="router.local",
-        resolution_time_ms=5.0
+        resolution_time_ms=5.0,
     )
 
 
@@ -53,6 +55,7 @@ def mock_dns_success():
 def mock_dns_failure():
     """Mock failed DNS result"""
     from app.models import DnsResult
+
     return DnsResult(success=False)
 
 
@@ -60,15 +63,12 @@ def mock_dns_failure():
 def sample_device_metrics():
     """Sample device metrics"""
     from app.models import DeviceMetrics, HealthStatus, PingResult
+
     return DeviceMetrics(
         ip="192.168.1.1",
         status=HealthStatus.HEALTHY,
         last_check=datetime.utcnow(),
-        ping=PingResult(
-            success=True,
-            latency_ms=25.0,
-            packet_loss_percent=0.0
-        )
+        ping=PingResult(success=True, latency_ms=25.0, packet_loss_percent=0.0),
     )
 
 
@@ -76,11 +76,16 @@ def sample_device_metrics():
 def health_checker_instance(tmp_path):
     """Create a fresh HealthChecker instance for testing"""
     from app.services.health_checker import HealthChecker
-    
+
     # Override data directory
-    with patch('app.services.health_checker.DATA_DIR', tmp_path):
-        with patch('app.services.health_checker.GATEWAY_TEST_IPS_FILE', tmp_path / "gateway_test_ips.json"):
-            with patch('app.services.health_checker.SPEED_TEST_RESULTS_FILE', tmp_path / "speed_test_results.json"):
+    with patch("app.services.health_checker.DATA_DIR", tmp_path):
+        with patch(
+            "app.services.health_checker.GATEWAY_TEST_IPS_FILE", tmp_path / "gateway_test_ips.json"
+        ):
+            with patch(
+                "app.services.health_checker.SPEED_TEST_RESULTS_FILE",
+                tmp_path / "speed_test_results.json",
+            ):
                 checker = HealthChecker()
                 yield checker
                 # Cleanup
@@ -116,8 +121,8 @@ def mock_subprocess_ping_failure():
 def sample_gateway_test_ips():
     """Sample gateway test IP configuration"""
     from app.models import GatewayTestIP
+
     return [
         GatewayTestIP(ip="8.8.8.8", label="Google DNS"),
-        GatewayTestIP(ip="1.1.1.1", label="Cloudflare DNS")
+        GatewayTestIP(ip="1.1.1.1", label="Cloudflare DNS"),
     ]
-

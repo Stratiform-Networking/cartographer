@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import NetworkUserManagement from '../components/NetworkUserManagement.vue'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import NetworkUserManagement from '../components/NetworkUserManagement.vue';
 
 const meta = {
   title: 'Components/NetworkUserManagement',
@@ -10,7 +10,8 @@ const meta = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'Panel for managing user permissions on a specific network. Allows network owners to add/remove users and set their access roles.',
+        component:
+          'Panel for managing user permissions on a specific network. Allows network owners to add/remove users and set their access roles.',
       },
     },
   },
@@ -33,10 +34,10 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof NetworkUserManagement>
+} satisfies Meta<typeof NetworkUserManagement>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default state
 export const Default: Story = {
@@ -45,7 +46,7 @@ export const Default: Story = {
     ownerId: '123e4567-e89b-12d3-a456-426614174000',
     onClose: fn(),
   },
-}
+};
 
 // Different network
 export const DifferentNetwork: Story = {
@@ -54,5 +55,4 @@ export const DifferentNetwork: Story = {
     ownerId: '123e4567-e89b-12d3-a456-426614174000',
     onClose: fn(),
   },
-}
-
+};

@@ -18,6 +18,7 @@ def _get_resend():
     if _resend is None:
         try:
             import resend
+
             if settings.resend_api_key:
                 resend.api_key = settings.resend_api_key
             _resend = resend
@@ -33,34 +34,27 @@ def is_email_configured() -> bool:
 
 
 def send_invitation_email(
-    to_email: str,
-    invite_token: str,
-    invited_by_name: str,
-    role: str,
-    expires_hours: int = 72
+    to_email: str, invite_token: str, invited_by_name: str, role: str, expires_hours: int = 72
 ) -> str | None:
     """
     Send an invitation email to a new user.
-    
+
     Returns the email ID if successful, None if failed or not configured.
     """
     if not is_email_configured():
         logger.warning(f"Email not configured - invitation for {to_email} not sent")
         return None
-    
+
     resend = _get_resend()
     if not resend:
         return None
-    
+
     # Build the invitation URL
     invite_url = f"{settings.application_url}/accept-invite?token={invite_token}"
-    
+
     # Role display name
-    role_display = {
-        "member": "Member",
-        "admin": "Admin"
-    }.get(role, role)
-    
+    role_display = {"member": "Member", "admin": "Admin"}.get(role, role)
+
     # HTML email template
     html_content = f"""
 <!DOCTYPE html>
@@ -82,7 +76,7 @@ def send_invitation_email(
                             <p style="margin: 8px 0 0; color: #e0f2fe; font-size: 14px;">Network Mapping Made Simple</p>
                         </td>
                     </tr>
-                    
+
                     <!-- Body -->
                     <tr>
                         <td style="padding: 32px 40px;">
@@ -90,7 +84,7 @@ def send_invitation_email(
                             <p style="margin: 0 0 24px; color: #475569; font-size: 15px; line-height: 1.6;">
                                 <strong>{invited_by_name}</strong> has invited you to join their Cartographer network map with <strong>{role_display}</strong> access.
                             </p>
-                            
+
                             <!-- CTA Button -->
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                 <tr>
@@ -101,15 +95,15 @@ def send_invitation_email(
                                     </td>
                                 </tr>
                             </table>
-                            
+
                             <p style="margin: 0 0 16px; color: #64748b; font-size: 13px; line-height: 1.5;">
                                 This invitation will expire in <strong>{expires_hours} hours</strong>.
                             </p>
-                            
+
                             <p style="margin: 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
                                 If you didn't expect this invitation, you can safely ignore this email.
                             </p>
-                            
+
                             <!-- Fallback link -->
                             <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;">
                             <p style="margin: 0; color: #94a3b8; font-size: 11px; line-height: 1.5;">
@@ -118,7 +112,7 @@ def send_invitation_email(
                             </p>
                         </td>
                     </tr>
-                    
+
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
@@ -134,7 +128,7 @@ def send_invitation_email(
 </body>
 </html>
 """
-    
+
     # Plain text fallback
     text_content = f"""
 You're Invited to Cartographer!
@@ -151,7 +145,7 @@ If you didn't expect this invitation, you can safely ignore this email.
 ---
 Cartographer - Network Mapping Tool
 """
-    
+
     try:
         params = {
             "from": settings.email_from,
@@ -160,13 +154,13 @@ Cartographer - Network Mapping Tool
             "html": html_content,
             "text": text_content,
         }
-        
+
         result = resend.Emails.send(params)
         email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
-        
+
         logger.info(f"Invitation email sent to {to_email} (ID: {email_id})")
         return email_id
-        
+
     except Exception as e:
         logger.error(f"Failed to send invitation email to {to_email}: {e}")
         return None

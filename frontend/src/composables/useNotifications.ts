@@ -1,6 +1,6 @@
 /**
  * Notification settings composable
- * 
+ *
  * Manages notification preferences and orchestrates notification API calls.
  * For network owner/admin configuration of notification settings.
  */
@@ -104,7 +104,11 @@ export function useNotifications(networkId?: string) {
   }
 
   // Send test notification for a network
-  async function sendTestNotification(channel: 'email' | 'discord', message?: string, netId?: number) {
+  async function sendTestNotification(
+    channel: 'email' | 'discord',
+    message?: string,
+    netId?: number
+  ) {
     const id = netId ?? currentNetworkId.value;
     if (!id) throw new Error('Network ID is required');
 
@@ -127,7 +131,13 @@ export function useNotifications(networkId?: string) {
     eventType: import('../types/notifications').NotificationType = 'scheduled_maintenance',
     priority: import('../types/notifications').NotificationPriority = 'medium'
   ) {
-    return await notificationsApi.sendBroadcastNotification(networkIdParam, title, message, eventType, priority);
+    return await notificationsApi.sendBroadcastNotification(
+      networkIdParam,
+      title,
+      message,
+      eventType,
+      priority
+    );
   }
 
   // Get scheduled broadcasts (owner only)
@@ -202,7 +212,9 @@ export function useNotifications(networkId?: string) {
   }
 
   // Update global notification preferences (Cartographer Up/Down)
-  async function updateGlobalPreferences(update: import('../types/notifications').GlobalUserPreferencesUpdate) {
+  async function updateGlobalPreferences(
+    update: import('../types/notifications').GlobalUserPreferencesUpdate
+  ) {
     return await notificationsApi.updateGlobalPreferences(update);
   }
 

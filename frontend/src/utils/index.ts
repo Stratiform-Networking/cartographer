@@ -37,4 +37,3 @@ export {
   getInviteStatusLabel,
   getInviteStatusClass,
 } from './authHelpers';
-

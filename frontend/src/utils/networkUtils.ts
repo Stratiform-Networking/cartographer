@@ -90,4 +90,3 @@ export function getSubnet(ip: string): string {
   }
   return `${parts[0]}.${parts[1]}.${parts[2]}`;
 }
-

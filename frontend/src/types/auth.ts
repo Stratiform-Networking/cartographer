@@ -10,76 +10,76 @@
 export type UserRole = 'owner' | 'admin' | 'member';
 
 export interface User {
-	id: string;
-	username: string;
-	first_name: string;
-	last_name: string;
-	email: string;
-	role: UserRole;
-	created_at: string;
-	updated_at: string;
-	last_login?: string;
-	is_active: boolean;
+  id: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+  last_login?: string;
+  is_active: boolean;
 }
 
 export interface OwnerSetupRequest {
-	username: string;
-	first_name: string;
-	last_name: string;
-	email: string;
-	password: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
 }
 
 export interface UserCreateRequest {
-	username: string;
-	first_name: string;
-	last_name: string;
-	email: string;
-	password: string;
-	role: UserRole;
+  username: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  role: UserRole;
 }
 
 export interface UserUpdateRequest {
-	first_name?: string;
-	last_name?: string;
-	email?: string;
-	role?: UserRole;
-	password?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  role?: UserRole;
+  password?: string;
 }
 
 // ==================== Auth Types ====================
 
 export interface LoginRequest {
-	username: string;
-	password: string;
+  username: string;
+  password: string;
 }
 
 export interface LoginResponse {
-	access_token: string;
-	token_type: string;
-	expires_in: number;
-	user: User;
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
 }
 
 export interface SetupStatus {
-	is_setup_complete: boolean;
-	owner_exists: boolean;
-	total_users: number;
+  is_setup_complete: boolean;
+  owner_exists: boolean;
+  total_users: number;
 }
 
 export interface SessionInfo {
-	user: User;
-	permissions: string[];
+  user: User;
+  permissions: string[];
 }
 
 export interface ChangePasswordRequest {
-	current_password: string;
-	new_password: string;
+  current_password: string;
+  new_password: string;
 }
 
 export interface AuthState {
-	token: string;
-	user: User;
+  token: string;
+  user: User;
   expiresAt: number;
 }
 
@@ -88,36 +88,36 @@ export interface AuthState {
 export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
 
 export interface Invite {
-	id: string;
-	email: string;
-	role: UserRole;
-	status: InviteStatus;
-	invited_by: string;
-	invited_by_name: string;
-	created_at: string;
-	expires_at: string;
-	accepted_at?: string;
+  id: string;
+  email: string;
+  role: UserRole;
+  status: InviteStatus;
+  invited_by: string;
+  invited_by_name: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at?: string;
 }
 
 export interface InviteCreateRequest {
-	email: string;
-	role: UserRole;
+  email: string;
+  role: UserRole;
 }
 
 export interface InviteTokenInfo {
-	email: string;
-	role: UserRole;
-	invited_by_name: string;
-	expires_at: string;
-	is_valid: boolean;
+  email: string;
+  role: UserRole;
+  invited_by_name: string;
+  expires_at: string;
+  is_valid: boolean;
 }
 
 export interface AcceptInviteRequest {
-	token: string;
-	username: string;
-	first_name: string;
-	last_name: string;
-	password: string;
+  token: string;
+  username: string;
+  first_name: string;
+  last_name: string;
+  password: string;
 }
 
 // ==================== Re-exports for backwards compatibility ====================

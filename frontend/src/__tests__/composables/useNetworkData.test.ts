@@ -199,9 +199,7 @@ Gateway: 192.168.1.1 (router.lan)
         id: 'root',
         name: 'Network',
         role: 'group',
-        children: [
-          { id: 'infra', name: 'Infrastructure', role: 'group', children: [] },
-        ],
+        children: [{ id: 'infra', name: 'Infrastructure', role: 'group', children: [] }],
       };
 
       const devices = flattenDevices(root);
@@ -220,7 +218,12 @@ Gateway: 192.168.1.1 (router.lan)
             name: 'Infrastructure',
             role: 'group',
             children: [
-              { id: 'dup-192.168.1.1', name: 'Gateway Duplicate', role: 'gateway/router', ip: '192.168.1.1' },
+              {
+                id: 'dup-192.168.1.1',
+                name: 'Gateway Duplicate',
+                role: 'gateway/router',
+                ip: '192.168.1.1',
+              },
             ],
           },
         ],
@@ -335,9 +338,7 @@ Gateway: 192.168.1.1 (router.lan)
       const root: TreeNode = {
         id: 'root',
         name: 'Network',
-        children: [
-          { id: 'group:infra', name: 'Infrastructure', role: 'group', children: [] },
-        ],
+        children: [{ id: 'group:infra', name: 'Infrastructure', role: 'group', children: [] }],
       };
 
       const group = findGroupByPrefix(root, 'infra');
@@ -348,9 +349,7 @@ Gateway: 192.168.1.1 (router.lan)
       const root: TreeNode = {
         id: 'root',
         name: 'Network',
-        children: [
-          { id: 'infrastructure', name: 'Infrastructure', role: 'group', children: [] },
-        ],
+        children: [{ id: 'infrastructure', name: 'Infrastructure', role: 'group', children: [] }],
       };
 
       const group = findGroupByPrefix(root, 'nonexistent');
@@ -418,4 +417,3 @@ Gateway: 192.168.1.1 (router.lan)
     });
   });
 });
-

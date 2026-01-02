@@ -11,12 +11,14 @@ from ..models.network import PermissionRole
 
 class PermissionCreate(BaseModel):
     """Permission creation request."""
+
     user_id: str  # UUID as string
     role: PermissionRole
 
 
 class PermissionResponse(BaseModel):
     """Permission response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -26,4 +28,3 @@ class PermissionResponse(BaseModel):
     created_at: datetime
     # Optional user info (populated if available)
     username: str | None = None
-

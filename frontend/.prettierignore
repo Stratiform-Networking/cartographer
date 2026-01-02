@@ -1,0 +1,8 @@
+dist
+node_modules
+coverage
+*.config.js
+*.config.ts
+vite-env.d.ts
+vitest.shims.d.ts
+

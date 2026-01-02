@@ -7,14 +7,12 @@ Performance optimizations:
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
 """
-from fastapi import APIRouter, Request, Depends
+
+from fastapi import APIRouter, Depends, Request
 
 from ..config import get_settings
-from ..dependencies import (
-    AuthenticatedUser,
-    require_auth,
-)
-from ..services.proxy_service import proxy_assistant_request, extract_auth_headers
+from ..dependencies import AuthenticatedUser, require_auth
+from ..services.proxy_service import extract_auth_headers, proxy_assistant_request
 from ..services.streaming_service import proxy_streaming_request
 
 settings = get_settings()
@@ -22,6 +20,7 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
 # ==================== Configuration Endpoints ====================
+
 
 @router.get("/config")
 async def get_config(request: Request, user: AuthenticatedUser = Depends(require_auth)):
@@ -36,79 +35,82 @@ async def list_providers(request: Request, user: AuthenticatedUser = Depends(req
 
 
 @router.get("/models/{provider}")
-async def list_models(request: Request, provider: str, user: AuthenticatedUser = Depends(require_auth)):
+async def list_models(
+    request: Request, provider: str, user: AuthenticatedUser = Depends(require_auth)
+):
     """List models for a provider. Requires authentication."""
     return await proxy_assistant_request("GET", f"/models/{provider}", request)
 
 
 # ==================== Context Endpoints ====================
 
+
 @router.get("/context")
 async def get_context(
-    request: Request,
-    network_id: str | None = None,
-    user: AuthenticatedUser = Depends(require_auth)
+    request: Request, network_id: str | None = None, user: AuthenticatedUser = Depends(require_auth)
 ):
     """Get network context summary. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
         params["network_id"] = network_id
-    return await proxy_assistant_request("GET", "/context", request, params=params if params else None)
+    return await proxy_assistant_request(
+        "GET", "/context", request, params=params if params else None
+    )
 
 
 @router.post("/context/refresh")
 async def refresh_context(
-    request: Request,
-    network_id: str | None = None,
-    user: AuthenticatedUser = Depends(require_auth)
+    request: Request, network_id: str | None = None, user: AuthenticatedUser = Depends(require_auth)
 ):
     """Refresh cached network context. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
         params["network_id"] = network_id
-    return await proxy_assistant_request("POST", "/context/refresh", request, params=params if params else None)
+    return await proxy_assistant_request(
+        "POST", "/context/refresh", request, params=params if params else None
+    )
 
 
 @router.get("/context/debug")
 async def get_context_debug(
-    request: Request,
-    network_id: str | None = None,
-    user: AuthenticatedUser = Depends(require_auth)
+    request: Request, network_id: str | None = None, user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug: Get full context string sent to AI. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
         params["network_id"] = network_id
-    return await proxy_assistant_request("GET", "/context/debug", request, params=params if params else None)
+    return await proxy_assistant_request(
+        "GET", "/context/debug", request, params=params if params else None
+    )
 
 
 @router.get("/context/raw")
 async def get_context_raw(
-    request: Request,
-    network_id: str | None = None,
-    user: AuthenticatedUser = Depends(require_auth)
+    request: Request, network_id: str | None = None, user: AuthenticatedUser = Depends(require_auth)
 ):
     """Debug: Get raw snapshot data from metrics. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID (UUID) for multi-tenant mode.
     """
     params = {}
     if network_id is not None:
         params["network_id"] = network_id
-    return await proxy_assistant_request("GET", "/context/raw", request, params=params if params else None)
+    return await proxy_assistant_request(
+        "GET", "/context/raw", request, params=params if params else None
+    )
 
 
 @router.get("/context/status")
@@ -118,6 +120,7 @@ async def get_context_status(request: Request, user: AuthenticatedUser = Depends
 
 
 # ==================== Chat Endpoints ====================
+
 
 @router.get("/chat/limit")
 async def get_chat_limit(request: Request, user: AuthenticatedUser = Depends(require_auth)):
@@ -140,7 +143,7 @@ async def chat_stream(request: Request, user: AuthenticatedUser = Depends(requir
     """
     body = await request.json()
     url = f"{settings.assistant_service_url}/api/assistant/chat/stream"
-    
+
     return await proxy_streaming_request(
         url=url,
         method="POST",

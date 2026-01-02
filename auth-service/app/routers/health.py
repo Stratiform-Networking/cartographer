@@ -17,4 +17,3 @@ def healthz():
 def ready():
     """Readiness check endpoint for container orchestration."""
     return {"status": "ready"}
-

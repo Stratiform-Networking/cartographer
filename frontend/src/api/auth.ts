@@ -1,10 +1,10 @@
 /**
  * Auth API module
- * 
+ *
  * All authentication and user management API calls.
  */
 
-import client, { extractErrorMessage } from './client';
+import client from './client';
 import type {
   User,
   SetupStatus,
@@ -118,8 +118,9 @@ export async function getPreferences(): Promise<UserPreferences> {
   return response.data;
 }
 
-export async function updatePreferences(preferences: Partial<UserPreferences>): Promise<UserPreferences> {
+export async function updatePreferences(
+  preferences: Partial<UserPreferences>
+): Promise<UserPreferences> {
   const response = await client.patch<UserPreferences>('/api/auth/me/preferences', preferences);
   return response.data;
 }
-

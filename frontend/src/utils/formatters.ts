@@ -125,4 +125,3 @@ export const formatTimestamp = (dateInput: string | Date) =>
   formatRelativeTime(dateInput, { includeTime: true, capitalizeJustNow: true });
 
 export const formatDate = (dateInput: string | Date) => formatRelativeTime(dateInput);
-

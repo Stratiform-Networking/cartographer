@@ -1,6 +1,6 @@
 /**
  * Embeds API module
- * 
+ *
  * All embed (shareable network map) API calls.
  */
 
@@ -77,4 +77,3 @@ export async function getEmbedHealthMetrics(embedId: string): Promise<Record<str
   const response = await client.get(`/api/embed/${embedId}/health/cached`);
   return response.data;
 }
-

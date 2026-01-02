@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { within, expect } from 'storybook/test'
-import MetricCard from '../components/MetricCard.vue'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { within, expect } from 'storybook/test';
+import MetricCard from '../components/MetricCard.vue';
 
 const meta = {
   title: 'Components/MetricCard',
@@ -9,7 +9,8 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: 'A compact metric display card with optional status indicator. Used for displaying network statistics and health metrics.',
+        component:
+          'A compact metric display card with optional status indicator. Used for displaying network statistics and health metrics.',
       },
     },
   },
@@ -32,10 +33,10 @@ const meta = {
       description: 'Status indicator color',
     },
   },
-} satisfies Meta<typeof MetricCard>
+} satisfies Meta<typeof MetricCard>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default story
 export const Default: Story = {
@@ -43,7 +44,7 @@ export const Default: Story = {
     label: 'Active Devices',
     value: '42',
   },
-}
+};
 
 // Good status
 export const GoodStatus: Story = {
@@ -54,18 +55,18 @@ export const GoodStatus: Story = {
     status: 'good',
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    
+    const canvas = within(canvasElement);
+
     // Verify the label is displayed
-    await expect(canvas.getByText('Uptime')).toBeInTheDocument()
-    
+    await expect(canvas.getByText('Uptime')).toBeInTheDocument();
+
     // Verify the value is displayed
-    await expect(canvas.getByText('99.9%')).toBeInTheDocument()
-    
+    await expect(canvas.getByText('99.9%')).toBeInTheDocument();
+
     // Verify the sublabel is displayed
-    await expect(canvas.getByText('Last 30 days')).toBeInTheDocument()
+    await expect(canvas.getByText('Last 30 days')).toBeInTheDocument();
   },
-}
+};
 
 // Warning status
 export const WarningStatus: Story = {
@@ -75,7 +76,7 @@ export const WarningStatus: Story = {
     sublabel: 'Consider optimization',
     status: 'warning',
   },
-}
+};
 
 // Bad status
 export const BadStatus: Story = {
@@ -85,7 +86,7 @@ export const BadStatus: Story = {
     sublabel: 'Since 10 mins ago',
     status: 'bad',
   },
-}
+};
 
 // Without status indicator
 export const NoStatus: Story = {
@@ -94,7 +95,7 @@ export const NoStatus: Story = {
     value: '1.2 TB',
     sublabel: 'This month',
   },
-}
+};
 
 // Network metric examples
 export const NetworkDevices: Story = {
@@ -104,7 +105,7 @@ export const NetworkDevices: Story = {
     sublabel: '+12 since last scan',
     status: 'good',
   },
-}
+};
 
 export const LatencyMetric: Story = {
   args: {
@@ -113,7 +114,7 @@ export const LatencyMetric: Story = {
     sublabel: 'To gateway',
     status: 'good',
   },
-}
+};
 
 export const HighLatencyMetric: Story = {
   args: {
@@ -122,5 +123,4 @@ export const HighLatencyMetric: Story = {
     sublabel: 'Degraded performance',
     status: 'warning',
   },
-}
-
+};

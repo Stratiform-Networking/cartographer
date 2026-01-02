@@ -12,18 +12,21 @@ from ..models.network import PermissionRole
 
 class NetworkCreate(BaseModel):
     """Network creation request."""
+
     name: str = Field(..., min_length=1, max_length=100)
     description: str | None = Field(None, max_length=500)
 
 
 class NetworkUpdate(BaseModel):
     """Network update request."""
+
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, max_length=500)
 
 
 class NetworkResponse(BaseModel):
     """Network response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str  # UUID string
@@ -41,6 +44,7 @@ class NetworkResponse(BaseModel):
 
 class NetworkLayoutResponse(BaseModel):
     """Network layout data response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str  # UUID string
@@ -51,5 +55,5 @@ class NetworkLayoutResponse(BaseModel):
 
 class NetworkLayoutSave(BaseModel):
     """Network layout save request."""
-    layout_data: dict[str, Any]
 
+    layout_data: dict[str, Any]

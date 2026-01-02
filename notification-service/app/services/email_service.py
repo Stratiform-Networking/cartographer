@@ -44,13 +44,11 @@ def is_email_configured() -> bool:
     return settings.is_email_configured
 
 
-
-
 def _build_notification_email_html(event: NetworkEvent) -> str:
     """Build HTML email content for a network event notification"""
     icon = get_notification_icon(event.event_type)
     priority_color = get_priority_color_hex(event.priority)
-    
+
     # Build device info section if available
     device_info_html = ""
     if event.device_ip or event.device_name:
@@ -66,8 +64,8 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
             </table>
         </div>
         """
-    
-    # Build anomaly info if present
+
+    # Build anomaly info if presen
     anomaly_info_html = ""
     if event.anomaly_score is not None:
         anomaly_percent = int(event.anomaly_score * 100)
@@ -78,15 +76,15 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
             </p>
         </div>
         """
-    
-    # Build additional details if present
+
+    # Build additional details if presen
     details_html = ""
     if event.details:
         details_rows = ""
         for key, value in event.details.items():
             display_key = key.replace("_", " ").title()
             details_rows += f"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>{display_key}:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>{value}</td></tr>"
-        
+
         details_html = f"""
         <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
             <h3 style="margin: 0 0 12px; color: #334155; font-size: 14px; font-weight: 600;">Additional Details</h3>
@@ -95,7 +93,7 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
             </table>
         </div>
         """
-    
+
     html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -126,7 +124,7 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
                             </table>
                         </td>
                     </tr>
-                    
+
                     <!-- Body -->
                     <tr>
                         <td style="padding: 32px 40px;">
@@ -136,16 +134,16 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
                             <p style="margin: 0 0 24px; color: #475569; font-size: 15px; line-height: 1.6;">
                                 {event.message}
                             </p>
-                            
+
                             {device_info_html}
                             {anomaly_info_html}
                             {details_html}
-                            
+
                             <!-- Timestamp -->
                             <p style="margin: 24px 0 0; color: #94a3b8; font-size: 12px;">
                                 Event detected at {event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
                             </p>
-                            
+
                             <!-- CTA Button -->
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                 <tr>
@@ -158,7 +156,7 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
                             </table>
                         </td>
                     </tr>
-                    
+
                     <!-- Footer -->
                     <tr>
                         <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
@@ -181,7 +179,7 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
 def _build_notification_email_text(event: NetworkEvent) -> str:
     """Build plain text email content for a network event notification"""
     icon = get_notification_icon(event.event_type)
-    
+
     text_content = f"""
 {icon} Cartographer Alert: {event.title}
 {'=' * 50}
@@ -190,7 +188,7 @@ Priority: {event.priority.value.upper()}
 
 {event.message}
 """
-    
+
     if event.device_ip or event.device_name:
         text_content += f"""
 Device Information:
@@ -206,7 +204,7 @@ Device Information:
             text_content += f"Previous State: {event.previous_state}\n"
         if event.current_state:
             text_content += f"Current State: {event.current_state}\n"
-    
+
     if event.anomaly_score is not None:
         anomaly_percent = int(event.anomaly_score * 100)
         text_content += f"""
@@ -215,7 +213,7 @@ Anomaly Detection:
 Anomaly Score: {anomaly_percent}%
 This event was flagged by our ML-based anomaly detection system.
 """
-    
+
     if event.details:
         text_content += """
 Additional Details:
@@ -224,7 +222,7 @@ Additional Details:
         for key, value in event.details.items():
             display_key = key.replace("_", " ").title()
             text_content += f"{display_key}: {value}\n"
-    
+
     text_content += f"""
 ---
 Event detected at {event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
@@ -245,7 +243,7 @@ async def send_notification_email(
 ) -> NotificationRecord:
     """
     Send a notification email for a network event.
-    
+
     Returns a NotificationRecord with the result.
     """
     record = NotificationRecord(
@@ -258,30 +256,32 @@ async def send_notification_email(
         priority=event.priority,
         success=False,
     )
-    
+
     if not is_email_configured():
         record.error_message = "Email not configured - RESEND_API_KEY not set"
-        logger.warning(f"✗ Email not configured - RESEND_API_KEY not set. Cannot send notification to {to_email}")
+        logger.warning(
+            f"✗ Email not configured - RESEND_API_KEY not set. Cannot send notification to {to_email}"
+        )
         return record
-    
+
     resend = _get_resend()
     if not resend:
         record.error_message = "Resend module not available"
         logger.error(f"✗ Resend module not available. Cannot send notification to {to_email}")
         return record
-    
+
     try:
         icon = get_notification_icon(event.event_type)
         subject = f"{icon} {event.title}"
-        
+
         if event.priority == NotificationPriority.CRITICAL:
             subject = f"🚨 CRITICAL: {event.title}"
         elif event.priority == NotificationPriority.HIGH:
             subject = f"⚠️ {event.title}"
-        
+
         html_content = _build_notification_email_html(event)
         text_content = _build_notification_email_text(event)
-        
+
         params = {
             "from": settings.email_from,
             "to": [to_email],
@@ -289,22 +289,26 @@ async def send_notification_email(
             "html": html_content,
             "text": text_content,
         }
-        
+
         logger.info(f"Attempting to send email via Resend to {to_email} with subject: {subject}")
         result = resend.Emails.send(params)
         email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
-        
+
         if email_id:
             record.success = True
-            logger.info(f"✓ Notification email sent successfully to {to_email} (Resend ID: {email_id}) - {event.title}")
+            logger.info(
+                f"✓ Notification email sent successfully to {to_email} (Resend ID: {email_id}) - {event.title}"
+            )
         else:
             record.error_message = "Resend API returned no email ID"
             logger.error(f"✗ Resend API returned no email ID for notification to {to_email}")
-        
+
     except Exception as e:
         record.error_message = str(e)
-        logger.error(f"✗ Exception while sending notification email to {to_email}: {e}", exc_info=True)
-    
+        logger.error(
+            f"✗ Exception while sending notification email to {to_email}: {e}", exc_info=True
+        )
+
     return record
 
 
@@ -319,13 +323,12 @@ async def send_test_email(to_email: str) -> dict[str, any]:
         details={
             "test": True,
             "sent_at": datetime.utcnow().isoformat(),
-        }
+        },
     )
-    
+
     record = await send_notification_email(to_email, test_event, "test-notification")
-    
+
     return {
         "success": record.success,
         "error": record.error_message,
     }
-

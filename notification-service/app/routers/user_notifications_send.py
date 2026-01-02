@@ -4,15 +4,16 @@ Send network notification endpoint (separate file for organization).
 
 import logging
 import uuid
-from typing import Optional, List
 from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
+from ..models import NetworkEvent, NotificationPriority, NotificationType
 from ..services.notification_dispatch import notification_dispatch_service
-from ..models import NetworkEvent, NotificationType, NotificationPriority
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ router = APIRouter()
 
 class SendNetworkNotificationRequest(BaseModel):
     """Request to send a notification to all network users"""
+
     user_ids: List[str]  # Provided by backend
     type: str  # NotificationType value
     priority: str  # NotificationPriority value
@@ -45,14 +47,14 @@ async def send_network_notification(
         priority = NotificationPriority(request.priority)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid notification type or priority: {e}")
-    
+
     scheduled_at = None
     if request.scheduled_at:
         try:
             scheduled_at = datetime.fromisoformat(request.scheduled_at.replace("Z", "+00:00"))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid scheduled_at format")
-    
+
     # Create network event
     event = NetworkEvent(
         event_id=str(uuid.uuid4()),
@@ -64,7 +66,7 @@ async def send_network_notification(
         details={
             "is_manual_notification": True,
             "scheduled_at": request.scheduled_at,
-        }
+        },
     )
 
     # Dispatch to all users
@@ -75,7 +77,7 @@ async def send_network_notification(
         event=event,
         scheduled_at=scheduled_at,
     )
-    
+
     return {
         "success": True,
         "event_id": event.event_id,

@@ -1,6 +1,6 @@
 /**
  * Assistant API module
- * 
+ *
  * All AI assistant and chat API calls.
  */
 
@@ -93,4 +93,3 @@ export async function sendChatMessage(request: ChatRequest): Promise<ChatRespons
   const response = await client.post<ChatResponse>('/api/assistant/chat', request);
   return response.data;
 }
-

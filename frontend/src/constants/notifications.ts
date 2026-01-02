@@ -1,6 +1,6 @@
 /**
  * Notification UI constants
- * 
+ *
  * Labels, icons, and display information for notification types.
  * These are UI concerns and should not be in composables or types.
  */
@@ -100,4 +100,3 @@ export const PRIORITY_INFO: Record<NotificationPriority, PriorityInfo> = {
   high: { label: 'High', color: 'orange' },
   critical: { label: 'Critical', color: 'red' },
 };
-

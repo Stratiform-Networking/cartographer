@@ -5,24 +5,17 @@ Mapper router - Network mapping and embed management endpoints.
 import json
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends, Query
-from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..database import get_db
-from ..dependencies import (
-    AuthenticatedUser,
-    require_auth,
-    require_write_access,
-    require_owner
-)
+from ..dependencies import AuthenticatedUser, require_auth, require_owner, require_write_access
 from ..models.network import Network
-from ..services import embed_service
-from ..services import mapper_runner_service
-from ..services import health_proxy_service
+from ..services import embed_service, health_proxy_service, mapper_runner_service
 
 settings = get_settings()
 
@@ -31,6 +24,7 @@ router = APIRouter()
 
 class MapperResponse(BaseModel):
     """Response from running the mapper script."""
+
     content: str
     script_exit_code: int
     network_map_path: str | None = None
@@ -74,8 +68,7 @@ def run_mapper_stream(user: AuthenticatedUser = Depends(require_write_access)):
         raise HTTPException(status_code=404, detail=f"lan_mapper.sh not found at {script}")
 
     return StreamingResponse(
-        mapper_runner_service.run_mapper_streaming(),
-        media_type="text/event-stream"
+        mapper_runner_service.run_mapper_streaming(), media_type="text/event-stream"
     )
 
 
@@ -85,7 +78,7 @@ def download_map(user: AuthenticatedUser = Depends(require_auth)):
     map_path = mapper_runner_service.find_network_map()
     if map_path is None:
         raise HTTPException(status_code=404, detail="network_map.txt not found")
-    
+
     return FileResponse(
         path=str(map_path),
         filename=map_path.name,
@@ -101,11 +94,7 @@ def save_layout(layout: dict, user: AuthenticatedUser = Depends(require_write_ac
     """Save the network layout to the server. Requires write access."""
     try:
         path = mapper_runner_service.save_layout(layout)
-        return JSONResponse({
-            "success": True,
-            "message": "Layout saved successfully",
-            "path": path
-        })
+        return JSONResponse({"success": True, "message": "Layout saved successfully", "path": path})
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -129,19 +118,19 @@ def load_layout(user: AuthenticatedUser = Depends(require_auth)):
 async def get_embed_data(embed_id: str, db: AsyncSession = Depends(get_db)):
     """Get the network map data for a specific embed (read-only, no auth required)."""
     embed_config = embed_service.get_embed(embed_id)
-    
+
     if not embed_config:
         raise HTTPException(status_code=404, detail="Embed not found")
-    
+
     network_id = embed_config.get("networkId")
     root = None
-    
+
     # Load the network map - from database if networkId is set, otherwise from file
     if network_id:
         try:
             result = await db.execute(select(Network).where(Network.id == network_id))
             network = result.scalar_one_or_none()
-            
+
             if network and network.layout_data:
                 layout = network.layout_data
                 if isinstance(layout, str):
@@ -157,32 +146,38 @@ async def get_embed_data(embed_id: str, db: AsyncSession = Depends(get_db)):
                 root = layout.get("root")
         except RuntimeError as exc:
             raise HTTPException(status_code=500, detail=str(exc))
-    
+
     if not root:
-        return JSONResponse({
-            "exists": False,
-            "root": None,
-            "sensitiveMode": False,
-            "showOwner": False,
-            "ownerDisplayName": None
-        })
-    
+        return JSONResponse(
+            {
+                "exists": False,
+                "root": None,
+                "sensitiveMode": False,
+                "showOwner": False,
+                "ownerDisplayName": None,
+            }
+        )
+
     sensitive_mode = embed_config.get("sensitiveMode", False)
-    
+
     # If sensitive mode is enabled, sanitize all IPs in the response
     if sensitive_mode:
         ip_mapping: dict[str, str] = {}
         root = embed_service.sanitize_node_ips(root, embed_id, ip_mapping)
         embed_service.set_ip_mapping(embed_id, ip_mapping)
-    
-    return JSONResponse({
-        "exists": True,
-        "root": root,
-        "sensitiveMode": sensitive_mode,
-        "showOwner": embed_config.get("showOwner", False),
-        "ownerDisplayName": embed_config.get("ownerDisplayName") if embed_config.get("showOwner") else None,
-        "name": embed_config.get("name", "Unnamed Embed")
-    })
+
+    return JSONResponse(
+        {
+            "exists": True,
+            "root": root,
+            "sensitiveMode": sensitive_mode,
+            "showOwner": embed_config.get("showOwner", False),
+            "ownerDisplayName": (
+                embed_config.get("ownerDisplayName") if embed_config.get("showOwner") else None
+            ),
+            "name": embed_config.get("name", "Unnamed Embed"),
+        }
+    )
 
 
 @router.get("/embeds")
@@ -192,7 +187,7 @@ def list_embeds(
 ):
     """List all embed configurations. Requires authentication."""
     embeds = embed_service.load_all_embeds()
-    
+
     embed_list = []
     for eid, config in embeds.items():
         # Filter by network_id if provided
@@ -200,17 +195,19 @@ def list_embeds(
             embed_network_id = config.get("networkId")
             if embed_network_id != network_id:
                 continue
-        embed_list.append({
-            "id": eid,
-            "name": config.get("name", "Unnamed Embed"),
-            "sensitiveMode": config.get("sensitiveMode", False),
-            "showOwner": config.get("showOwner", False),
-            "ownerDisplayName": config.get("ownerDisplayName"),
-            "networkId": config.get("networkId"),
-            "createdAt": config.get("createdAt"),
-            "updatedAt": config.get("updatedAt")
-        })
-    
+        embed_list.append(
+            {
+                "id": eid,
+                "name": config.get("name", "Unnamed Embed"),
+                "sensitiveMode": config.get("sensitiveMode", False),
+                "showOwner": config.get("showOwner", False),
+                "ownerDisplayName": config.get("ownerDisplayName"),
+                "networkId": config.get("networkId"),
+                "createdAt": config.get("createdAt"),
+                "updatedAt": config.get("updatedAt"),
+            }
+        )
+
     # Sort by creation date, newest first
     embed_list.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
     return JSONResponse({"embeds": embed_list})
@@ -221,27 +218,21 @@ def create_embed(config: dict, user: AuthenticatedUser = Depends(require_write_a
     """Create a new embed configuration. Requires write access."""
     try:
         embed_id, embed_config = embed_service.create_embed(config)
-        return JSONResponse({
-            "success": True,
-            "id": embed_id,
-            "embed": embed_config
-        })
+        return JSONResponse({"success": True, "id": embed_id, "embed": embed_config})
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to create embed: {exc}")
 
 
 @router.patch("/embeds/{embed_id}")
-def update_embed(embed_id: str, config: dict, user: AuthenticatedUser = Depends(require_write_access)):
+def update_embed(
+    embed_id: str, config: dict, user: AuthenticatedUser = Depends(require_write_access)
+):
     """Update an existing embed configuration. Requires write access."""
     try:
         embed_config = embed_service.update_embed(embed_id, config)
         if embed_config is None:
             raise HTTPException(status_code=404, detail="Embed not found")
-        return JSONResponse({
-            "success": True,
-            "id": embed_id,
-            "embed": embed_config
-        })
+        return JSONResponse({"success": True, "id": embed_id, "embed": embed_config})
     except HTTPException:
         raise
     except Exception as exc:
@@ -268,28 +259,30 @@ def delete_embed(embed_id: str, user: AuthenticatedUser = Depends(require_owner)
 @router.post("/embed/{embed_id}/health/register")
 async def register_embed_health_devices(embed_id: str, request: dict):
     """Register devices for health monitoring using anonymized IDs.
-    
+
     The backend translates these to real IPs server-side.
     """
     embed_config = embed_service.get_embed(embed_id)
     if not embed_config:
         raise HTTPException(status_code=404, detail="Embed not found")
-    
+
     # Get anonymized IDs from request and translate to real IPs
     anon_ids = request.get("device_ids", [])
     real_ips = embed_service.translate_anon_ids_to_ips(embed_id, anon_ids)
-    
+
     if not real_ips:
         return JSONResponse({"message": "No valid devices to register", "count": 0})
-    
+
     try:
         response = await health_proxy_service.register_devices(real_ips)
         response.raise_for_status()
-        
-        return JSONResponse({
-            "message": f"Registered {len(real_ips)} devices for monitoring",
-            "count": len(real_ips)
-        })
+
+        return JSONResponse(
+            {
+                "message": f"Registered {len(real_ips)} devices for monitoring",
+                "count": len(real_ips),
+            }
+        )
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Health service unavailable")
     except Exception as exc:
@@ -302,7 +295,7 @@ async def trigger_embed_health_check(embed_id: str):
     embed_config = embed_service.get_embed(embed_id)
     if not embed_config:
         raise HTTPException(status_code=404, detail="Embed not found")
-    
+
     try:
         response = await health_proxy_service.trigger_health_check()
         if response.status_code == 400:
@@ -318,23 +311,23 @@ async def trigger_embed_health_check(embed_id: str):
 @router.get("/embed/{embed_id}/health/cached")
 async def get_embed_cached_health(embed_id: str):
     """Get cached health metrics for an embed, using anonymized IDs.
-    
+
     Real IPs are never exposed to the client.
     """
     embed_config = embed_service.get_embed(embed_id)
     if not embed_config:
         raise HTTPException(status_code=404, detail="Embed not found")
-    
+
     sensitive_mode = embed_config.get("sensitiveMode", False)
-    
+
     try:
         all_metrics = await health_proxy_service.get_cached_metrics()
-        
+
         # Anonymize metrics if in sensitive mode
         result_metrics = embed_service.anonymize_health_metrics(
             embed_id, all_metrics, sensitive_mode
         )
-        
+
         return JSONResponse(result_metrics)
     except httpx.ConnectError:
         raise HTTPException(status_code=503, detail="Health service unavailable")

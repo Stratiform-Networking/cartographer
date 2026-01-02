@@ -4,6 +4,7 @@ Cartographer Backend - FastAPI Application Entry Point.
 This module creates and configures the FastAPI application,
 including middleware, routers, and lifecycle management.
 """
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -33,7 +34,7 @@ settings = get_settings()
 async def run_migrations() -> None:
     """
     Run database migrations on startup.
-    
+
     These migrations are non-fatal - the application will continue
     even if they fail, logging warnings for investigation.
     """
@@ -44,7 +45,7 @@ async def run_migrations() -> None:
             logger.info("Network ID UUID migration completed")
     except Exception as e:
         logger.warning(f"Network ID UUID migration failed (non-fatal): {e}")
-    
+
     # Migration: Existing layouts to database
     try:
         layout_migrated = await migrate_layout_to_database()
@@ -52,13 +53,13 @@ async def run_migrations() -> None:
             logger.info("Layout migration completed")
     except Exception as e:
         logger.warning(f"Layout migration failed (non-fatal): {e}")
-    
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager.
-    
+
     Handles startup and shutdown tasks:
     - Database initialization
     - Data migrations
@@ -69,24 +70,24 @@ async def lifespan(app: FastAPI):
     logger.info("Starting application - initializing database...")
     await init_db()
     logger.info("Database initialized")
-    
+
     # Run data migrations
     await run_migrations()
-    
+
     # Register and initialize HTTP client pool
     logger.info("Registering services with HTTP client pool...")
     register_all_services()
-    
+
     logger.info("Initializing HTTP client pool...")
     await http_pool.initialize_all()
-    
+
     # Warm up connections to reduce cold start latency
     warm_up_results = await http_pool.warm_up_all()
     ready_count = sum(1 for v in warm_up_results.values() if v)
     logger.info(f"Warm-up complete: {ready_count}/{len(warm_up_results)} services ready")
-    
+
     yield
-    
+
     # Shutdown: Close HTTP client pool gracefully
     logger.info("Shutting down - closing HTTP client pool...")
     await http_pool.close_all()
@@ -95,7 +96,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """
     Create and configure the FastAPI application.
-    
+
     Returns:
         Configured FastAPI application instance.
     """
@@ -116,7 +117,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Usage tracking middleware - reports endpoint usage to metrics service
     app.add_middleware(UsageTrackingMiddleware, service_name="backend")
 
@@ -137,7 +138,7 @@ def create_app() -> FastAPI:
     if dist_path.exists():
         # Mount Vite assets directory
         mount_assets(app, dist_path)
-        
+
         # Add SPA routes (must be last to act as catch-all)
         static_router = create_static_router(dist_path)
         if static_router:

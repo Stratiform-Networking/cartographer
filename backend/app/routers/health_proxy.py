@@ -7,13 +7,10 @@ Performance optimizations:
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
 """
-from fastapi import APIRouter, HTTPException, Request, Query, Depends
 
-from ..dependencies import (
-    AuthenticatedUser,
-    require_auth,
-    require_write_access
-)
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+
+from ..dependencies import AuthenticatedUser, require_auth, require_write_access
 from ..services.proxy_service import proxy_health_request
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -24,13 +21,11 @@ async def check_device(
     ip: str,
     include_ports: bool = Query(False),
     include_dns: bool = Query(True),
-    user: AuthenticatedUser = Depends(require_auth)
+    user: AuthenticatedUser = Depends(require_auth),
 ):
     """Proxy health check for a single device. Requires authentication."""
     return await proxy_health_request(
-        "GET",
-        f"/check/{ip}",
-        params={"include_ports": include_ports, "include_dns": include_dns}
+        "GET", f"/check/{ip}", params={"include_ports": include_ports, "include_dns": include_dns}
     )
 
 
@@ -60,7 +55,9 @@ async def clear_cache(user: AuthenticatedUser = Depends(require_write_access)):
 
 
 @router.get("/ping/{ip}")
-async def ping(ip: str, count: int = Query(3, ge=1, le=10), user: AuthenticatedUser = Depends(require_auth)):
+async def ping(
+    ip: str, count: int = Query(3, ge=1, le=10), user: AuthenticatedUser = Depends(require_auth)
+):
     """Proxy quick ping. Requires authentication."""
     return await proxy_health_request("GET", f"/ping/{ip}", params={"count": count})
 
@@ -79,11 +76,14 @@ async def check_dns(ip: str, user: AuthenticatedUser = Depends(require_auth)):
 
 # ==================== Monitoring Endpoints ====================
 
+
 @router.post("/monitoring/devices")
-async def register_devices(request: Request, user: AuthenticatedUser = Depends(require_write_access)):
+async def register_devices(
+    request: Request, user: AuthenticatedUser = Depends(require_write_access)
+):
     """
     Proxy register devices for monitoring. Requires write access.
-    
+
     Expects JSON body with:
     - ips: List[str] - Device IP addresses
     - network_id: str - The network UUID these devices belong to (required)
@@ -114,7 +114,9 @@ async def get_monitoring_config(user: AuthenticatedUser = Depends(require_auth))
 
 
 @router.post("/monitoring/config")
-async def set_monitoring_config(request: Request, user: AuthenticatedUser = Depends(require_write_access)):
+async def set_monitoring_config(
+    request: Request, user: AuthenticatedUser = Depends(require_write_access)
+):
     """Proxy set monitoring config. Requires write access."""
     body = await request.json()
     return await proxy_health_request("POST", "/monitoring/config", json_body=body)
@@ -146,6 +148,7 @@ async def trigger_check(user: AuthenticatedUser = Depends(require_write_access))
 
 # ==================== Gateway Test IP Endpoints ====================
 
+
 # Note: Specific route must come before parameterized routes
 @router.get("/gateway/test-ips/all")
 async def get_all_gateway_test_ips(user: AuthenticatedUser = Depends(require_auth)):
@@ -154,7 +157,9 @@ async def get_all_gateway_test_ips(user: AuthenticatedUser = Depends(require_aut
 
 
 @router.post("/gateway/{gateway_ip}/test-ips")
-async def set_gateway_test_ips(gateway_ip: str, request: Request, user: AuthenticatedUser = Depends(require_write_access)):
+async def set_gateway_test_ips(
+    gateway_ip: str, request: Request, user: AuthenticatedUser = Depends(require_write_access)
+):
     """Proxy set test IPs for a gateway. Requires write access."""
     body = await request.json()
     return await proxy_health_request("POST", f"/gateway/{gateway_ip}/test-ips", json_body=body)
@@ -167,7 +172,9 @@ async def get_gateway_test_ips(gateway_ip: str, user: AuthenticatedUser = Depend
 
 
 @router.delete("/gateway/{gateway_ip}/test-ips")
-async def remove_gateway_test_ips(gateway_ip: str, user: AuthenticatedUser = Depends(require_write_access)):
+async def remove_gateway_test_ips(
+    gateway_ip: str, user: AuthenticatedUser = Depends(require_write_access)
+):
     """Proxy remove test IPs for a gateway. Requires write access."""
     return await proxy_health_request("DELETE", f"/gateway/{gateway_ip}/test-ips")
 
@@ -179,17 +186,22 @@ async def check_gateway_test_ips(gateway_ip: str, user: AuthenticatedUser = Depe
 
 
 @router.get("/gateway/{gateway_ip}/test-ips/cached")
-async def get_cached_test_ip_metrics(gateway_ip: str, user: AuthenticatedUser = Depends(require_auth)):
+async def get_cached_test_ip_metrics(
+    gateway_ip: str, user: AuthenticatedUser = Depends(require_auth)
+):
     """Proxy get cached test IP metrics for a gateway. Requires authentication."""
     return await proxy_health_request("GET", f"/gateway/{gateway_ip}/test-ips/cached")
 
 
 # ==================== Speed Test Endpoints ====================
 
+
 @router.post("/speedtest")
 async def run_speed_test(user: AuthenticatedUser = Depends(require_write_access)):
     """Proxy run speed test - can take 30-60 seconds. Requires write access."""
-    return await proxy_health_request("POST", "/speedtest", timeout=120.0)  # 2 minute timeout for speed test
+    return await proxy_health_request(
+        "POST", "/speedtest", timeout=120.0
+    )  # 2 minute timeout for speed test
 
 
 @router.get("/speedtest/all")
@@ -205,6 +217,8 @@ async def get_gateway_speed_test(gateway_ip: str, user: AuthenticatedUser = Depe
 
 
 @router.post("/gateway/{gateway_ip}/speedtest")
-async def run_gateway_speed_test(gateway_ip: str, user: AuthenticatedUser = Depends(require_write_access)):
+async def run_gateway_speed_test(
+    gateway_ip: str, user: AuthenticatedUser = Depends(require_write_access)
+):
     """Proxy run speed test for a specific gateway - can take 30-60 seconds. Requires write access."""
     return await proxy_health_request("POST", f"/gateway/{gateway_ip}/speedtest", timeout=120.0)

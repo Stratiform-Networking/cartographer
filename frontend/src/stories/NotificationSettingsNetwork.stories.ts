@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import NotificationSettingsNetwork from '../components/NotificationSettingsNetwork.vue'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import NotificationSettingsNetwork from '../components/NotificationSettingsNetwork.vue';
 
 // Mock preferences
 const createMockPreferences = (overrides = {}) => ({
@@ -10,36 +10,40 @@ const createMockPreferences = (overrides = {}) => ({
   device_down_enabled: true,
   anomaly_detection_enabled: true,
   ...overrides,
-})
+});
 
 // Mock service status
 const createMockServiceStatus = (overrides = {}) => ({
   email: { configured: true, enabled: true },
   discord: { configured: false, enabled: false },
   ...overrides,
-})
+});
 
 // Mock discord link
-const createMockDiscordLink = (linked = false) => 
-  linked ? {
-    linked: true,
-    discord_username: 'User#1234',
-    discord_user_id: '123456789',
-  } : {
-    linked: false,
-    discord_username: null,
-    discord_user_id: null,
-  }
+const createMockDiscordLink = (linked = false) =>
+  linked
+    ? {
+        linked: true,
+        discord_username: 'User#1234',
+        discord_user_id: '123456789',
+      }
+    : {
+        linked: false,
+        discord_username: null,
+        discord_user_id: null,
+      };
 
 // Mock anomaly stats
 const createMockAnomalyStats = (hasAnomalies = false) => ({
   total_anomalies_24h: hasAnomalies ? 5 : 0,
-  anomalies_by_device: hasAnomalies ? {
-    '192.168.1.10': 3,
-    '192.168.1.20': 2,
-  } : {},
+  anomalies_by_device: hasAnomalies
+    ? {
+        '192.168.1.10': 3,
+        '192.168.1.20': 2,
+      }
+    : {},
   last_anomaly: hasAnomalies ? '2024-06-15T10:30:00Z' : null,
-})
+});
 
 const meta = {
   title: 'Components/NotificationSettingsNetwork',
@@ -49,7 +53,8 @@ const meta = {
     layout: 'padded',
     docs: {
       description: {
-        component: 'Network-specific notification settings panel for configuring alerts for a particular network including device status and anomaly detection.',
+        component:
+          'Network-specific notification settings panel for configuring alerts for a particular network including device status and anomaly detection.',
       },
     },
   },
@@ -84,10 +89,10 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof NotificationSettingsNetwork>
+} satisfies Meta<typeof NotificationSettingsNetwork>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default state
 export const Default: Story = {
@@ -101,7 +106,7 @@ export const Default: Story = {
     'onTest-email': fn(),
     'onTest-discord': fn(),
   },
-}
+};
 
 // With Discord enabled
 export const WithDiscord: Story = {
@@ -119,7 +124,7 @@ export const WithDiscord: Story = {
     'onTest-email': fn(),
     'onTest-discord': fn(),
   },
-}
+};
 
 // With anomalies detected
 export const WithAnomalies: Story = {
@@ -135,7 +140,7 @@ export const WithAnomalies: Story = {
     'onTest-email': fn(),
     'onTest-discord': fn(),
   },
-}
+};
 
 // All notifications disabled
 export const AllDisabled: Story = {
@@ -155,7 +160,7 @@ export const AllDisabled: Story = {
     'onTest-email': fn(),
     'onTest-discord': fn(),
   },
-}
+};
 
 // Only device down alerts
 export const OnlyDeviceDown: Story = {
@@ -173,5 +178,4 @@ export const OnlyDeviceDown: Story = {
     'onTest-email': fn(),
     'onTest-discord': fn(),
   },
-}
-
+};

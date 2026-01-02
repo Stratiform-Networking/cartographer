@@ -3,7 +3,7 @@ Pydantic schemas for API request/response validation.
 
 Domain-specific schemas are organized into submodules:
 - network: Network CRUD schemas
-- permission: Permission management schemas  
+- permission: Permission management schemas
 - notification: Notification settings schemas
 
 All schemas are re-exported here for backwards compatibility.
@@ -11,22 +11,19 @@ All schemas are re-exported here for backwards compatibility.
 
 from .network import (
     NetworkCreate,
-    NetworkUpdate,
-    NetworkResponse,
     NetworkLayoutResponse,
     NetworkLayoutSave,
-)
-from .permission import (
-    PermissionCreate,
-    PermissionResponse,
+    NetworkResponse,
+    NetworkUpdate,
 )
 from .notification import (
-    EmailConfigCreate,
     DiscordConfigCreate,
-    NotificationPreferencesCreate,
+    EmailConfigCreate,
     NetworkNotificationSettingsCreate,
     NetworkNotificationSettingsResponse,
+    NotificationPreferencesCreate,
 )
+from .permission import PermissionCreate, PermissionResponse
 
 __all__ = [
     # Network
@@ -45,4 +42,3 @@ __all__ = [
     "NetworkNotificationSettingsCreate",
     "NetworkNotificationSettingsResponse",
 ]
-

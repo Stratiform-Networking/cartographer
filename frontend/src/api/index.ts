@@ -1,6 +1,6 @@
 /**
  * API module exports
- * 
+ *
  * Centralized exports for all API modules.
  */
 
@@ -46,4 +46,3 @@ export type {
   ChatRequest,
   ChatResponse,
 } from './assistant';
-

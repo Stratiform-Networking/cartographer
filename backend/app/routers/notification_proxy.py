@@ -14,76 +14,64 @@ Performance optimizations:
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
 """
+
 from fastapi import APIRouter, Depends, Query
 
-from ..dependencies import (
-    AuthenticatedUser,
-    require_auth,
-    require_write_access,
-    require_owner,
-)
+from ..dependencies import AuthenticatedUser, require_auth, require_owner, require_write_access
 from ..services.proxy_service import proxy_notification_request
 
 # Import sub-routers
-from .notification import (
-    preferences_router,
-    discord_router,
-    broadcast_router,
-    email_router,
+from .notification import broadcast_router, discord_router, email_router, preferences_router
+from .notification.broadcast import (
+    cancel_scheduled_broadcast,
+    check_for_updates,
+    create_cartographer_status_subscription,
+    create_scheduled_broadcast,
+    delete_cartographer_status_subscription,
+    delete_scheduled_broadcast,
+    get_cartographer_status_subscription,
+    get_scheduled_broadcast,
+    get_scheduled_broadcasts,
+    get_version_status,
+    mark_broadcast_seen,
+    notify_service_down,
+    notify_service_up,
+    send_global_notification,
+    send_network_notification,
+    send_version_notification,
+    test_global_discord,
+    update_cartographer_status_subscription,
+    update_scheduled_broadcast,
+)
+from .notification.discord import discord_oauth_callback, get_discord_channels, get_discord_guilds
+from .notification.discord import get_discord_info as _get_discord_bot_info
+from .notification.discord import get_discord_invite_url
+from .notification.discord import (
+    get_user_discord_info as get_discord_info,  # Re-export with legacy name for test compatibility
+)
+from .notification.discord import initiate_discord_oauth, unlink_discord
+from .notification.email import (
+    send_network_test_notification,
+    send_test_notification,
+    test_user_global_notification,
+    test_user_network_notification,
 )
 
 # Re-export functions from sub-routers for backwards compatibility with tests
 from .notification.preferences import (
-    get_network_preferences,
-    update_network_preferences,
     delete_network_preferences,
-    get_global_preferences,
-    update_global_preferences,
-    get_user_network_preferences,
-    update_user_network_preferences,
-    delete_user_network_preferences,
-    get_user_global_preferences,
-    update_user_global_preferences,
-    get_preferences,
-    update_preferences,
     delete_preferences,
-)
-from .notification.discord import (
-    get_discord_info as _get_discord_bot_info,
-    get_discord_guilds,
-    get_discord_channels,
-    get_discord_invite_url,
-    initiate_discord_oauth,
-    discord_oauth_callback,
-    get_user_discord_info as get_discord_info,  # Re-export with legacy name for test compatibility
-    unlink_discord,
-)
-from .notification.broadcast import (
-    send_global_notification,
-    send_network_notification,
-    get_scheduled_broadcasts,
-    create_scheduled_broadcast,
-    get_scheduled_broadcast,
-    update_scheduled_broadcast,
-    cancel_scheduled_broadcast,
-    delete_scheduled_broadcast,
-    mark_broadcast_seen,
-    notify_service_up,
-    notify_service_down,
-    get_version_status,
-    check_for_updates,
-    send_version_notification,
-    get_cartographer_status_subscription,
-    create_cartographer_status_subscription,
-    update_cartographer_status_subscription,
-    delete_cartographer_status_subscription,
-    test_global_discord,
-)
-from .notification.email import (
-    send_test_notification,
-    send_network_test_notification,
-    test_user_network_notification,
-    test_user_global_notification,
+    delete_user_network_preferences,
+    get_global_preferences,
+    get_network_preferences,
+    get_preferences,
+    get_user_global_preferences,
+    get_user_network_preferences,
+    update_global_preferences,
+    update_network_preferences,
+    update_preferences,
+    update_user_global_preferences,
+    update_user_network_preferences,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -97,6 +85,7 @@ router.include_router(email_router)
 
 # ==================== Service Status ====================
 
+
 @router.get("/status")
 async def get_service_status(
     user: AuthenticatedUser = Depends(require_auth),
@@ -106,6 +95,7 @@ async def get_service_status(
 
 
 # ==================== History & Stats ====================
+
 
 @router.get("/history")
 async def get_notification_history(
@@ -165,6 +155,7 @@ async def get_network_notification_stats(
 
 # ==================== ML / Anomaly Detection ====================
 
+
 @router.get("/ml/status")
 async def get_ml_model_status(
     network_id: str = Query(None, description="Network ID for per-network stats"),
@@ -218,6 +209,7 @@ async def reset_all_ml_data(
 
 # ==================== Silenced Devices (Monitoring Disabled) ====================
 
+
 @router.get("/silenced-devices")
 async def get_silenced_devices(
     user: AuthenticatedUser = Depends(require_auth),
@@ -265,6 +257,7 @@ async def check_device_silenced(
 
 # ==================== Internal Endpoints (for health service integration) ====================
 
+
 @router.post("/internal/process-health-check")
 async def process_health_check(
     device_ip: str,
@@ -276,7 +269,7 @@ async def process_health_check(
 ):
     """
     Process a health check result from the health service.
-    
+
     This internal endpoint is called by the health service after each check.
     It trains the ML model and potentially sends notifications.
     """

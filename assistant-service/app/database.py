@@ -2,11 +2,10 @@
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from .config import settings
-
 
 DATABASE_URL = settings.database_url
 
@@ -36,6 +35,7 @@ if DATABASE_URL:
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
+
     pass
 
 
@@ -44,12 +44,12 @@ async def init_db():
     if engine is None:
         print("[Database] DATABASE_URL not configured, skipping database initialization")
         return
-    
+
     from . import db_models  # Import models to register them
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     print("[Database] Tables created successfully")
 
 
@@ -57,6 +57,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get database session for FastAPI endpoints."""
     if AsyncSessionLocal is None:
         raise RuntimeError("Database not configured. Set DATABASE_URL environment variable.")
-    
+
     async with AsyncSessionLocal() as session:
         yield session

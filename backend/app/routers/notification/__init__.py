@@ -7,10 +7,11 @@ This package contains specialized routers for different notification domains:
 - broadcast: Broadcast notifications and scheduled messages
 - email: Email notifications and testing
 """
-from .preferences import router as preferences_router
-from .discord import router as discord_router
+
 from .broadcast import router as broadcast_router
+from .discord import router as discord_router
 from .email import router as email_router
+from .preferences import router as preferences_router
 
 __all__ = [
     "preferences_router",
@@ -18,4 +19,3 @@ __all__ = [
     "broadcast_router",
     "email_router",
 ]
-

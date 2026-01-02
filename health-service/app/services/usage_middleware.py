@@ -30,7 +30,14 @@ class UsageRecord:
 
     __slots__ = ["endpoint", "method", "status_code", "response_time_ms", "timestamp"]
 
-    def __init__(self, endpoint: str, method: str, status_code: int, response_time_ms: float, timestamp: datetime):
+    def __init__(
+        self,
+        endpoint: str,
+        method: str,
+        status_code: int,
+        response_time_ms: float,
+        timestamp: datetime,
+    ):
         self.endpoint = endpoint
         self.method = method
         self.status_code = status_code

@@ -1,6 +1,6 @@
 /**
  * Version check composable
- * 
+ *
  * Manages version checking and update notifications.
  */
 
@@ -46,7 +46,10 @@ function parseVersion(version: string): { major: number; minor: number; patch: n
 }
 
 // Compare two versions and determine the type of update
-function compareVersions(current: string, latest: string): { hasUpdate: boolean; type: VersionType | null } {
+function compareVersions(
+  current: string,
+  latest: string
+): { hasUpdate: boolean; type: VersionType | null } {
   const currentParsed = parseVersion(current);
   const latestParsed = parseVersion(latest);
 
@@ -142,7 +145,11 @@ async function checkForUpdates(): Promise<void> {
     preferences.value.lastChecked = Date.now();
     savePreferences();
 
-    console.log('[VersionCheck] Latest version:', latestVersion.value, `(from commit ${latestSha.substring(0, 7)})`);
+    console.log(
+      '[VersionCheck] Latest version:',
+      latestVersion.value,
+      `(from commit ${latestSha.substring(0, 7)})`
+    );
   } catch (e: unknown) {
     lastError.value = e instanceof Error ? e.message : 'Failed to check for updates';
     console.warn('[VersionCheck] Failed to fetch version:', e);
@@ -249,7 +256,11 @@ function forceShowBanner(): void {
 }
 
 // Trigger backend notification for version update
-async function triggerBackendNotification(): Promise<{ success: boolean; users_notified?: number; error?: string }> {
+async function triggerBackendNotification(): Promise<{
+  success: boolean;
+  users_notified?: number;
+  error?: string;
+}> {
   try {
     const result = await notificationsApi.triggerVersionNotification();
     console.log('[VersionCheck] Backend notification triggered:', result);

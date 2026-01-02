@@ -3,7 +3,7 @@ Database configuration and session management.
 Matches cartographer-cloud's database setup for compatibility.
 """
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from .config import get_settings
@@ -29,6 +29,7 @@ async_session_maker = async_sessionmaker(
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
+
     pass
 
 
@@ -45,4 +46,3 @@ async def init_db():
     """Initialize database tables."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-

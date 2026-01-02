@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import NotificationSettingsGlobal from '../components/NotificationSettingsGlobal.vue'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import NotificationSettingsGlobal from '../components/NotificationSettingsGlobal.vue';
 
 // Mock preferences
 const createMockPreferences = (overrides = {}) => ({
@@ -13,26 +13,28 @@ const createMockPreferences = (overrides = {}) => ({
   cartographer_up_enabled: true,
   cartographer_down_enabled: true,
   ...overrides,
-})
+});
 
 // Mock service status
 const createMockServiceStatus = (overrides = {}) => ({
   email: { configured: true, enabled: true },
   discord: { configured: false, enabled: false },
   ...overrides,
-})
+});
 
 // Mock discord link
-const createMockDiscordLink = (linked = false) => 
-  linked ? {
-    linked: true,
-    discord_username: 'User#1234',
-    discord_user_id: '123456789',
-  } : {
-    linked: false,
-    discord_username: null,
-    discord_user_id: null,
-  }
+const createMockDiscordLink = (linked = false) =>
+  linked
+    ? {
+        linked: true,
+        discord_username: 'User#1234',
+        discord_user_id: '123456789',
+      }
+    : {
+        linked: false,
+        discord_username: null,
+        discord_user_id: null,
+      };
 
 const meta = {
   title: 'Components/NotificationSettingsGlobal',
@@ -42,7 +44,8 @@ const meta = {
     layout: 'padded',
     docs: {
       description: {
-        component: 'Global notification settings panel for configuring email and Discord notifications across all networks.',
+        component:
+          'Global notification settings panel for configuring email and Discord notifications across all networks.',
       },
     },
   },
@@ -69,10 +72,10 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof NotificationSettingsGlobal>
+} satisfies Meta<typeof NotificationSettingsGlobal>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default state with email configured
 export const Default: Story = {
@@ -86,7 +89,7 @@ export const Default: Story = {
     'onLink-discord': fn(),
     'onUnlink-discord': fn(),
   },
-}
+};
 
 // With Discord linked
 export const DiscordLinked: Story = {
@@ -105,7 +108,7 @@ export const DiscordLinked: Story = {
     'onLink-discord': fn(),
     'onUnlink-discord': fn(),
   },
-}
+};
 
 // All notifications disabled
 export const AllDisabled: Story = {
@@ -124,7 +127,7 @@ export const AllDisabled: Story = {
     'onLink-discord': fn(),
     'onUnlink-discord': fn(),
   },
-}
+};
 
 // Email not configured (service level)
 export const EmailNotConfigured: Story = {
@@ -143,7 +146,7 @@ export const EmailNotConfigured: Story = {
     'onLink-discord': fn(),
     'onUnlink-discord': fn(),
   },
-}
+};
 
 // Discord channel delivery
 export const DiscordChannelDelivery: Story = {
@@ -164,5 +167,4 @@ export const DiscordChannelDelivery: Story = {
     'onLink-discord': fn(),
     'onUnlink-discord': fn(),
   },
-}
-
+};

@@ -4,27 +4,41 @@ API endpoints for Cartographer status notifications (Up/Down).
 This is a separate system from network-scoped notifications.
 """
 
-import uuid
 import logging
-from typing import Optional, List
+import uuid
 from datetime import datetime
+from typing import List, Optional
+
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from ..services.cartographer_status import cartographer_status_service, CartographerStatusSubscription
-from ..services.email_service import send_notification_email, is_email_configured
+from ..models import (
+    DiscordChannelConfig,
+    DiscordConfig,
+    DiscordDeliveryMethod,
+    NetworkEvent,
+    NotificationPriority,
+    NotificationType,
+    get_default_priority_for_type,
+)
+from ..services.cartographer_status import (
+    CartographerStatusSubscription,
+    cartographer_status_service,
+)
 from ..services.discord_service import discord_service, is_discord_configured
-from ..models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type, DiscordConfig, DiscordDeliveryMethod, DiscordChannelConfig
+from ..services.email_service import is_email_configured, send_notification_email
 
 logger = logging.getLogger(__name__)
 
 
 class CartographerStatusNotifyRequest(BaseModel):
     """Request model for Cartographer status notification"""
+
     event_type: str  # "up" or "down"
     message: Optional[str] = None
     downtime_minutes: Optional[int] = None
     affected_services: Optional[List[str]] = None
+
 
 router = APIRouter()
 
@@ -35,7 +49,7 @@ async def get_cartographer_status_subscription(
 ):
     """Get the user's Cartographer status subscription"""
     subscription = cartographer_status_service.get_subscription(x_user_id)
-    
+
     if not subscription:
         # Return default (not subscribed)
         return {
@@ -59,7 +73,7 @@ async def get_cartographer_status_subscription(
             "timezone": None,
             "subscribed": False,
         }
-    
+
     return {
         "user_id": subscription.user_id,
         "email_address": subscription.email_address,
@@ -87,6 +101,7 @@ async def get_cartographer_status_subscription(
 
 class CreateSubscriptionRequest(BaseModel):
     """Request model for creating a subscription"""
+
     email_address: str
     cartographer_up_enabled: bool = True
     cartographer_down_enabled: bool = True
@@ -114,13 +129,13 @@ async def create_cartographer_status_subscription(
     """Create or update Cartographer status subscription"""
     if not request.email_address:
         raise HTTPException(status_code=400, detail="email_address is required")
-    
+
     if not is_email_configured():
         raise HTTPException(
             status_code=503,
-            detail="Email service is not configured. Please contact your administrator."
+            detail="Email service is not configured. Please contact your administrator.",
         )
-    
+
     subscription = cartographer_status_service.create_or_update_subscription(
         user_id=x_user_id,
         email_address=request.email_address,
@@ -146,7 +161,7 @@ async def create_cartographer_status_subscription(
         _discord_channel_id_provided=True,
         _discord_user_id_provided=True,
     )
-    
+
     return {
         "user_id": subscription.user_id,
         "email_address": subscription.email_address,
@@ -174,6 +189,7 @@ async def create_cartographer_status_subscription(
 
 class UpdateSubscriptionRequest(BaseModel):
     """Request model for updating a subscription"""
+
     email_address: Optional[str] = None
     cartographer_up_enabled: Optional[bool] = None
     cartographer_down_enabled: Optional[bool] = None
@@ -201,18 +217,18 @@ async def update_cartographer_status_subscription(
 ):
     """Update Cartographer status subscription (creates if not exists)"""
     subscription = cartographer_status_service.get_subscription(x_user_id)
-    
+
     # If no subscription exists, we'll create one - determine email to use
     email_to_use = request.email_address
     if not subscription and not email_to_use:
         # Use email from header or a placeholder for new subscriptions
         email_to_use = x_user_email or f"{x_user_id}@cartographer.local"
         logger.info(f"Creating new subscription for user {x_user_id} with email {email_to_use}")
-    
+
     # Validate email if provided
     if request.email_address is not None and not request.email_address:
         raise HTTPException(status_code=400, detail="email_address cannot be empty")
-    
+
     # Check if nullable fields were explicitly provided in the request
     request_dict = request.model_dump(exclude_unset=True)
     bypass_provided = "quiet_hours_bypass_priority" in request_dict
@@ -220,7 +236,7 @@ async def update_cartographer_status_subscription(
     discord_guild_id_provided = "discord_guild_id" in request_dict
     discord_channel_id_provided = "discord_channel_id" in request_dict
     discord_user_id_provided = "discord_user_id" in request_dict
-    
+
     updated = cartographer_status_service.create_or_update_subscription(
         user_id=x_user_id,
         email_address=email_to_use,
@@ -246,7 +262,7 @@ async def update_cartographer_status_subscription(
         _discord_channel_id_provided=discord_channel_id_provided,
         _discord_user_id_provided=discord_user_id_provided,
     )
-    
+
     return {
         "user_id": updated.user_id,
         "email_address": updated.email_address,
@@ -278,10 +294,10 @@ async def delete_cartographer_status_subscription(
 ):
     """Delete Cartographer status subscription"""
     success = cartographer_status_service.delete_subscription(x_user_id)
-    
+
     if not success:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    
+
     return {"success": True, "message": "Subscription deleted"}
 
 
@@ -291,7 +307,7 @@ async def notify_cartographer_status(
 ):
     """
     Send Cartographer status notification to all subscribers.
-    
+
     This endpoint is called by the service itself or external monitoring.
     """
     # Map event type string to NotificationType
@@ -302,12 +318,14 @@ async def notify_cartographer_status(
         notification_type = NotificationType.CARTOGRAPHER_DOWN
     else:
         raise HTTPException(status_code=400, detail="event_type must be 'up' or 'down'")
-    
+
     # Build message
     if notification_type == NotificationType.CARTOGRAPHER_UP:
         downtime_str = ""
         if request.downtime_minutes:
-            downtime_str = f"Service was down for approximately {request.downtime_minutes} minutes. "
+            downtime_str = (
+                f"Service was down for approximately {request.downtime_minutes} minutes. "
+            )
         title = "Cartographer is Back Online"
         default_message = f"{downtime_str}The Cartographer monitoring service is now operational."
     else:
@@ -316,7 +334,7 @@ async def notify_cartographer_status(
             services_str = f"Affected services: {', '.join(request.affected_services)}. "
         title = "Cartographer Service Alert"
         default_message = f"{services_str}The Cartographer monitoring service may be unavailable."
-    
+
     event = NetworkEvent(
         event_type=notification_type,
         priority=get_default_priority_for_type(notification_type),
@@ -330,10 +348,10 @@ async def notify_cartographer_status(
             "reported_at": datetime.utcnow().isoformat(),
         },
     )
-    
+
     # Get all subscribers for this event type
     subscribers = cartographer_status_service.get_subscribers_for_event(notification_type)
-    
+
     if not subscribers:
         logger.info(f"No subscribers found for {event_type_lower} notification")
         return {
@@ -341,50 +359,63 @@ async def notify_cartographer_status(
             "subscribers_notified": 0,
             "message": "No active subscriptions",
         }
-    
+
     # Check available notification services
     email_available = is_email_configured()
     discord_available = is_discord_configured()
-    
+
     if not email_available and not discord_available:
-        logger.error("Cannot send Cartographer status notifications: Neither email nor Discord is configured")
+        logger.error(
+            "Cannot send Cartographer status notifications: Neither email nor Discord is configured"
+        )
         return {
             "success": False,
             "subscribers_notified": 0,
             "error": "No notification services configured",
         }
-    
+
     # Send to each subscriber via their preferred channels
     notification_id = str(uuid.uuid4())
     successful = 0
     failed = 0
-    
+
     for subscriber in subscribers:
         subscriber_notified = False
-        
+
         # Send via email if enabled
         if subscriber.email_enabled and subscriber.email_address and email_available:
             try:
-                logger.info(f"Sending {event_type_lower} email to {subscriber.email_address} (user {subscriber.user_id})")
+                logger.info(
+                    f"Sending {event_type_lower} email to {subscriber.email_address} (user {subscriber.user_id})"
+                )
                 record = await send_notification_email(
                     to_email=subscriber.email_address,
                     event=event,
                     notification_id=notification_id,
                 )
-                
+
                 if record.success:
-                    logger.info(f"✓ Cartographer {event_type_lower} email sent to {subscriber.email_address}")
+                    logger.info(
+                        f"✓ Cartographer {event_type_lower} email sent to {subscriber.email_address}"
+                    )
                     subscriber_notified = True
                 else:
-                    logger.error(f"✗ Failed to send email to {subscriber.email_address}: {record.error_message}")
+                    logger.error(
+                        f"✗ Failed to send email to {subscriber.email_address}: {record.error_message}"
+                    )
             except Exception as e:
-                logger.error(f"✗ Exception sending email to {subscriber.email_address}: {e}", exc_info=True)
-        
+                logger.error(
+                    f"✗ Exception sending email to {subscriber.email_address}: {e}", exc_info=True
+                )
+
         # Send via Discord if enabled
         if subscriber.discord_enabled and discord_available:
             try:
                 # Build Discord config based on subscriber preferences
-                if subscriber.discord_delivery_method == "channel" and subscriber.discord_channel_id:
+                if (
+                    subscriber.discord_delivery_method == "channel"
+                    and subscriber.discord_channel_id
+                ):
                     discord_config = DiscordConfig(
                         enabled=True,
                         delivery_method=DiscordDeliveryMethod.CHANNEL,
@@ -400,32 +431,43 @@ async def notify_cartographer_status(
                         discord_user_id=subscriber.discord_user_id,
                     )
                 else:
-                    logger.warning(f"Discord enabled but no channel/user configured for user {subscriber.user_id}")
+                    logger.warning(
+                        f"Discord enabled but no channel/user configured for user {subscriber.user_id}"
+                    )
                     discord_config = None
-                
+
                 if discord_config:
-                    logger.info(f"Sending {event_type_lower} Discord notification to user {subscriber.user_id}")
+                    logger.info(
+                        f"Sending {event_type_lower} Discord notification to user {subscriber.user_id}"
+                    )
                     from ..services.discord_service import send_discord_notification
+
                     record = await send_discord_notification(discord_config, event, notification_id)
-                    
+
                     if record.success:
-                        logger.info(f"✓ Cartographer {event_type_lower} Discord sent to user {subscriber.user_id}")
+                        logger.info(
+                            f"✓ Cartographer {event_type_lower} Discord sent to user {subscriber.user_id}"
+                        )
                         subscriber_notified = True
                     else:
-                        logger.error(f"✗ Failed to send Discord to user {subscriber.user_id}: {record.error_message}")
+                        logger.error(
+                            f"✗ Failed to send Discord to user {subscriber.user_id}: {record.error_message}"
+                        )
             except Exception as e:
-                logger.error(f"✗ Exception sending Discord to user {subscriber.user_id}: {e}", exc_info=True)
-        
+                logger.error(
+                    f"✗ Exception sending Discord to user {subscriber.user_id}: {e}", exc_info=True
+                )
+
         if subscriber_notified:
             successful += 1
         else:
             failed += 1
-    
+
     logger.info(
         f"Cartographer {event_type_lower} notification complete: "
         f"{successful} successful, {failed} failed out of {len(subscribers)} subscribers"
     )
-    
+
     return {
         "success": successful > 0,
         "subscribers_notified": successful,
@@ -436,6 +478,7 @@ async def notify_cartographer_status(
 
 class TestDiscordRequest(BaseModel):
     """Request model for testing Discord notifications"""
+
     channel_id: Optional[str] = None
     user_id: Optional[str] = None
 
@@ -448,10 +491,10 @@ async def test_global_discord(
     """Test Discord notifications for global settings"""
     if not is_discord_configured():
         raise HTTPException(status_code=503, detail="Discord bot is not configured")
-    
+
     if not request.channel_id and not request.user_id:
         raise HTTPException(status_code=400, detail="Either channel_id or user_id must be provided")
-    
+
     try:
         # Build Discord config based on request
         if request.channel_id:
@@ -471,13 +514,15 @@ async def test_global_discord(
                 delivery_method=DiscordDeliveryMethod.DM,
                 discord_user_id=request.user_id,
             )
-        
+
         result = await discord_service.send_test_notification(config)
-        
+
         if result.get("success"):
             return {"success": True, "message": "Test Discord notification sent successfully"}
         else:
-            raise HTTPException(status_code=500, detail=result.get("error", "Failed to send test notification"))
+            raise HTTPException(
+                status_code=500, detail=result.get("error", "Failed to send test notification")
+            )
     except HTTPException:
         raise
     except Exception as e:

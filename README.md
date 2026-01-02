@@ -1,6 +1,7 @@
 # 🗺️ Cartographer
 
 [![Tests](https://github.com/Meridian-Inc/cartographer/actions/workflows/tests.yml/badge.svg)](https://github.com/Meridian-Inc/cartographer/actions/workflows/tests.yml)
+[![Lint](https://github.com/Meridian-Inc/cartographer/actions/workflows/lint.yml/badge.svg)](https://github.com/Meridian-Inc/cartographer/actions/workflows/lint.yml)
 [![codecov](https://codecov.io/gh/Meridian-Inc/cartographer/graph/badge.svg)](https://codecov.io/gh/Meridian-Inc/cartographer)
 
 [![Network Map](https://raw.githubusercontent.com/Meridian-Inc/cartographer/refs/heads/main/assets/application.png)](https://cartographer.artzima.dev/embed/yJLRHFuiajaxkWvLc44Gm0f4)
@@ -376,6 +377,49 @@ npm run test           # Run tests once
 npm run test:coverage  # Run with coverage report
 ```
 
+### Linting
+
+Cartographer enforces consistent code style using **Black** + **Flake8** + **isort** for Python and **ESLint** + **Prettier** for TypeScript/Vue.
+
+**Run linters:**
+```bash
+# All services
+npm run lint              # Check all services
+npm run format            # Auto-fix all services
+
+# Backend only
+npm run lint:backend      # Check all backend services
+npm run format:backend    # Auto-fix all backend services
+
+# Frontend only
+npm run lint:frontend     # Check frontend
+npm run format:frontend   # Auto-fix frontend
+
+# Individual backend services
+npm run lint:backend:main          # Backend gateway
+npm run lint:backend:assistant     # Assistant service
+npm run lint:backend:auth          # Auth service
+npm run lint:backend:health        # Health service
+npm run lint:backend:metrics       # Metrics service
+npm run lint:backend:notifications # Notification service
+```
+
+**Individual service commands:**
+```bash
+# Python services (backend, assistant-service, auth-service, etc.)
+cd backend
+black app/ tests/           # Format code
+isort app/ tests/           # Sort imports
+flake8 app/ tests/          # Check style
+
+# Frontend
+cd frontend
+npm run lint                # Check TypeScript/Vue
+npm run lint:fix            # Auto-fix
+npm run format              # Format with Prettier
+npm run format:check        # Check formatting
+```
+
 ### Coverage Requirements
 
 | Service | Minimum Coverage |
@@ -390,7 +434,11 @@ npm run test:coverage  # Run with coverage report
 
 ### CI
 
-A unified [Tests workflow](https://github.com/Meridian-Inc/cartographer/actions/workflows/tests.yml) runs all services in parallel on every push/PR to `main`. Coverage reports are uploaded to [Codecov](https://codecov.io/gh/Meridian-Inc/cartographer).
+All services run linting, tests, and coverage checks in parallel on every push/PR to `main`:
+- **[Lint workflow](https://github.com/Meridian-Inc/cartographer/actions/workflows/lint.yml)** - Code style enforcement
+- **[Tests workflow](https://github.com/Meridian-Inc/cartographer/actions/workflows/tests.yml)** - Test suite execution
+
+Coverage reports are uploaded to [Codecov](https://codecov.io/gh/Meridian-Inc/cartographer).
 
 ## Contributing
 

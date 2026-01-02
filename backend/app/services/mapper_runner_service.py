@@ -19,6 +19,7 @@ from typing import Generator
 @dataclass
 class MapperResult:
     """Result from running the mapper script."""
+
     content: str
     exit_code: int
     map_path: str | None = None
@@ -26,7 +27,7 @@ class MapperResult:
 
 def project_root() -> pathlib.Path:
     """Get the project root directory.
-    
+
     Returns:
         Path to the repository root
     """
@@ -36,7 +37,7 @@ def project_root() -> pathlib.Path:
 
 def script_path() -> pathlib.Path:
     """Get the path to the mapper script.
-    
+
     Returns:
         Path to lan_mapper.sh
     """
@@ -45,7 +46,7 @@ def script_path() -> pathlib.Path:
 
 def network_map_candidates() -> list[pathlib.Path]:
     """Get candidate paths where network map file might be located.
-    
+
     Returns:
         List of paths to check for network_map.txt
     """
@@ -58,7 +59,7 @@ def network_map_candidates() -> list[pathlib.Path]:
 
 def saved_layout_path() -> pathlib.Path:
     """Get the path where the saved network layout JSON is stored.
-    
+
     Returns:
         Path to saved_network_layout.json
     """
@@ -72,11 +73,11 @@ def saved_layout_path() -> pathlib.Path:
 
 def sse_event(event: str, data: str) -> str:
     """Format data as a Server-Sent Event.
-    
+
     Args:
         event: Event type name
         data: Event data (can be multi-line)
-        
+
     Returns:
         SSE-formatted string
     """
@@ -90,7 +91,7 @@ def sse_event(event: str, data: str) -> str:
 
 def get_script_command() -> list[str]:
     """Get the command to run the mapper script.
-    
+
     Returns:
         Command list for subprocess
     """
@@ -103,13 +104,13 @@ def get_script_command() -> list[str]:
 
 def run_mapper_sync(timeout: int = 300) -> MapperResult:
     """Run the mapper script synchronously.
-    
+
     Args:
         timeout: Maximum execution time in seconds
-        
+
     Returns:
         MapperResult with content, exit code, and optional map path
-        
+
     Raises:
         FileNotFoundError: If script doesn't exist
         TimeoutError: If script times out
@@ -118,9 +119,9 @@ def run_mapper_sync(timeout: int = 300) -> MapperResult:
     script = script_path()
     if not script.exists():
         raise FileNotFoundError(f"lan_mapper.sh not found at {script}")
-    
+
     cmd = get_script_command()
-    
+
     try:
         proc = subprocess.run(
             cmd,
@@ -134,11 +135,11 @@ def run_mapper_sync(timeout: int = 300) -> MapperResult:
         raise TimeoutError(f"lan_mapper.sh timed out after {timeout}s")
     except Exception as exc:
         raise RuntimeError(f"Failed to run lan_mapper.sh: {exc}")
-    
+
     # Prefer an actual file artifact if present
     content: str | None = None
     map_path: str | None = None
-    
+
     for candidate in network_map_candidates():
         if candidate.exists():
             try:
@@ -147,37 +148,33 @@ def run_mapper_sync(timeout: int = 300) -> MapperResult:
                 break
             except Exception:
                 pass
-    
+
     # Fallback to stdout
     if content is None:
         content = proc.stdout.strip()
-    
+
     if not content:
         stderr_msg = proc.stderr.strip() if proc.stderr else "No output"
         raise RuntimeError(f"No network_map.txt content produced. stderr: {stderr_msg}")
-    
-    return MapperResult(
-        content=content,
-        exit_code=proc.returncode,
-        map_path=map_path
-    )
+
+    return MapperResult(content=content, exit_code=proc.returncode, map_path=map_path)
 
 
 def run_mapper_streaming() -> Generator[str, None, None]:
     """Run the mapper script with streaming output.
-    
+
     Yields:
         SSE-formatted event strings
-        
+
     Raises:
         FileNotFoundError: If script doesn't exist
     """
     script = script_path()
     if not script.exists():
         raise FileNotFoundError(f"lan_mapper.sh not found at {script}")
-    
+
     cmd = get_script_command()
-    
+
     try:
         proc = subprocess.Popen(
             cmd,
@@ -192,23 +189,23 @@ def run_mapper_streaming() -> Generator[str, None, None]:
         yield sse_event("log", f"ERROR: failed to start lan_mapper.sh: {exc}")
         yield sse_event("done", "exit=-1")
         return
-    
+
     # Stream stdout
     if proc.stdout:
         for line in proc.stdout:
             yield sse_event("log", line.rstrip("\n"))
-    
+
     # Drain stderr afterwards
     if proc.stderr:
         for line in proc.stderr:
-            stripped = line.rstrip('\n')
+            stripped = line.rstrip("\n")
             yield sse_event("log", f"STDERR: {stripped}")
-    
+
     exit_code = proc.wait()
-    
+
     # Attempt to read produced file
     result_payload = {"content": "", "script_exit_code": exit_code, "network_map_path": None}
-    
+
     for candidate in network_map_candidates():
         if candidate.exists():
             try:
@@ -217,14 +214,14 @@ def run_mapper_streaming() -> Generator[str, None, None]:
                 break
             except Exception as exc:
                 yield sse_event("log", f"ERROR: could not read {candidate}: {exc}")
-    
+
     yield sse_event("result", json.dumps(result_payload))
     yield sse_event("done", f"exit={exit_code}")
 
 
 def find_network_map() -> pathlib.Path | None:
     """Find the network map file.
-    
+
     Returns:
         Path to network_map.txt if found, None otherwise
     """
@@ -236,19 +233,19 @@ def find_network_map() -> pathlib.Path | None:
 
 def save_layout(layout: dict) -> str:
     """Save network layout to file.
-    
+
     Args:
         layout: Layout data to save
-        
+
     Returns:
         Path where layout was saved
-        
+
     Raises:
         RuntimeError: If save fails
     """
     try:
         layout_path = saved_layout_path()
-        with open(layout_path, 'w') as f:
+        with open(layout_path, "w") as f:
             json.dump(layout, f, indent=2)
         return str(layout_path)
     except Exception as exc:
@@ -257,20 +254,19 @@ def save_layout(layout: dict) -> str:
 
 def load_layout() -> dict | None:
     """Load saved network layout from file.
-    
+
     Returns:
         Layout dict if exists, None otherwise
-        
+
     Raises:
         RuntimeError: If load fails
     """
     layout_path = saved_layout_path()
     if not layout_path.exists():
         return None
-    
+
     try:
-        with open(layout_path, 'r') as f:
+        with open(layout_path, "r") as f:
             return json.load(f)
     except Exception as exc:
         raise RuntimeError(f"Failed to load layout: {exc}")
-

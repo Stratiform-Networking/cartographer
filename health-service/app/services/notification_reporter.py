@@ -85,7 +85,9 @@ async def report_health_check(
             if response.status_code == 200:
                 return True
             else:
-                logger.warning(f"Notification service returned {response.status_code}: {response.text}")
+                logger.warning(
+                    f"Notification service returned {response.status_code}: {response.text}"
+                )
                 return False
 
     except httpx.ConnectError:
@@ -126,7 +128,9 @@ def clear_state_tracking():
     _previous_states.clear()
 
 
-async def sync_devices_with_notification_service(device_ips: list, network_id: str | None = None) -> bool:
+async def sync_devices_with_notification_service(
+    device_ips: list, network_id: str | None = None
+) -> bool:
     """
     Sync the current list of monitored devices with the notification service.
 
@@ -152,10 +156,14 @@ async def sync_devices_with_notification_service(device_ips: list, network_id: s
             )
 
             if response.status_code == 200:
-                logger.info(f"Synced {len(device_ips)} devices with notification service for network {network_id}")
+                logger.info(
+                    f"Synced {len(device_ips)} devices with notification service for network {network_id}"
+                )
                 return True
             else:
-                logger.warning(f"Notification service returned {response.status_code}: {response.text}")
+                logger.warning(
+                    f"Notification service returned {response.status_code}: {response.text}"
+                )
                 return False
 
     except httpx.ConnectError:

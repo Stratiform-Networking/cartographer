@@ -1,6 +1,6 @@
 /**
  * Centralized HTTP client wrapper
- * 
+ *
  * All HTTP requests go through this client which handles:
  * - Auth headers (attached automatically from stored token)
  * - Error handling with typed responses
@@ -61,11 +61,11 @@ client.interceptors.response.use(
   (error: AxiosError<{ detail?: string }>) => {
     if (error.response?.status === 401) {
       const url = error.config?.url || '';
-      const isAuthEndpoint = 
-        url.includes('/api/auth/login') || 
+      const isAuthEndpoint =
+        url.includes('/api/auth/login') ||
         url.includes('/api/auth/setup') ||
         url.includes('/api/auth/verify');
-      
+
       if (!isAuthEndpoint && onUnauthorized) {
         console.warn('[API Client] Received 401, triggering unauthorized callback');
         onUnauthorized();
@@ -109,4 +109,3 @@ export function toApiError(error: unknown): ApiError {
 
 export { client };
 export default client;
-

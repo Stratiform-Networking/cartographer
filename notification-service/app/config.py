@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     """
 
     # Database
-    database_url: str = "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
+    database_url: str = (
+        "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
+    )
 
     # Data persistence directory for JSON state files
     notification_data_dir: str = "/app/data"

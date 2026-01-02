@@ -122,4 +122,3 @@ export function getInviteStatusClass(status: InviteStatus): string {
       return 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400';
   }
 }
-

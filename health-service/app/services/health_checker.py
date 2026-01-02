@@ -104,7 +104,9 @@ class HealthChecker:
             with open(GATEWAY_TEST_IPS_FILE, "w") as f:
                 json.dump(data, f, indent=2)
 
-            logger.debug(f"Saved {len(data)} gateway test IP configurations to {GATEWAY_TEST_IPS_FILE}")
+            logger.debug(
+                f"Saved {len(data)} gateway test IP configurations to {GATEWAY_TEST_IPS_FILE}"
+            )
         except Exception as e:
             logger.error(f"Failed to save gateway test IPs: {e}")
 
@@ -170,7 +172,9 @@ class HealthChecker:
                     )
                 self._speed_test_results[gateway_ip] = SpeedTestResult(**result_data)
 
-            logger.info(f"Loaded {len(self._speed_test_results)} speed test results from {SPEED_TEST_RESULTS_FILE}")
+            logger.info(
+                f"Loaded {len(self._speed_test_results)} speed test results from {SPEED_TEST_RESULTS_FILE}"
+            )
         except Exception as e:
             logger.error(f"Failed to load speed test results: {e}")
 
@@ -271,13 +275,15 @@ class HealthChecker:
 
                 # Calculate jitter (variance in latency)
                 if len(latencies) > 1:
-                    jitter = sum(abs(latencies[i] - latencies[i - 1]) for i in range(1, len(latencies))) / (
-                        len(latencies) - 1
-                    )
+                    jitter = sum(
+                        abs(latencies[i] - latencies[i - 1]) for i in range(1, len(latencies))
+                    ) / (len(latencies) - 1)
                 else:
                     jitter = 0.0
 
-                packet_loss = ((transmitted - received) / transmitted) * 100 if transmitted > 0 else 100
+                packet_loss = (
+                    ((transmitted - received) / transmitted) * 100 if transmitted > 0 else 100
+                )
 
                 return PingResult(
                     success=received > 0,
@@ -434,7 +440,9 @@ class HealthChecker:
             checks_passed_24h=passed_24h,
             checks_failed_24h=failed_24h,
             check_history=check_history,
-            last_seen_online=now if ping_result.success else (cached.last_seen_online if cached else None),
+            last_seen_online=(
+                now if ping_result.success else (cached.last_seen_online if cached else None)
+            ),
             consecutive_failures=consecutive_failures,
         )
 
@@ -450,8 +458,16 @@ class HealthChecker:
                 success=ping_result.success,
                 network_id=network_id,
                 latency_ms=ping_result.avg_latency_ms,
-                packet_loss=ping_result.packet_loss_percent / 100.0 if ping_result.packet_loss_percent else None,
-                device_name=dns_result.resolved_hostname if dns_result and dns_result.resolved_hostname else None,
+                packet_loss=(
+                    ping_result.packet_loss_percent / 100.0
+                    if ping_result.packet_loss_percent
+                    else None
+                ),
+                device_name=(
+                    dns_result.resolved_hostname
+                    if dns_result and dns_result.resolved_hostname
+                    else None
+                ),
             )
         )
 
@@ -498,7 +514,9 @@ class HealthChecker:
 
     # ==================== Gateway Test IP Methods ====================
 
-    def set_gateway_test_ips(self, gateway_ip: str, test_ips: list[GatewayTestIP]) -> GatewayTestIPConfig:
+    def set_gateway_test_ips(
+        self, gateway_ip: str, test_ips: list[GatewayTestIP]
+    ) -> GatewayTestIPConfig:
         """Set test IPs for a gateway device"""
         config = GatewayTestIPConfig(gateway_ip=gateway_ip, test_ips=test_ips, enabled=True)
         self._gateway_test_ips[gateway_ip] = config
@@ -537,7 +555,9 @@ class HealthChecker:
         """Generate unique key for test IP history"""
         return f"{gateway_ip}:{test_ip}"
 
-    def _record_test_ip_check(self, gateway_ip: str, test_ip: str, success: bool, latency_ms: float | None):
+    def _record_test_ip_check(
+        self, gateway_ip: str, test_ip: str, success: bool, latency_ms: float | None
+    ):
         """Record a test IP check result for historical tracking"""
         key = self._get_test_ip_history_key(gateway_ip, test_ip)
         if key not in self._test_ip_history:
@@ -553,7 +573,9 @@ class HealthChecker:
             return None, None, 0, 0
 
         cutoff = datetime.utcnow() - timedelta(hours=24)
-        recent = [(ts, success, lat) for ts, success, lat in self._test_ip_history[key] if ts > cutoff]
+        recent = [
+            (ts, success, lat) for ts, success, lat in self._test_ip_history[key] if ts > cutoff
+        ]
 
         if not recent:
             return None, None, 0, 0
@@ -568,7 +590,9 @@ class HealthChecker:
 
         return uptime_percent, avg_latency, passed, failed
 
-    def _get_test_ip_check_history(self, gateway_ip: str, test_ip: str, hours: int = 24) -> list[CheckHistoryEntry]:
+    def _get_test_ip_check_history(
+        self, gateway_ip: str, test_ip: str, hours: int = 24
+    ) -> list[CheckHistoryEntry]:
         """Get check history for a test IP"""
         key = self._get_test_ip_history_key(gateway_ip, test_ip)
         if key not in self._test_ip_history or len(self._test_ip_history[key]) == 0:
@@ -583,7 +607,9 @@ class HealthChecker:
 
         return history
 
-    async def check_test_ip(self, gateway_ip: str, test_ip: str, label: str | None = None) -> GatewayTestIPMetrics:
+    async def check_test_ip(
+        self, gateway_ip: str, test_ip: str, label: str | None = None
+    ) -> GatewayTestIPMetrics:
         """Check a single test IP and return metrics"""
         now = datetime.utcnow()
 
@@ -594,10 +620,14 @@ class HealthChecker:
         ping_result = await self.ping_host(test_ip)
 
         # Record for historical tracking
-        self._record_test_ip_check(gateway_ip, test_ip, ping_result.success, ping_result.avg_latency_ms)
+        self._record_test_ip_check(
+            gateway_ip, test_ip, ping_result.success, ping_result.avg_latency_ms
+        )
 
         # Calculate historical stats
-        uptime_24h, avg_lat_24h, passed_24h, failed_24h = self._calculate_test_ip_historical_stats(gateway_ip, test_ip)
+        uptime_24h, avg_lat_24h, passed_24h, failed_24h = self._calculate_test_ip_historical_stats(
+            gateway_ip, test_ip
+        )
 
         # Determine health status
         if not ping_result.success:
@@ -627,7 +657,9 @@ class HealthChecker:
             checks_passed_24h=passed_24h,
             checks_failed_24h=failed_24h,
             check_history=check_history,
-            last_seen_online=now if ping_result.success else (cached.last_seen_online if cached else None),
+            last_seen_online=(
+                now if ping_result.success else (cached.last_seen_online if cached else None)
+            ),
             consecutive_failures=consecutive_failures,
         )
 
@@ -733,7 +765,9 @@ class HealthChecker:
             server = results.get("server", {})
             client = results.get("client", {})
 
-            logger.info(f"Speed test completed: {download_mbps:.2f} Mbps down, {upload_mbps:.2f} Mbps up")
+            logger.info(
+                f"Speed test completed: {download_mbps:.2f} Mbps down, {upload_mbps:.2f} Mbps up"
+            )
 
             result = SpeedTestResult(
                 success=True,
@@ -742,7 +776,9 @@ class HealthChecker:
                 upload_mbps=round(upload_mbps, 2),
                 ping_ms=ping_ms,
                 server_name=server.get("name"),
-                server_location=f"{server.get('city', '')}, {server.get('country', '')}".strip(", "),
+                server_location=f"{server.get('city', '')}, {server.get('country', '')}".strip(
+                    ", "
+                ),
                 server_sponsor=server.get("sponsor"),
                 client_ip=client.get("ip"),
                 client_isp=client.get("isp"),
@@ -783,7 +819,9 @@ class HealthChecker:
             devices: Dict mapping device IP to network_id
         """
         self._monitored_devices.update(devices)
-        logger.info(f"Registered {len(devices)} devices for monitoring. Total: {len(self._monitored_devices)}")
+        logger.info(
+            f"Registered {len(devices)} devices for monitoring. Total: {len(self._monitored_devices)}"
+        )
 
     def unregister_devices(self, ips: list[str]) -> None:
         """Unregister devices from passive monitoring"""
@@ -812,7 +850,9 @@ class HealthChecker:
     def set_monitoring_config(self, config: MonitoringConfig) -> None:
         """Update monitoring configuration"""
         self._monitoring_config = config
-        logger.info(f"Updated monitoring config: interval={config.check_interval_seconds}s, enabled={config.enabled}")
+        logger.info(
+            f"Updated monitoring config: interval={config.check_interval_seconds}s, enabled={config.enabled}"
+        )
 
         # Restart monitoring task if running to apply new interval
         if self._monitoring_task and not self._monitoring_task.done():
@@ -846,7 +886,9 @@ class HealthChecker:
 
             # Check all devices in parallel
             if self._monitored_devices:
-                logger.debug(f"Starting passive health check for {len(self._monitored_devices)} devices")
+                logger.debug(
+                    f"Starting passive health check for {len(self._monitored_devices)} devices"
+                )
                 await self.check_multiple_devices(
                     ips=list(self._monitored_devices),
                     include_ports=False,  # Don't scan ports during passive checks (too slow)
@@ -857,9 +899,13 @@ class HealthChecker:
             # Note: Test IPs are checked independently of gateway device monitoring status
             # because they monitor external internet connectivity, not the gateway itself
             if self._gateway_test_ips:
-                enabled_gateways = [gw for gw, config in self._gateway_test_ips.items() if config.enabled]
+                enabled_gateways = [
+                    gw for gw, config in self._gateway_test_ips.items() if config.enabled
+                ]
                 if enabled_gateways:
-                    logger.debug(f"Starting passive test IP check for {len(enabled_gateways)} gateways")
+                    logger.debug(
+                        f"Starting passive test IP check for {len(enabled_gateways)} gateways"
+                    )
                     tasks = [self.check_gateway_test_ips(gw) for gw in enabled_gateways]
                     await asyncio.gather(*tasks, return_exceptions=True)
 

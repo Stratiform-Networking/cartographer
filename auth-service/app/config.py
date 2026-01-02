@@ -11,7 +11,9 @@ class Settings(BaseSettings):
     """Auth Service configuration loaded from environment variables."""
 
     # Database
-    database_url: str = "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
+    database_url: str = (
+        "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
+    )
 
     # JWT Configuration
     jwt_secret: str = "cartographer-dev-secret-change-in-production"
@@ -51,4 +53,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

@@ -16,4 +16,3 @@ export interface VersionInfo {
   updateAvailable: boolean;
   updateType: VersionType | null;
 }
-

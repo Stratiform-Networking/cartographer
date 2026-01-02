@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import MapControls from '../components/MapControls.vue'
-import type { TreeNode } from '../types/network'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import MapControls from '../components/MapControls.vue';
+import type { TreeNode } from '../types/network';
 
 // Sample root node for the stories
 const sampleRoot: TreeNode = {
@@ -25,14 +25,14 @@ const sampleRoot: TreeNode = {
       children: [],
     },
   ],
-}
+};
 
 const emptyRoot: TreeNode = {
   id: 'root',
   name: 'Network',
   role: 'group',
   children: [],
-}
+};
 
 const meta = {
   title: 'Components/MapControls',
@@ -42,7 +42,8 @@ const meta = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'The main toolbar/header for the network map. Contains scan controls, save/export functionality, and settings.',
+        component:
+          'The main toolbar/header for the network map. Contains scan controls, save/export functionality, and settings.',
       },
     },
   },
@@ -77,10 +78,10 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof MapControls>
+} satisfies Meta<typeof MapControls>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default state with network data
 export const Default: Story = {
@@ -97,7 +98,7 @@ export const Default: Story = {
     onAutoLoadFromServer: fn(),
     onSaved: fn(),
   },
-}
+};
 
 // With unsaved changes (highlights save button)
 export const UnsavedChanges: Story = {
@@ -114,7 +115,7 @@ export const UnsavedChanges: Story = {
     onAutoLoadFromServer: fn(),
     onSaved: fn(),
   },
-}
+};
 
 // Read-only mode (some buttons disabled)
 export const ReadOnlyMode: Story = {
@@ -131,7 +132,7 @@ export const ReadOnlyMode: Story = {
     onAutoLoadFromServer: fn(),
     onSaved: fn(),
   },
-}
+};
 
 // Empty network (no devices scanned yet)
 export const EmptyNetwork: Story = {
@@ -148,7 +149,7 @@ export const EmptyNetwork: Story = {
     onAutoLoadFromServer: fn(),
     onSaved: fn(),
   },
-}
+};
 
 // Read-only with empty network
 export const ReadOnlyEmpty: Story = {
@@ -165,5 +166,4 @@ export const ReadOnlyEmpty: Story = {
     onAutoLoadFromServer: fn(),
     onSaved: fn(),
   },
-}
-
+};

@@ -1,6 +1,6 @@
 /**
  * Map layout composable
- * 
+ *
  * Manages network map node positions, layout persistence, and layout cleanup.
  */
 
@@ -39,9 +39,7 @@ export function useMapLayout() {
     const walk = (n: TreeNode) => {
       const p =
         positions.get(n.id) ||
-        (typeof n.fx === 'number' && typeof n.fy === 'number'
-          ? { x: n.fx, y: n.fy }
-          : undefined);
+        (typeof n.fx === 'number' && typeof n.fy === 'number' ? { x: n.fx, y: n.fy } : undefined);
       if (p) map[n.id] = { x: p.x, y: p.y };
       for (const c of n.children || []) walk(c);
     };

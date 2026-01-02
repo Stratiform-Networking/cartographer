@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { within, userEvent, expect, fn } from 'storybook/test'
-import DeviceList from '../components/DeviceList.vue'
-import type { TreeNode } from '../types/network'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { within, userEvent, expect, fn } from 'storybook/test';
+import DeviceList from '../components/DeviceList.vue';
+import type { TreeNode } from '../types/network';
 
 // Sample device tree data
 const createMockDevices = (): TreeNode => ({
@@ -61,7 +61,7 @@ const createMockDevices = (): TreeNode => ({
       children: [],
     },
   ],
-})
+});
 
 const meta = {
   title: 'Components/DeviceList',
@@ -71,7 +71,8 @@ const meta = {
     layout: 'padded',
     docs: {
       description: {
-        component: 'A searchable list of network devices with role-based color coding and health status indicators.',
+        component:
+          'A searchable list of network devices with role-based color coding and health status indicators.',
       },
     },
   },
@@ -95,10 +96,10 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof DeviceList>
+} satisfies Meta<typeof DeviceList>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default story with sample devices
 export const Default: Story = {
@@ -106,7 +107,7 @@ export const Default: Story = {
     root: createMockDevices(),
     onSelect: fn(),
   },
-}
+};
 
 // With a selected device
 export const WithSelection: Story = {
@@ -115,7 +116,7 @@ export const WithSelection: Story = {
     selectedId: 'server-1',
     onSelect: fn(),
   },
-}
+};
 
 // Story testing search functionality
 export const SearchFunctionality: Story = {
@@ -124,18 +125,18 @@ export const SearchFunctionality: Story = {
     onSelect: fn(),
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    
+    const canvas = within(canvasElement);
+
     // Find and interact with the search input
-    const searchInput = canvas.getByPlaceholderText('Search devices...')
-    
+    const searchInput = canvas.getByPlaceholderText('Search devices...');
+
     // Type a search query
-    await userEvent.type(searchInput, 'server')
-    
+    await userEvent.type(searchInput, 'server');
+
     // Verify the search filters the list
-    await expect(canvas.getByText('Web Server')).toBeInTheDocument()
+    await expect(canvas.getByText('Web Server')).toBeInTheDocument();
   },
-}
+};
 
 // Story with search showing no results
 export const SearchNoResults: Story = {
@@ -144,15 +145,15 @@ export const SearchNoResults: Story = {
     onSelect: fn(),
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    
-    const searchInput = canvas.getByPlaceholderText('Search devices...')
-    await userEvent.type(searchInput, 'nonexistent-device')
-    
+    const canvas = within(canvasElement);
+
+    const searchInput = canvas.getByPlaceholderText('Search devices...');
+    await userEvent.type(searchInput, 'nonexistent-device');
+
     // Should show empty state
-    await expect(canvas.getByText('No devices found')).toBeInTheDocument()
+    await expect(canvas.getByText('No devices found')).toBeInTheDocument();
   },
-}
+};
 
 // Empty device list
 export const EmptyList: Story = {
@@ -165,7 +166,7 @@ export const EmptyList: Story = {
     } as TreeNode,
     onSelect: fn(),
   },
-}
+};
 
 // Large device list for performance testing
 export const LargeList: Story = {
@@ -185,7 +186,7 @@ export const LargeList: Story = {
     } as TreeNode,
     onSelect: fn(),
   },
-}
+};
 
 // Click interaction test
 export const ClickToSelect: Story = {
@@ -194,14 +195,13 @@ export const ClickToSelect: Story = {
     onSelect: fn(),
   },
   play: async ({ canvasElement, args }) => {
-    const canvas = within(canvasElement)
-    
-    // Click on a device
-    const device = canvas.getByText('Web Server')
-    await userEvent.click(device)
-    
-    // Verify the select handler was called
-    await expect(args.onSelect).toHaveBeenCalledWith('server-1')
-  },
-}
+    const canvas = within(canvasElement);
 
+    // Click on a device
+    const device = canvas.getByText('Web Server');
+    await userEvent.click(device);
+
+    // Verify the select handler was called
+    await expect(args.onSelect).toHaveBeenCalledWith('server-1');
+  },
+};

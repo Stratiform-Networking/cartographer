@@ -1,6 +1,6 @@
 /**
  * Composables module exports
- * 
+ *
  * Centralized exports for all composables.
  * NOTE: Types should be imported from 'types/' directory directly.
  */

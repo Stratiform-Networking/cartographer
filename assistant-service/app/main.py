@@ -22,8 +22,7 @@ from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -36,15 +35,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Cartographer Assistant Service...")
     logger.info(f"Metrics service URL: {settings.metrics_service_url}")
-    
+
     # Initialize database
     from .database import init_db
+
     await init_db()
-    
+
     # Log provider availability
-    from .providers import OpenAIProvider, AnthropicProvider, GeminiProvider, OllamaProvider
+    from .providers import AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider
     from .providers.base import ProviderConfig
-    
+
     config = ProviderConfig()
     providers = [
         ("OpenAI", OpenAIProvider(config)),
@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
         ("Gemini", GeminiProvider(config)),
         ("Ollama", OllamaProvider(config)),
     ]
-    
+
     for name, provider in providers:
         try:
             available = await provider.is_available()
@@ -60,16 +60,16 @@ async def lifespan(app: FastAPI):
             logger.info(f"  {name}: {status}")
         except Exception as e:
             logger.warning(f"  {name}: ✗ error checking ({e})")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Cartographer Assistant Service...")
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    
+
     app = FastAPI(
         title="Cartographer Assistant Service",
         description="""
@@ -101,7 +101,7 @@ This service provides intelligent assistance by:
         redoc_url=None if settings.disable_docs else "/redoc",
         openapi_url=None if settings.disable_docs else "/openapi.json",
     )
-    
+
     # CORS middleware
     allowed_origins = settings.cors_origins.split(",")
     app.add_middleware(
@@ -111,13 +111,13 @@ This service provides intelligent assistance by:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Usage tracking middleware - reports endpoint usage to metrics service
     app.add_middleware(UsageTrackingMiddleware, service_name="assistant-service")
-    
+
     # Include routers
     app.include_router(assistant_router, prefix="/api")
-    
+
     # Root endpoint
     @app.get("/")
     def root():
@@ -133,20 +133,20 @@ This service provides intelligent assistance by:
                 "config": "/api/assistant/config",
                 "docs": "/docs",
                 "health": "/healthz",
-            }
+            },
         }
-    
+
     # Health check endpoint
     @app.get("/healthz")
     async def healthz():
         """
         Health check endpoint for container orchestration.
         """
-        from .providers import OpenAIProvider, AnthropicProvider, GeminiProvider, OllamaProvider
+        from .providers import AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider
         from .providers.base import ProviderConfig
-        
+
         config = ProviderConfig()
-        
+
         # Check which providers are available
         providers_available = {}
         for name, provider_class in [
@@ -160,15 +160,15 @@ This service provides intelligent assistance by:
                 providers_available[name] = await provider.is_available()
             except Exception:
                 providers_available[name] = False
-        
+
         any_available = any(providers_available.values())
-        
+
         return {
             "status": "healthy" if any_available else "degraded",
             "providers": providers_available,
             "any_provider_available": any_available,
         }
-    
+
     # Readiness check endpoint
     @app.get("/ready")
     async def readyz():
@@ -176,11 +176,11 @@ This service provides intelligent assistance by:
         Readiness check endpoint.
         Service is ready if at least one provider is available.
         """
-        from .providers import OpenAIProvider, AnthropicProvider, GeminiProvider, OllamaProvider
+        from .providers import AnthropicProvider, GeminiProvider, OllamaProvider, OpenAIProvider
         from .providers.base import ProviderConfig
-        
+
         config = ProviderConfig()
-        
+
         for provider_class in [OpenAIProvider, AnthropicProvider, GeminiProvider, OllamaProvider]:
             try:
                 provider = provider_class(config)
@@ -188,9 +188,9 @@ This service provides intelligent assistance by:
                     return {"ready": True}
             except Exception:
                 continue
-        
+
         return {"ready": False, "reason": "No AI providers configured"}
-    
+
     return app
 
 

@@ -4,12 +4,14 @@ Tests for Discord OAuth Service.
 This module tests the Discord OAuth flow including authorization URL generation,
 token exchange, user info retrieval, and link management.
 """
-import pytest
+
 import os
 import re
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 
 class TestDiscordOAuthService:
@@ -19,7 +21,7 @@ class TestDiscordOAuthService:
         """Should raise error when client ID not configured"""
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', ''):
+        with patch("app.services.discord_oauth.settings.discord_client_id", ""):
             service = DiscordOAuthService()
 
             with pytest.raises(ValueError, match="DISCORD_CLIENT_ID not configured"):
@@ -29,7 +31,7 @@ class TestDiscordOAuthService:
         """Should generate authorization URL"""
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', 'test-client-id-12345'):
+        with patch("app.services.discord_oauth.settings.discord_client_id", "test-client-id-12345"):
             service = DiscordOAuthService()
             url = service.get_authorization_url("user-123", "network", "net-uuid")
 
@@ -41,7 +43,7 @@ class TestDiscordOAuthService:
         """Should generate URL for global context"""
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', 'test-client-id-12345'):
+        with patch("app.services.discord_oauth.settings.discord_client_id", "test-client-id-12345"):
             service = DiscordOAuthService()
             url = service.get_authorization_url("user-123", "global", None)
 
@@ -61,11 +63,11 @@ class TestDiscordOAuthService:
         from app.services import discord_oauth
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', 'test-client-id-12345'):
+        with patch("app.services.discord_oauth.settings.discord_client_id", "test-client-id-12345"):
             service = DiscordOAuthService()
             url = service.get_authorization_url("user-abc", "network", "net-xyz")
 
-            match = re.search(r'state=([^&]+)', url)
+            match = re.search(r"state=([^&]+)", url)
             assert match is not None
 
             state = match.group(1)
@@ -82,18 +84,18 @@ class TestDiscordOAuthService:
         from app.services import discord_oauth
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', 'test-client-id-12345'):
+        with patch("app.services.discord_oauth.settings.discord_client_id", "test-client-id-12345"):
             service = DiscordOAuthService()
             url = service.get_authorization_url("user-123")
 
-            match = re.search(r'state=([^&]+)', url)
+            match = re.search(r"state=([^&]+)", url)
             if match:
                 state = match.group(1)
 
                 if state in discord_oauth._oauth_states:
-                    discord_oauth._oauth_states[state]["created_at"] = (
-                        datetime.utcnow() - timedelta(minutes=10)
-                    )
+                    discord_oauth._oauth_states[state][
+                        "created_at"
+                    ] = datetime.utcnow() - timedelta(minutes=10)
 
                 result = service.validate_state(state)
                 assert result is None
@@ -107,8 +109,8 @@ class TestDiscordOAuthTokenExchange:
         """Should raise error when OAuth not configured"""
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', ''):
-            with patch('app.services.discord_oauth.settings.discord_client_secret', ''):
+        with patch("app.services.discord_oauth.settings.discord_client_id", ""):
+            with patch("app.services.discord_oauth.settings.discord_client_secret", ""):
                 service = DiscordOAuthService()
 
                 with pytest.raises(ValueError, match="Discord OAuth not configured"):
@@ -119,8 +121,8 @@ class TestDiscordOAuthTokenExchange:
         """Should exchange code for tokens"""
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', 'test-client-id'):
-            with patch('app.services.discord_oauth.settings.discord_client_secret', 'test-secret'):
+        with patch("app.services.discord_oauth.settings.discord_client_id", "test-client-id"):
+            with patch("app.services.discord_oauth.settings.discord_client_secret", "test-secret"):
                 service = DiscordOAuthService()
 
                 mock_response = MagicMock()
@@ -131,8 +133,10 @@ class TestDiscordOAuthTokenExchange:
                     "expires_in": 3600,
                 }
 
-                with patch('httpx.AsyncClient') as mock_client:
-                    mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+                with patch("httpx.AsyncClient") as mock_client:
+                    mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                        return_value=mock_response
+                    )
 
                     result = await service.exchange_code_for_tokens("test-code")
 
@@ -143,16 +147,18 @@ class TestDiscordOAuthTokenExchange:
         """Should raise error on token exchange failure"""
         from app.services.discord_oauth import DiscordOAuthService
 
-        with patch('app.services.discord_oauth.settings.discord_client_id', 'test-client-id'):
-            with patch('app.services.discord_oauth.settings.discord_client_secret', 'test-secret'):
+        with patch("app.services.discord_oauth.settings.discord_client_id", "test-client-id"):
+            with patch("app.services.discord_oauth.settings.discord_client_secret", "test-secret"):
                 service = DiscordOAuthService()
 
                 mock_response = MagicMock()
                 mock_response.status_code = 400
                 mock_response.text = "Invalid code"
 
-                with patch('httpx.AsyncClient') as mock_client:
-                    mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=mock_response)
+                with patch("httpx.AsyncClient") as mock_client:
+                    mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                        return_value=mock_response
+                    )
 
                     with pytest.raises(ValueError, match="Failed to exchange code"):
                         await service.exchange_code_for_tokens("invalid-code")
@@ -176,8 +182,10 @@ class TestDiscordOAuthUserInfo:
             "avatar": "abcdef",
         }
 
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
 
             result = await service.get_user_info("test-token")
 
@@ -194,8 +202,10 @@ class TestDiscordOAuthUserInfo:
         mock_response = MagicMock()
         mock_response.status_code = 401
 
-        with patch('httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+        with patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                return_value=mock_response
+            )
 
             with pytest.raises(ValueError, match="Failed to get user info"):
                 await service.get_user_info("invalid-token")
@@ -247,7 +257,7 @@ class TestDiscordOAuthLinkOperations:
         mock_db = AsyncMock()
         mock_link = MagicMock()
 
-        with patch.object(service, 'get_link', new_callable=AsyncMock) as mock_get:
+        with patch.object(service, "get_link", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_link
 
             result = await service.delete_link(mock_db, "user-123")
@@ -263,7 +273,7 @@ class TestDiscordOAuthLinkOperations:
         service = DiscordOAuthService()
         mock_db = AsyncMock()
 
-        with patch.object(service, 'get_link', new_callable=AsyncMock) as mock_get:
+        with patch.object(service, "get_link", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await service.delete_link(mock_db, "user-123")
@@ -278,7 +288,7 @@ class TestDiscordOAuthLinkOperations:
         service = DiscordOAuthService()
         mock_db = AsyncMock()
 
-        with patch.object(service, 'get_link', new_callable=AsyncMock) as mock_get:
+        with patch.object(service, "get_link", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
             mock_db.add = MagicMock()
             mock_db.commit = AsyncMock()
@@ -310,7 +320,7 @@ class TestDiscordOAuthLinkOperations:
         existing_link = MagicMock()
         existing_link.discord_id = "old-id"
 
-        with patch.object(service, 'get_link', new_callable=AsyncMock) as mock_get:
+        with patch.object(service, "get_link", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = existing_link
             mock_db.commit = AsyncMock()
             mock_db.refresh = AsyncMock()

@@ -12,13 +12,10 @@ Security:
 - Protected endpoints require authentication at proxy level for defense in depth
 - Owner-only endpoints (user management, invitations) require owner role at proxy level
 """
-from fastapi import APIRouter, Request, Depends
 
-from ..dependencies import (
-    AuthenticatedUser,
-    require_auth,
-    require_owner,
-)
+from fastapi import APIRouter, Depends, Request
+
+from ..dependencies import AuthenticatedUser, require_auth, require_owner
 from ..services.proxy_service import proxy_auth_request
 
 router = APIRouter(tags=["auth"])
@@ -26,6 +23,7 @@ router = APIRouter(tags=["auth"])
 
 # ==================== Setup Endpoints ====================
 # These endpoints are intentionally public for initial application setup
+
 
 @router.get("/auth/setup/status")
 async def get_setup_status(request: Request):
@@ -42,6 +40,7 @@ async def setup_owner(request: Request):
 
 # ==================== Authentication Endpoints ====================
 # Login is public, logout/session require authentication
+
 
 @router.post("/auth/login")
 async def login(request: Request):
@@ -72,6 +71,7 @@ async def verify_token(request: Request):
 # Creating and deleting users requires owner role
 # Listing and viewing requires authentication (auth service further restricts visibility)
 
+
 @router.get("/auth/users")
 async def list_users(request: Request, user: AuthenticatedUser = Depends(require_auth)):
     """List all users. Requires authentication (owners see all, others see only themselves)."""
@@ -92,20 +92,25 @@ async def get_user(user_id: str, request: Request, user: AuthenticatedUser = Dep
 
 
 @router.patch("/auth/users/{user_id}")
-async def update_user(user_id: str, request: Request, user: AuthenticatedUser = Depends(require_auth)):
+async def update_user(
+    user_id: str, request: Request, user: AuthenticatedUser = Depends(require_auth)
+):
     """Update a user. Requires authentication."""
     body = await request.json()
     return await proxy_auth_request("PATCH", f"/users/{user_id}", request, body)
 
 
 @router.delete("/auth/users/{user_id}")
-async def delete_user(user_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)):
+async def delete_user(
+    user_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)
+):
     """Delete a user. Requires owner role."""
     return await proxy_auth_request("DELETE", f"/users/{user_id}", request)
 
 
 # ==================== Profile Endpoints ====================
 # All profile endpoints require authentication
+
 
 @router.get("/auth/me")
 async def get_current_profile(request: Request, user: AuthenticatedUser = Depends(require_auth)):
@@ -130,6 +135,7 @@ async def change_password(request: Request, user: AuthenticatedUser = Depends(re
 # ==================== Invitation Endpoints ====================
 # All invitation management endpoints require owner role
 
+
 @router.get("/auth/invites")
 async def list_invites(request: Request, user: AuthenticatedUser = Depends(require_owner)):
     """List all invitations. Requires owner role."""
@@ -144,25 +150,32 @@ async def create_invite(request: Request, user: AuthenticatedUser = Depends(requ
 
 
 @router.get("/auth/invites/{invite_id}")
-async def get_invite(invite_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)):
+async def get_invite(
+    invite_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)
+):
     """Get invitation by ID. Requires owner role."""
     return await proxy_auth_request("GET", f"/invites/{invite_id}", request)
 
 
 @router.delete("/auth/invites/{invite_id}")
-async def revoke_invite(invite_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)):
+async def revoke_invite(
+    invite_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)
+):
     """Revoke an invitation. Requires owner role."""
     return await proxy_auth_request("DELETE", f"/invites/{invite_id}", request)
 
 
 @router.post("/auth/invites/{invite_id}/resend")
-async def resend_invite(invite_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)):
+async def resend_invite(
+    invite_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)
+):
     """Resend an invitation email. Requires owner role."""
     return await proxy_auth_request("POST", f"/invites/{invite_id}/resend", request)
 
 
 # ==================== Public Invitation Endpoints ====================
 # These endpoints are intentionally public - they allow users to accept invitations
+
 
 @router.get("/auth/invite/verify/{token}")
 async def verify_invite_token(token: str, request: Request):

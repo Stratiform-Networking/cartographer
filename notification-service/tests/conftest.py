@@ -1,10 +1,12 @@
 """
 Shared test fixtures for notification service unit tests.
 """
+
 import os
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Set test environment before imports
 os.environ["RESEND_API_KEY"] = ""
@@ -16,7 +18,8 @@ os.environ["NOTIFICATION_DATA_DIR"] = "/tmp/test_notification_data"
 @pytest.fixture
 def sample_network_event():
     """Sample network event for testing"""
-    from app.models import NetworkEvent, NotificationType, NotificationPriority
+    from app.models import NetworkEvent, NotificationPriority, NotificationType
+
     return NetworkEvent(
         event_id="test-event-123",
         event_type=NotificationType.DEVICE_OFFLINE,
@@ -33,12 +36,13 @@ def sample_network_event():
 def sample_preferences():
     """Sample notification preferences"""
     from app.models import (
-        NotificationPreferences,
-        EmailConfig,
         DiscordConfig,
-        NotificationType,
+        EmailConfig,
+        NotificationPreferences,
         NotificationPriority,
+        NotificationType,
     )
+
     return NotificationPreferences(
         user_id="test-user-1",
         enabled=True,
@@ -56,7 +60,8 @@ def sample_preferences():
 @pytest.fixture
 def sample_discord_config():
     """Sample Discord config"""
-    from app.models import DiscordConfig, DiscordDeliveryMethod, DiscordChannelConfig
+    from app.models import DiscordChannelConfig, DiscordConfig, DiscordDeliveryMethod
+
     return DiscordConfig(
         enabled=True,
         delivery_method=DiscordDeliveryMethod.CHANNEL,
@@ -72,9 +77,10 @@ def sample_discord_config():
 @pytest.fixture
 def sample_device_stats():
     """Sample device stats for anomaly detection"""
-    from app.services.anomaly_detector import DeviceStats, LatencyStats
     from datetime import datetime
-    
+
+    from app.services.anomaly_detector import DeviceStats, LatencyStats
+
     stats = DeviceStats(
         device_ip="192.168.1.100",
         device_name="Test Device",
@@ -90,7 +96,7 @@ def sample_device_stats():
     stats.last_updated = datetime.utcnow()
     stats.last_state = "online"
     stats.last_check_time = datetime.utcnow()
-    
+
     return stats
 
 
@@ -117,17 +123,17 @@ def mock_discord_client():
 def notification_manager_instance():
     """Fresh NotificationManager instance for testing"""
     from app.services.notification_manager import NotificationManager
-    
+
     # Create fresh instance
     manager = NotificationManager()
-    
+
     # Clear any loaded state
     manager._preferences.clear()
     manager._history.clear()
     manager._rate_limits.clear()
     manager._scheduled_broadcasts.clear()
     manager._silenced_devices.clear()
-    
+
     yield manager
 
 
@@ -135,13 +141,13 @@ def notification_manager_instance():
 def anomaly_detector_instance():
     """Fresh AnomalyDetector instance for testing"""
     from app.services.anomaly_detector import AnomalyDetector
-    
+
     detector = AnomalyDetector()
     detector._device_stats.clear()
     detector._anomalies_detected = 0
     detector._false_positives = 0
     detector._notified_offline.clear()
-    
+
     yield detector
 
 
@@ -149,10 +155,9 @@ def anomaly_detector_instance():
 def version_checker_instance():
     """Fresh VersionChecker instance for testing"""
     from app.services.version_checker import VersionChecker
-    
+
     checker = VersionChecker()
     checker._last_notified_version = None
     checker._last_check_time = None
-    
-    yield checker
 
+    yield checker

@@ -10,9 +10,8 @@ Features:
 - Graceful disconnect handling
 - Resource cleanup on connection close
 """
+
 import asyncio
-from collections.abc import Awaitable, Callable
-from typing import Any
 
 import websockets
 from fastapi import WebSocket, WebSocketDisconnect
@@ -24,7 +23,7 @@ async def forward_to_client(
 ) -> None:
     """
     Forward messages from upstream WebSocket to the client.
-    
+
     Args:
         upstream_ws: The upstream WebSocket connection
         client_ws: The FastAPI WebSocket client connection
@@ -43,7 +42,7 @@ async def forward_to_upstream(
 ) -> None:
     """
     Forward messages from client to upstream WebSocket.
-    
+
     Args:
         client_ws: The FastAPI WebSocket client connection
         upstream_ws: The upstream WebSocket connection
@@ -63,23 +62,23 @@ async def proxy_websocket(
 ) -> None:
     """
     Proxy a WebSocket connection to an upstream service.
-    
+
     This is the main entry point for WebSocket proxying. It:
     1. Accepts the client WebSocket connection
     2. Establishes connection to the upstream service
     3. Runs bidirectional forwarding concurrently
     4. Handles disconnects and errors gracefully
-    
+
     Args:
         client_ws: The FastAPI WebSocket from the client
         upstream_url: Full WebSocket URL to the upstream service (ws:// or wss://)
-        
+
     Note:
         This function handles all cleanup internally. Caller should not
         need to manage the WebSocket lifecycle.
     """
     await client_ws.accept()
-    
+
     try:
         async with websockets.connect(upstream_url) as upstream_ws:
             # Run both forwarding tasks concurrently
@@ -102,13 +101,13 @@ async def proxy_websocket(
 def build_ws_url(http_url: str, path: str) -> str:
     """
     Build a WebSocket URL from an HTTP base URL and path.
-    
+
     Converts http:// to ws:// and https:// to wss://.
-    
+
     Args:
         http_url: The HTTP base URL (e.g., "http://localhost:8001")
         path: The WebSocket path (e.g., "/api/metrics/ws")
-        
+
     Returns:
         Full WebSocket URL (e.g., "ws://localhost:8001/api/metrics/ws")
     """

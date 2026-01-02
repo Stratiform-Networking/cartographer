@@ -1,6 +1,6 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import AssistantChat from '../components/AssistantChat.vue'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import AssistantChat from '../components/AssistantChat.vue';
 
 const meta = {
   title: 'Components/AssistantChat',
@@ -10,7 +10,8 @@ const meta = {
     layout: 'padded',
     docs: {
       description: {
-        component: 'AI-powered network assistant chat interface. Supports multiple LLM providers (OpenAI, Anthropic, Gemini, Ollama) with streaming responses.',
+        component:
+          'AI-powered network assistant chat interface. Supports multiple LLM providers (OpenAI, Anthropic, Gemini, Ollama) with streaming responses.',
       },
     },
   },
@@ -26,19 +27,18 @@ const meta = {
       `,
     }),
   ],
-} satisfies Meta<typeof AssistantChat>
+} satisfies Meta<typeof AssistantChat>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default state
 export const Default: Story = {
   args: {
     onClose: fn(),
   },
-}
+};
 
 // Note: The AssistantChat component fetches available providers on mount
 // In a real implementation, you might want to mock the API calls
 // For now, we demonstrate the component in its default state
-

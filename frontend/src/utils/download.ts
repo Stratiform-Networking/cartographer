@@ -66,4 +66,3 @@ export function downloadJson(data: unknown, filename: string): void {
   URL.revokeObjectURL(blobUrl);
   document.body.removeChild(a);
 }
-

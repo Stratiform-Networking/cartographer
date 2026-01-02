@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite'
-import { fn } from 'storybook/test'
-import NetworkMap from '../components/NetworkMap.vue'
-import type { TreeNode, DeviceMetrics } from '../types/network'
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { fn } from 'storybook/test';
+import NetworkMap from '../components/NetworkMap.vue';
+import type { TreeNode, DeviceMetrics } from '../types/network';
 
 // Sample network data for stories
 const createSampleNetwork = (): TreeNode => ({
@@ -116,7 +116,7 @@ const createSampleNetwork = (): TreeNode => ({
       ],
     },
   ],
-})
+});
 
 // Simple network with just a few nodes
 const createSimpleNetwork = (): TreeNode => ({
@@ -149,7 +149,7 @@ const createSimpleNetwork = (): TreeNode => ({
       ],
     },
   ],
-})
+});
 
 // Sample health metrics
 const healthyMetrics: Record<string, DeviceMetrics> = {
@@ -162,7 +162,7 @@ const healthyMetrics: Record<string, DeviceMetrics> = {
   '192.168.1.100': { status: 'healthy', latency: 8, packet_loss: 0 },
   '192.168.1.101': { status: 'healthy', latency: 12, packet_loss: 0 },
   '192.168.1.50': { status: 'healthy', latency: 6, packet_loss: 0 },
-}
+};
 
 const mixedMetrics: Record<string, DeviceMetrics> = {
   '192.168.1.1': { status: 'healthy', latency: 1, packet_loss: 0 },
@@ -174,7 +174,7 @@ const mixedMetrics: Record<string, DeviceMetrics> = {
   '192.168.1.100': { status: 'healthy', latency: 8, packet_loss: 0 },
   '192.168.1.101': { status: 'unhealthy', latency: 1000, packet_loss: 50 },
   '192.168.1.50': { status: 'healthy', latency: 6, packet_loss: 0 },
-}
+};
 
 const meta = {
   title: 'Visualizations/NetworkMap',
@@ -184,7 +184,8 @@ const meta = {
     layout: 'fullscreen',
     docs: {
       description: {
-        component: 'Interactive D3-based network topology visualization. Supports pan/zoom, node selection, and drag-to-reposition in edit mode. Shows health status with colored halos around nodes.',
+        component:
+          'Interactive D3-based network topology visualization. Supports pan/zoom, node selection, and drag-to-reposition in edit mode. Shows health status with colored halos around nodes.',
       },
     },
   },
@@ -210,10 +211,10 @@ const meta = {
       template: '<div style="height: 600px; width: 100%;"><story /></div>',
     }),
   ],
-} satisfies Meta<typeof NetworkMap>
+} satisfies Meta<typeof NetworkMap>;
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 // Default network map view
 export const Default: Story = {
@@ -223,7 +224,7 @@ export const Default: Story = {
     onNodeSelected: fn(),
     onNodePositionChanged: fn(),
   },
-}
+};
 
 // Simple network with fewer nodes
 export const SimpleNetwork: Story = {
@@ -233,7 +234,7 @@ export const SimpleNetwork: Story = {
     onNodeSelected: fn(),
     onNodePositionChanged: fn(),
   },
-}
+};
 
 // Network with a selected node
 export const WithSelectedNode: Story = {
@@ -244,7 +245,7 @@ export const WithSelectedNode: Story = {
     onNodeSelected: fn(),
     onNodePositionChanged: fn(),
   },
-}
+};
 
 // Edit mode (allows dragging nodes)
 export const EditMode: Story = {
@@ -257,11 +258,12 @@ export const EditMode: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'In edit mode, nodes can be dragged to reposition them. The new position is persisted.',
+        story:
+          'In edit mode, nodes can be dragged to reposition them. The new position is persisted.',
       },
     },
   },
-}
+};
 
 // Network with all healthy devices
 export const AllHealthy: Story = {
@@ -279,7 +281,7 @@ export const AllHealthy: Story = {
       },
     },
   },
-}
+};
 
 // Network with mixed health status
 export const MixedHealth: Story = {
@@ -293,11 +295,12 @@ export const MixedHealth: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Network showing mixed health states - healthy (green), degraded (amber), and unhealthy (red) nodes.',
+        story:
+          'Network showing mixed health states - healthy (green), degraded (amber), and unhealthy (red) nodes.',
       },
     },
   },
-}
+};
 
 // Empty network (just the root)
 export const EmptyNetwork: Story = {
@@ -320,13 +323,13 @@ export const EmptyNetwork: Story = {
       },
     },
   },
-}
+};
 
 // Large network with many devices
 const createLargeNetwork = (): TreeNode => {
-  const network = createSampleNetwork()
+  const network = createSampleNetwork();
   // Add more clients
-  const clientGroup = network.children?.find(g => g.id === 'group-clients')
+  const clientGroup = network.children?.find((g) => g.id === 'group-clients');
   if (clientGroup) {
     for (let i = 3; i <= 10; i++) {
       clientGroup.children?.push({
@@ -336,11 +339,11 @@ const createLargeNetwork = (): TreeNode => {
         ip: `192.168.1.${99 + i}`,
         parentId: 'switch-1',
         children: [],
-      })
+      });
     }
   }
-  return network
-}
+  return network;
+};
 
 export const LargeNetwork: Story = {
   args: {
@@ -356,5 +359,4 @@ export const LargeNetwork: Story = {
       },
     },
   },
-}
-
+};

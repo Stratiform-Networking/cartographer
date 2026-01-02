@@ -1,10 +1,12 @@
 """
 Shared test fixtures for assistant service unit tests.
 """
+
 import os
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 # Set test environment before imports
 os.environ["OPENAI_API_KEY"] = ""
@@ -18,22 +20,16 @@ os.environ["REDIS_URL"] = "redis://localhost:6379"
 def mock_authenticated_user():
     """Create a mock authenticated user for testing"""
     from app.dependencies.auth import AuthenticatedUser, UserRole
-    return AuthenticatedUser(
-        user_id="test-user-123",
-        username="testuser",
-        role=UserRole.MEMBER
-    )
+
+    return AuthenticatedUser(user_id="test-user-123", username="testuser", role=UserRole.MEMBER)
 
 
 @pytest.fixture
 def mock_admin_user():
     """Create a mock admin user for testing"""
     from app.dependencies.auth import AuthenticatedUser, UserRole
-    return AuthenticatedUser(
-        user_id="admin-user-123",
-        username="adminuser",
-        role=UserRole.ADMIN
-    )
+
+    return AuthenticatedUser(user_id="admin-user-123", username="adminuser", role=UserRole.ADMIN)
 
 
 @pytest.fixture
@@ -43,10 +39,10 @@ def override_auth_dependency(mock_authenticated_user):
     Use this fixture when testing authenticated endpoints.
     """
     from app.dependencies.auth import require_auth
-    
+
     async def mock_require_auth():
         return mock_authenticated_user
-    
+
     return mock_require_auth
 
 
@@ -56,11 +52,13 @@ def override_rate_limit_dependency(mock_authenticated_user):
     Override the require_auth_with_rate_limit dependency.
     Use this fixture when testing rate-limited endpoints.
     """
+
     def create_mock_rate_limit(limit: int, endpoint: str):
         async def mock_dependency():
             return mock_authenticated_user
+
         return mock_dependency
-    
+
     return create_mock_rate_limit
 
 
@@ -87,19 +85,13 @@ def sample_snapshot():
                     "status": "healthy",
                     "hostname": "router.local",
                     "connection_speed": "1GbE",
-                    "ping": {
-                        "success": True,
-                        "latency_ms": 5.0,
-                        "avg_latency_ms": 5.0
-                    },
-                    "uptime": {
-                        "uptime_percent_24h": 99.9
-                    },
+                    "ping": {"success": True, "latency_ms": 5.0, "avg_latency_ms": 5.0},
+                    "uptime": {"uptime_percent_24h": 99.9},
                     "open_ports": [
                         {"port": 80, "service": "HTTP"},
-                        {"port": 443, "service": "HTTPS"}
+                        {"port": 443, "service": "HTTPS"},
                     ],
-                    "notes": "Primary gateway device"
+                    "notes": "Primary gateway device",
                 },
                 "switch-1": {
                     "id": "switch-1",
@@ -111,12 +103,20 @@ def sample_snapshot():
                         "rows": 2,
                         "cols": 4,
                         "ports": [
-                            {"row": 1, "col": 1, "status": "active", "type": "rj45", "port_number": 1, "connected_device_name": "Server", "speed": "1G"},
+                            {
+                                "row": 1,
+                                "col": 1,
+                                "status": "active",
+                                "type": "rj45",
+                                "port_number": 1,
+                                "connected_device_name": "Server",
+                                "speed": "1G",
+                            },
                             {"row": 1, "col": 2, "status": "unused", "type": "sfp+", "poe": "poe+"},
-                            {"row": 1, "col": 3, "status": "blocked", "type": "rj45"}
+                            {"row": 1, "col": 3, "status": "blocked", "type": "rj45"},
                         ],
-                        "start_number": 1
-                    }
+                        "start_number": 1,
+                    },
                 },
                 "server-1": {
                     "id": "server-1",
@@ -124,25 +124,25 @@ def sample_snapshot():
                     "ip": "192.168.1.10",
                     "role": "server",
                     "status": "degraded",
-                    "notes": "Needs maintenance"
+                    "notes": "Needs maintenance",
                 },
                 "group-1": {
                     "id": "group-1",
                     "name": "Network Group",
                     "role": "group",
-                    "status": "unknown"
-                }
+                    "status": "unknown",
+                },
             },
             "connections": [
                 {"source_id": "gateway-1", "target_id": "switch-1", "connection_speed": "10GbE"},
-                {"source_id": "switch-1", "target_id": "server-1", "connection_speed": "1GbE"}
+                {"source_id": "switch-1", "target_id": "server-1", "connection_speed": "1GbE"},
             ],
             "gateways": [
                 {
                     "gateway_ip": "192.168.1.1",
                     "test_ips": [
                         {"ip": "8.8.8.8", "label": "Google DNS", "status": "healthy"},
-                        {"ip": "1.1.1.1", "label": "Cloudflare", "status": "healthy"}
+                        {"ip": "1.1.1.1", "label": "Cloudflare", "status": "healthy"},
                     ],
                     "last_speed_test": {
                         "success": True,
@@ -152,12 +152,12 @@ def sample_snapshot():
                         "client_isp": "Test ISP",
                         "server_sponsor": "SpeedTest.net",
                         "server_location": "New York",
-                        "timestamp": datetime.now(timezone.utc).isoformat()
-                    }
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
                 }
             ],
-            "root_node_id": "root-1"
-        }
+            "root_node_id": "root-1",
+        },
     }
 
 
@@ -167,12 +167,7 @@ def sample_summary():
     return {
         "available": True,
         "total_nodes": 3,
-        "health_summary": {
-            "healthy": 2,
-            "degraded": 1,
-            "unhealthy": 0,
-            "unknown": 0
-        }
+        "health_summary": {"healthy": 2, "degraded": 1, "unhealthy": 0, "unknown": 0},
     }
 
 
@@ -180,11 +175,9 @@ def sample_summary():
 def provider_config():
     """Sample provider config"""
     from app.providers.base import ProviderConfig
+
     return ProviderConfig(
-        api_key="test-api-key",
-        model="test-model",
-        temperature=0.7,
-        max_tokens=2048
+        api_key="test-api-key", model="test-model", temperature=0.7, max_tokens=2048
     )
 
 
@@ -192,10 +185,11 @@ def provider_config():
 def chat_messages():
     """Sample chat messages"""
     from app.providers.base import ChatMessage
+
     return [
         ChatMessage(role="user", content="Hello"),
         ChatMessage(role="assistant", content="Hi there!"),
-        ChatMessage(role="user", content="How is my network?")
+        ChatMessage(role="user", content="How is my network?"),
     ]
 
 
@@ -203,20 +197,20 @@ def chat_messages():
 def mock_openai_client():
     """Mock OpenAI client"""
     mock = AsyncMock()
-    
+
     # Mock chat completions
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = "Test response"
     mock.chat.completions.create = AsyncMock(return_value=mock_response)
-    
+
     # Mock models list
     mock_model = MagicMock()
     mock_model.id = "gpt-4o"
     mock_models = MagicMock()
     mock_models.data = [mock_model]
     mock.models.list = AsyncMock(return_value=mock_models)
-    
+
     return mock
 
 
@@ -224,14 +218,14 @@ def mock_openai_client():
 def mock_anthropic_client():
     """Mock Anthropic client"""
     mock = AsyncMock()
-    
+
     # Mock message creation
     mock_block = MagicMock()
     mock_block.text = "Test response"
     mock_response = MagicMock()
     mock_response.content = [mock_block]
     mock.messages.create = AsyncMock(return_value=mock_response)
-    
+
     return mock
 
 
@@ -239,13 +233,13 @@ def mock_anthropic_client():
 def mock_ollama_client():
     """Mock Ollama client"""
     mock = AsyncMock()
-    
+
     # Mock list
     mock.list = AsyncMock(return_value={"models": [{"name": "llama3.2"}]})
-    
+
     # Mock chat
     mock.chat = AsyncMock(return_value={"message": {"content": "Test response"}})
-    
+
     return mock
 
 
@@ -253,8 +247,8 @@ def mock_ollama_client():
 def metrics_context_instance():
     """Fresh MetricsContextService instance for testing"""
     from app.services.metrics_context import MetricsContextService
+
     service = MetricsContextService()
     yield service
     # Reset state after test
     service.reset_state()
-

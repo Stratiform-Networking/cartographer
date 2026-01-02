@@ -9,8 +9,8 @@ import logging
 import os
 import subprocess
 import sys
-from pathlib import Path
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,8 +22,7 @@ from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -31,42 +30,47 @@ logger = logging.getLogger(__name__)
 async def _check_and_stamp_version() -> bool:
     """
     Check if tables exist but version table is empty, and stamp if needed.
-    
+
     Returns True if stamping is needed (tables exist but no version entry).
     """
-    from .database import async_session_maker
     from sqlalchemy import text
-    
+
+    from .database import async_session_maker
+
     async with async_session_maker() as session:
         try:
             # Check if our version table exists and has entries
-            result = await session.execute(text(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version_auth')"
-            ))
+            result = await session.execute(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version_auth')"
+                )
+            )
             version_table_exists = result.scalar()
-            
+
             if version_table_exists:
                 result = await session.execute(text("SELECT COUNT(*) FROM alembic_version_auth"))
                 version_count = result.scalar()
             else:
                 version_count = 0
-            
+
             # Check if users table exists (indicates migrations were run before)
-            result = await session.execute(text(
-                "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')"
-            ))
+            result = await session.execute(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')"
+                )
+            )
             tables_exist = result.scalar()
-            
+
             return version_count == 0 and tables_exist
         except Exception as e:
             logger.warning(f"Could not check version table state: {e}")
             return False
-            
+
 
 async def run_migrations() -> None:
     """
     Run database migrations using Alembic.
-    
+
     Handles stamping the database if tables exist but version table is empty
     (migration from old version table), then runs migrations to head.
     """
@@ -78,25 +82,27 @@ async def run_migrations() -> None:
         return
 
     needs_stamp = await _check_and_stamp_version()
-    
+
     if needs_stamp:
         # Tables exist but version table is empty - stamp to current head
-        logger.info("Tables exist but version table empty. Stamping database at 001_create_users_and_invites...")
-        
+        logger.info(
+            "Tables exist but version table empty. Stamping database at 001_create_users_and_invites..."
+        )
+
         stamp_result = subprocess.run(
             [sys.executable, "-m", "alembic", "stamp", "001_create_users_and_invites"],
             cwd=str(app_dir),
             capture_output=True,
             text=True,
             timeout=30,
-            env=os.environ.copy()
+            env=os.environ.copy(),
         )
-        
+
         if stamp_result.returncode == 0:
             logger.info("Database stamped at 001_create_users_and_invites")
         else:
             logger.warning(f"Failed to stamp database: {stamp_result.stderr}")
-    
+
     # Now run migrations normally
     logger.info("Running Alembic migrations...")
     result = subprocess.run(
@@ -105,9 +111,9 @@ async def run_migrations() -> None:
         capture_output=True,
         text=True,
         timeout=60,
-        env=os.environ.copy()  # Pass environment variables (including DATABASE_URL)
+        env=os.environ.copy(),  # Pass environment variables (including DATABASE_URL)
     )
-    
+
     if result.returncode == 0:
         logger.info("Database migrations completed successfully")
         if result.stdout:
@@ -117,8 +123,10 @@ async def run_migrations() -> None:
         logger.error(f"Migration stderr: {result.stderr}")
         logger.error(f"Migration stdout: {result.stdout}")
         # Don't raise an exception - allow service to start
-        logger.warning("Migration may have failed, but service will continue. Check database connection.")
-                    
+        logger.warning(
+            "Migration may have failed, but service will continue. Check database connection."
+        )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -131,17 +139,21 @@ async def lifespan(app: FastAPI):
     try:
         await run_migrations()
     except FileNotFoundError:
-        logger.warning("Alembic not found, skipping migrations. Install alembic to enable automatic migrations.")
+        logger.warning(
+            "Alembic not found, skipping migrations. Install alembic to enable automatic migrations."
+        )
     except subprocess.TimeoutExpired:
         logger.error("Migration timed out after 60 seconds")
     except Exception as e:
         logger.error(f"Failed to run database migrations: {e}", exc_info=True)
-        logger.warning("Service will continue, but some features may not work. Please check database connection and migration files.")
-    
+        logger.warning(
+            "Service will continue, but some features may not work. Please check database connection and migration files."
+        )
+
     logger.info("Auth Service started successfully")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Auth Service...")
 
@@ -151,7 +163,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Cartographer Auth Service",
         description="User authentication and authorization microservice for Cartographer. "
-                    "Uses PostgreSQL database for user storage, compatible with cartographer-cloud format.",
+        "Uses PostgreSQL database for user storage, compatible with cartographer-cloud format.",
         version="0.1.0",
         lifespan=lifespan,
         docs_url=None if settings.disable_docs else "/docs",
@@ -167,7 +179,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Usage tracking middleware - reports endpoint usage to metrics service
     app.add_middleware(UsageTrackingMiddleware, service_name="auth-service")
 
@@ -177,11 +189,7 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     def root():
-        return {
-            "service": "Cartographer Auth Service",
-            "status": "running",
-            "version": "0.1.0"
-        }
+        return {"service": "Cartographer Auth Service", "status": "running", "version": "0.1.0"}
 
     return app
 

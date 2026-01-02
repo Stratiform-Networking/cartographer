@@ -14,8 +14,8 @@ IMPORTANT: This migration must run BEFORE the application uses the new UUID mode
 Back up your database before running this migration.
 """
 
-import uuid
 import logging
+import uuid
 
 from sqlalchemy import text
 

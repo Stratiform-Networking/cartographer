@@ -1,6 +1,6 @@
 /**
  * Types module exports
- * 
+ *
  * Centralized exports for all type definitions.
  */
 
@@ -21,4 +21,3 @@ export * from './notifications';
 
 // Version types
 export * from './version';
-

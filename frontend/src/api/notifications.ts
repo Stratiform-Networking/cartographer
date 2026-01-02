@@ -1,6 +1,6 @@
 /**
  * Notifications API module
- * 
+ *
  * All notification settings and management API calls.
  */
 
@@ -34,8 +34,12 @@ const API_BASE = '/api/notifications';
 
 // ==================== Network Preferences (Owner/Admin) ====================
 
-export async function getNetworkPreferences(networkId: number | string): Promise<NotificationPreferences> {
-  const response = await client.get<NotificationPreferences>(`${API_BASE}/networks/${networkId}/preferences`);
+export async function getNetworkPreferences(
+  networkId: number | string
+): Promise<NotificationPreferences> {
+  const response = await client.get<NotificationPreferences>(
+    `${API_BASE}/networks/${networkId}/preferences`
+  );
   return response.data;
 }
 
@@ -88,10 +92,13 @@ export async function sendTestNotification(
   channel: 'email' | 'discord',
   message?: string
 ): Promise<TestNotificationResult> {
-  const response = await client.post<TestNotificationResult>(`${API_BASE}/networks/${networkId}/test`, {
-    channel,
-    message,
-  });
+  const response = await client.post<TestNotificationResult>(
+    `${API_BASE}/networks/${networkId}/test`,
+    {
+      channel,
+      message,
+    }
+  );
   return response.data;
 }
 
@@ -111,17 +118,22 @@ export async function sendBroadcastNotification(
   eventType: NotificationType = 'scheduled_maintenance',
   priority: NotificationPriority = 'medium'
 ): Promise<{ success: boolean; users_notified: number }> {
-  const response = await client.post<{ success: boolean; users_notified: number }>(`${API_BASE}/broadcast`, {
-    network_id: networkId,
-    title,
-    message,
-    event_type: eventType,
-    priority,
-  });
+  const response = await client.post<{ success: boolean; users_notified: number }>(
+    `${API_BASE}/broadcast`,
+    {
+      network_id: networkId,
+      title,
+      message,
+      event_type: eventType,
+      priority,
+    }
+  );
   return response.data;
 }
 
-export async function getScheduledBroadcasts(includeCompleted = false): Promise<ScheduledBroadcastResponse> {
+export async function getScheduledBroadcasts(
+  includeCompleted = false
+): Promise<ScheduledBroadcastResponse> {
   const response = await client.get<ScheduledBroadcastResponse>(`${API_BASE}/scheduled`, {
     params: { include_completed: includeCompleted },
   });
@@ -153,7 +165,10 @@ export async function updateScheduledBroadcast(
   broadcastId: string,
   update: ScheduledBroadcastUpdate
 ): Promise<ScheduledBroadcast> {
-  const response = await client.patch<ScheduledBroadcast>(`${API_BASE}/scheduled/${broadcastId}`, update);
+  const response = await client.patch<ScheduledBroadcast>(
+    `${API_BASE}/scheduled/${broadcastId}`,
+    update
+  );
   return response.data;
 }
 
@@ -201,7 +216,10 @@ export async function getGlobalPreferences(): Promise<GlobalUserPreferences> {
 export async function updateGlobalPreferences(
   update: GlobalUserPreferencesUpdate
 ): Promise<GlobalUserPreferences> {
-  const response = await client.put<GlobalUserPreferences>(`${API_BASE}/global/preferences`, update);
+  const response = await client.put<GlobalUserPreferences>(
+    `${API_BASE}/global/preferences`,
+    update
+  );
   return response.data;
 }
 
@@ -237,7 +255,10 @@ export async function getUserGlobalPreferences(): Promise<GlobalPreferences> {
 export async function updateUserGlobalPreferences(
   update: Partial<GlobalPreferences>
 ): Promise<GlobalPreferences> {
-  const response = await client.put<GlobalPreferences>(`${API_BASE}/users/me/global/preferences`, update);
+  const response = await client.put<GlobalPreferences>(
+    `${API_BASE}/users/me/global/preferences`,
+    update
+  );
   return response.data;
 }
 
@@ -247,7 +268,9 @@ export async function testUserNetworkNotification(
   networkId: string,
   channel: 'email' | 'discord'
 ): Promise<{ success: boolean; message: string; error?: string }> {
-  const response = await client.post(`${API_BASE}/users/me/networks/${networkId}/test`, { channel });
+  const response = await client.post(`${API_BASE}/users/me/networks/${networkId}/test`, {
+    channel,
+  });
   return response.data;
 }
 
@@ -268,9 +291,12 @@ export async function initiateDiscordOAuth(
   if (contextType === 'network' && networkId !== undefined) {
     params.network_id = networkId;
   }
-  const response = await client.get<{ authorization_url: string }>(`${API_BASE}/auth/discord/link`, {
-    params,
-  });
+  const response = await client.get<{ authorization_url: string }>(
+    `${API_BASE}/auth/discord/link`,
+    {
+      params,
+    }
+  );
   return response.data;
 }
 
@@ -330,13 +356,11 @@ export async function getCartographerStatusSubscription(): Promise<CartographerS
   return response.data;
 }
 
-export async function createCartographerStatusSubscription(
-  data: {
-    email_address?: string;
-    cartographer_up_enabled?: boolean;
-    cartographer_down_enabled?: boolean;
-  }
-): Promise<CartographerStatusSubscription> {
+export async function createCartographerStatusSubscription(data: {
+  email_address?: string;
+  cartographer_up_enabled?: boolean;
+  cartographer_down_enabled?: boolean;
+}): Promise<CartographerStatusSubscription> {
   const response = await client.post(`${API_BASE}/cartographer-status/subscription`, data);
   return response.data;
 }
@@ -361,15 +385,18 @@ export async function deleteCartographerStatusSubscription(): Promise<void> {
   await client.delete(`${API_BASE}/cartographer-status/subscription`);
 }
 
-export async function testCartographerStatusNotification(
-  target: { channel_id?: string; user_id?: string }
-): Promise<void> {
+export async function testCartographerStatusNotification(target: {
+  channel_id?: string;
+  user_id?: string;
+}): Promise<void> {
   await client.post(`${API_BASE}/cartographer-status/test/discord`, target);
 }
 
 // ==================== Discord Channels ====================
 
-export async function getDiscordGuildChannels(guildId: string): Promise<{ channels: DiscordChannel[] }> {
+export async function getDiscordGuildChannels(
+  guildId: string
+): Promise<{ channels: DiscordChannel[] }> {
   const response = await client.get(`${API_BASE}/discord/guilds/${guildId}/channels`);
   return response.data;
 }
@@ -402,4 +429,3 @@ export async function getUserProfile(): Promise<{ email?: string }> {
   const response = await client.get('/api/user/profile');
   return response.data;
 }
-

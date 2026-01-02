@@ -13,10 +13,10 @@ def get_priority_color_hex(priority: NotificationPriority) -> str:
     Used for email templates.
     """
     colors = {
-        NotificationPriority.LOW: "#64748b",      # slate
-        NotificationPriority.MEDIUM: "#f59e0b",   # amber
-        NotificationPriority.HIGH: "#f97316",     # orange
-        NotificationPriority.CRITICAL: "#ef4444", # red
+        NotificationPriority.LOW: "#64748b",  # slate
+        NotificationPriority.MEDIUM: "#f59e0b",  # amber
+        NotificationPriority.HIGH: "#f97316",  # orange
+        NotificationPriority.CRITICAL: "#ef4444",  # red
     }
     return colors.get(priority, "#64748b")
 
@@ -27,12 +27,12 @@ def get_priority_color_discord(priority: NotificationPriority) -> int:
     Used for Discord embed messages.
     """
     colors = {
-        NotificationPriority.LOW: 0x64748b,      # slate
-        NotificationPriority.MEDIUM: 0xf59e0b,   # amber
-        NotificationPriority.HIGH: 0xf97316,     # orange
-        NotificationPriority.CRITICAL: 0xef4444, # red
+        NotificationPriority.LOW: 0x64748B,  # slate
+        NotificationPriority.MEDIUM: 0xF59E0B,  # amber
+        NotificationPriority.HIGH: 0xF97316,  # orange
+        NotificationPriority.CRITICAL: 0xEF4444,  # red
     }
-    return colors.get(priority, 0x64748b)
+    return colors.get(priority, 0x64748B)
 
 
 def get_notification_icon(event_type: NotificationType) -> str:

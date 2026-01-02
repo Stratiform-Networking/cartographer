@@ -2,43 +2,44 @@
 API router for notification service endpoints.
 """
 
-import uuid
 import logging
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query, Header, Request, Depends
+import uuid
+from datetime import datetime
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from datetime import datetime
+from ..database import get_db
 from ..models import (
-    NotificationPreferences,
-    NotificationPreferencesUpdate,
+    DeviceBaseline,
+    DiscordBotInfo,
+    DiscordChannelsResponse,
+    DiscordGuildsResponse,
     GlobalUserPreferences,
     GlobalUserPreferencesUpdate,
-    NotificationHistoryResponse,
-    NotificationStatsResponse,
-    TestNotificationRequest,
-    TestNotificationResponse,
-    DiscordBotInfo,
-    DiscordGuildsResponse,
-    DiscordChannelsResponse,
     MLModelStatus,
-    DeviceBaseline,
     NetworkEvent,
-    NotificationType,
+    NotificationHistoryResponse,
+    NotificationPreferences,
+    NotificationPreferencesUpdate,
     NotificationPriority,
+    NotificationStatsResponse,
+    NotificationType,
     ScheduledBroadcast,
     ScheduledBroadcastCreate,
-    ScheduledBroadcastUpdate,
     ScheduledBroadcastResponse,
+    ScheduledBroadcastUpdate,
+    TestNotificationRequest,
+    TestNotificationResponse,
     get_default_priority_for_type,
 )
-from ..services.notification_manager import notification_manager
-from ..services.discord_service import discord_service, is_discord_configured, get_bot_invite_url
-from ..services.email_service import is_email_configured
 from ..services.anomaly_detector import anomaly_detector
+from ..services.discord_service import discord_service, get_bot_invite_url, is_discord_configured
+from ..services.email_service import is_email_configured
 from ..services.network_anomaly_detector import network_anomaly_detector_manager
+from ..services.notification_manager import notification_manager
 from ..services.version_checker import version_checker
-from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ router = APIRouter()
 
 
 # ==================== Preferences (per-network) ====================
+
 
 @router.get("/networks/{network_id}/preferences", response_model=NotificationPreferences)
 async def get_network_preferences(
@@ -83,10 +85,13 @@ async def get_preferences_legacy(
 ):
     """DEPRECATED: Use /networks/{network_id}/preferences instead"""
     # Return default preferences for backwards compatibility
-    return NotificationPreferences(network_id="00000000-0000-0000-0000-000000000000", owner_user_id=x_user_id)
+    return NotificationPreferences(
+        network_id="00000000-0000-0000-0000-000000000000", owner_user_id=x_user_id
+    )
 
 
 # ==================== Service Status ====================
+
 
 @router.get("/status")
 async def get_service_status():
@@ -94,13 +99,16 @@ async def get_service_status():
     return {
         "email_configured": is_email_configured(),
         "discord_configured": is_discord_configured(),
-        "discord_bot_connected": discord_service._ready.is_set() if discord_service._client else False,
+        "discord_bot_connected": (
+            discord_service._ready.is_set() if discord_service._client else False
+        ),
         "ml_model_status": anomaly_detector.get_model_status().model_dump(),
         "version_checker": version_checker.get_status(),
     }
 
 
 # ==================== Discord Integration ====================
+
 
 @router.get("/discord/info", response_model=DiscordBotInfo)
 async def get_discord_info():
@@ -113,7 +121,7 @@ async def get_discord_guilds():
     """Get list of Discord servers (guilds) the bot is in"""
     if not is_discord_configured():
         raise HTTPException(status_code=503, detail="Discord not configured")
-    
+
     guilds = await discord_service.get_guilds()
     return DiscordGuildsResponse(guilds=guilds)
 
@@ -123,7 +131,7 @@ async def get_discord_channels(guild_id: str):
     """Get list of text channels in a Discord server"""
     if not is_discord_configured():
         raise HTTPException(status_code=503, detail="Discord not configured")
-    
+
     channels = await discord_service.get_channels(guild_id)
     return DiscordChannelsResponse(guild_id=guild_id, channels=channels)
 
@@ -134,11 +142,12 @@ async def get_discord_invite_url():
     url = get_bot_invite_url()
     if not url:
         raise HTTPException(status_code=503, detail="Discord client ID not configured")
-    
+
     return {"invite_url": url}
 
 
 # ==================== Testing ====================
+
 
 @router.post("/networks/{network_id}/test", response_model=TestNotificationResponse)
 async def send_test_notification(
@@ -151,6 +160,7 @@ async def send_test_notification(
 
 
 # ==================== History & Stats (per-network) ====================
+
 
 @router.get("/networks/{network_id}/history", response_model=NotificationHistoryResponse)
 async def get_network_notification_history(
@@ -174,8 +184,11 @@ async def get_network_notification_stats(
 
 # ==================== Anomaly Detection ====================
 
+
 @router.get("/ml/status", response_model=MLModelStatus)
-async def get_ml_model_status(network_id: Optional[str] = Query(None, description="Network ID (UUID) for per-network stats")):
+async def get_ml_model_status(
+    network_id: Optional[str] = Query(None, description="Network ID (UUID) for per-network stats")
+):
     """Get ML anomaly detection model status"""
     if network_id is not None:
         # Return per-network stats
@@ -194,7 +207,10 @@ async def get_device_baseline(
     detector = network_anomaly_detector_manager.get_detector(network_id)
     baseline = detector.get_device_baseline(device_ip)
     if not baseline:
-        raise HTTPException(status_code=404, detail=f"No baseline found for device {device_ip} in network {network_id}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No baseline found for device {device_ip} in network {network_id}",
+        )
     return baseline
 
 
@@ -214,19 +230,31 @@ async def reset_device_baseline(
     detector = network_anomaly_detector_manager.get_detector(network_id)
     # Note: NetworkAnomalyDetector doesn't have reset_device yet - would need to add it
     # For now, log a warning
-    logger.warning(f"Reset device baseline requested for {device_ip} in network {network_id} - not yet implemented")
-    return {"success": True, "message": f"Baseline reset for device {device_ip} in network {network_id} (per-network reset coming soon)"}
+    logger.warning(
+        f"Reset device baseline requested for {device_ip} in network {network_id} - not yet implemented"
+    )
+    return {
+        "success": True,
+        "message": f"Baseline reset for device {device_ip} in network {network_id} (per-network reset coming soon)",
+    }
 
 
 @router.delete("/ml/reset")
-async def reset_all_ml_data(network_id: Optional[str] = Query(None, description="Network ID (UUID) to reset (or all if not provided)")):
+async def reset_all_ml_data(
+    network_id: Optional[str] = Query(
+        None, description="Network ID (UUID) to reset (or all if not provided)"
+    )
+):
     """Reset ML model data (use with caution)"""
     if network_id is not None:
         # Reset specific network
         detector = network_anomaly_detector_manager.get_detector(network_id)
         # Would need to add reset method to NetworkAnomalyDetector
         logger.warning(f"Reset ML data requested for network {network_id} - not yet implemented")
-        return {"success": True, "message": f"ML model data reset for network {network_id} (coming soon)"}
+        return {
+            "success": True,
+            "message": f"ML model data reset for network {network_id} (coming soon)",
+        }
     else:
         # Reset all (legacy)
         anomaly_detector.reset_all()
@@ -240,7 +268,7 @@ async def sync_current_devices(
 ):
     """
     Sync the list of devices currently in a network.
-    
+
     This should be called by the health service when devices are registered
     or when the device list changes. It ensures the ML model status only
     reports tracking devices that are actually present in the network.
@@ -257,6 +285,7 @@ async def sync_current_devices(
 
 # ==================== Health Check Processing ====================
 
+
 @router.post("/process-health-check")
 async def process_health_check(
     device_ip: str,
@@ -270,10 +299,10 @@ async def process_health_check(
 ):
     """
     Process a health check result from the health service.
-    
+
     This endpoint should be called by the health service after each check.
     It will train the ML model and potentially send notifications.
-    
+
     Args:
         device_ip: IP address of the device
         success: Whether the health check succeeded
@@ -285,7 +314,7 @@ async def process_health_check(
     """
     # Use per-network anomaly detector
     from ..services.network_anomaly_detector import network_anomaly_detector_manager
-    
+
     # Process health check with per-network detector
     event = network_anomaly_detector_manager.process_health_check(
         network_id=network_id,
@@ -296,19 +325,21 @@ async def process_health_check(
         device_name=device_name,
         previous_state=previous_state,
     )
-    
+
     # If event created, dispatch to network users
     if event:
         event.network_id = network_id
-        logger.info(f"Network event created for network {network_id}: {event.event_type.value} - {event.title}")
-        
+        logger.info(
+            f"Network event created for network {network_id}: {event.event_type.value} - {event.title}"
+        )
+
         # Get network member user IDs from database and dispatch
         try:
-            from ..services.user_preferences import user_preferences_service
             from ..services.notification_dispatch import notification_dispatch_service
-            
+            from ..services.user_preferences import user_preferences_service
+
             user_ids = await user_preferences_service.get_network_member_user_ids(db, network_id)
-            
+
             if user_ids:
                 # Dispatch to all network users
                 results = await notification_dispatch_service.send_to_network_users(
@@ -318,14 +349,18 @@ async def process_health_check(
                     event=event,
                     scheduled_at=None,
                 )
-                
+
                 successful = sum(1 for r in results.values() if any(rec.success for rec in r))
-                logger.info(f"Dispatched notification to {successful}/{len(user_ids)} users in network {network_id}")
+                logger.info(
+                    f"Dispatched notification to {successful}/{len(user_ids)} users in network {network_id}"
+                )
             else:
                 logger.warning(f"No users found for network {network_id}")
         except Exception as e:
-            logger.error(f"Failed to dispatch notification for network {network_id}: {e}", exc_info=True)
-    
+            logger.error(
+                f"Failed to dispatch notification for network {network_id}: {e}", exc_info=True
+            )
+
     return {"success": True, "event_created": event is not None}
 
 
@@ -336,18 +371,18 @@ async def send_network_notification(
 ):
     """
     Send a notification to a specific network (for broadcasts).
-    
+
     Expects JSON body with:
     - Either: event: NetworkEvent object
     - Or: event fields directly (event_type, title, message, priority, etc.)
     - user_ids: Optional[List[str]] - List of user IDs who are network members
-    
+
     If user_ids is provided, sends to those specific network members based on their preferences.
     Otherwise, sends to the network's configured notification channels.
     """
     body = await request.json()
     user_ids = body.get("user_ids")
-    
+
     # Parse the event - support both formats
     if "event" in body:
         # Format 1: event object
@@ -356,17 +391,19 @@ async def send_network_notification(
     else:
         # Format 2: event fields directly in body
         event = NetworkEvent(**body)
-    
+
     # Ensure event has the correct network_id
     event.network_id = network_id
-    
+
     if user_ids:
         # Send to specific network members based on their preferences
-        logger.info(f"Broadcast request for network {network_id} to {len(user_ids)} users: {event.title}")
+        logger.info(
+            f"Broadcast request for network {network_id} to {len(user_ids)} users: {event.title}"
+        )
         results = await notification_manager.send_notification_to_network_members(
             network_id, user_ids, event, force=True
         )
-        
+
         # Count successful and failed records
         total_records = 0
         successful_records = 0
@@ -378,15 +415,15 @@ async def send_network_notification(
                     successful_records += 1
                 else:
                     failed_records += 1
-        
+
         success = successful_records > 0
-        
+
         logger.info(
             f"Broadcast result for network {network_id}: "
             f"success={success}, users={len(results)}, "
             f"total_records={total_records}, successful={successful_records}, failed={failed_records}"
         )
-        
+
         return {
             "success": success,
             "users_notified": len(results),
@@ -398,16 +435,18 @@ async def send_network_notification(
     else:
         # Fallback to network-level preferences
         logger.info(f"Network-level notification request for network {network_id}: {event.title}")
-        records = await notification_manager.send_notification_to_network(network_id, event, force=True)
+        records = await notification_manager.send_notification_to_network(
+            network_id, event, force=True
+        )
         successful = [r for r in records if r.success]
         failed = [r for r in records if not r.success]
-        
+
         logger.info(
             f"Network-level notification result for network {network_id}: "
             f"success={len(successful) > 0}, total={len(records)}, "
             f"successful={len(successful)}, failed={len(failed)}"
         )
-        
+
         return {
             "success": len(successful) > 0,
             "total_records": len(records),
@@ -425,7 +464,7 @@ async def send_manual_notification(
 ):
     """
     Manually send a notification (for testing or admin use).
-    
+
     DEPRECATED: Use /networks/{network_id}/send-notification for network-scoped notifications.
     """
     if user_id:
@@ -446,6 +485,7 @@ async def send_manual_notification(
 
 # ==================== Scheduled Broadcasts ====================
 
+
 @router.get("/scheduled", response_model=ScheduledBroadcastResponse)
 async def get_scheduled_broadcasts(
     include_completed: bool = Query(False, description="Include sent/cancelled broadcasts"),
@@ -464,20 +504,21 @@ async def create_scheduled_broadcast(
     # Handle both timezone-aware and naive datetimes
     scheduled_time = request.scheduled_at
     now = datetime.utcnow()
-    
+
     # If scheduled_time is timezone-aware, convert to naive UTC for comparison
     if scheduled_time.tzinfo is not None:
         from datetime import timezone as dt_timezone
+
         scheduled_time = scheduled_time.astimezone(dt_timezone.utc).replace(tzinfo=None)
-    
+
     if scheduled_time <= now:
         raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
-    
+
     logger.info(
         f"Creating scheduled broadcast: title='{request.title}', "
         f"scheduled_at={request.scheduled_at.isoformat()}, timezone={request.timezone}"
     )
-    
+
     return notification_manager.create_scheduled_broadcast(
         title=request.title,
         message=request.message,
@@ -506,28 +547,28 @@ async def update_scheduled_broadcast(
 ):
     """
     Update a scheduled broadcast (only pending broadcasts can be updated).
-    
+
     Only the fields provided in the request will be updated.
     """
     # If updating scheduled_at, validate it's in the future
     if request.scheduled_at is not None:
         scheduled_time = request.scheduled_at
         now = datetime.utcnow()
-        
+
         if scheduled_time.tzinfo is not None:
             from datetime import timezone as dt_timezone
+
             scheduled_time = scheduled_time.astimezone(dt_timezone.utc).replace(tzinfo=None)
-        
+
         if scheduled_time <= now:
             raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
-    
+
     broadcast = notification_manager.update_scheduled_broadcast(broadcast_id, request)
     if not broadcast:
         raise HTTPException(
-            status_code=400, 
-            detail="Cannot update broadcast (not found or not pending)"
+            status_code=400, detail="Cannot update broadcast (not found or not pending)"
         )
-    
+
     logger.info(f"Updated scheduled broadcast: {broadcast_id}")
     return broadcast
 
@@ -537,7 +578,9 @@ async def cancel_scheduled_broadcast(broadcast_id: str):
     """Cancel a scheduled broadcast"""
     success = notification_manager.cancel_scheduled_broadcast(broadcast_id)
     if not success:
-        raise HTTPException(status_code=400, detail="Cannot cancel broadcast (not found or already sent)")
+        raise HTTPException(
+            status_code=400, detail="Cannot cancel broadcast (not found or already sent)"
+        )
     return {"success": True, "message": "Broadcast cancelled"}
 
 
@@ -546,7 +589,9 @@ async def delete_scheduled_broadcast(broadcast_id: str):
     """Delete a scheduled broadcast (must be cancelled or completed first)"""
     success = notification_manager.delete_scheduled_broadcast(broadcast_id)
     if not success:
-        raise HTTPException(status_code=400, detail="Cannot delete broadcast (not found or still pending)")
+        raise HTTPException(
+            status_code=400, detail="Cannot delete broadcast (not found or still pending)"
+        )
     return {"success": True, "message": "Broadcast deleted"}
 
 
@@ -568,6 +613,7 @@ async def mark_broadcast_seen(broadcast_id: str):
 
 
 # ==================== Silenced Devices (Monitoring Disabled) ====================
+
 
 @router.get("/silenced-devices")
 async def get_silenced_devices():
@@ -605,6 +651,7 @@ async def check_device_silenced(device_ip: str):
 
 # ==================== Global User Preferences (for Cartographer Up/Down) ====================
 
+
 @router.get("/global/preferences", response_model=GlobalUserPreferences)
 async def get_global_preferences(
     x_user_id: str = Header(..., description="User ID from auth service"),
@@ -624,6 +671,7 @@ async def update_global_preferences(
 
 # ==================== Cartographer Service Status Notifications ====================
 
+
 @router.post("/service-status/up")
 async def notify_cartographer_up(
     message: Optional[str] = None,
@@ -631,27 +679,32 @@ async def notify_cartographer_up(
 ):
     """
     Send a notification that Cartographer is back online.
-    
+
     This can be called by external monitoring systems when they detect
     the service has recovered from downtime.
-    
+
     NOTE: This endpoint now uses the new Cartographer Status service.
     """
+    from ..models import (
+        NetworkEvent,
+        NotificationPriority,
+        NotificationType,
+        get_default_priority_for_type,
+    )
     from ..services.cartographer_status import cartographer_status_service
-    from ..services.email_service import send_notification_email, is_email_configured
-    from ..models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
-    
+    from ..services.email_service import is_email_configured, send_notification_email
+
     if not is_email_configured():
         return {
             "success": False,
             "subscribers_notified": 0,
             "error": "Email service not configured",
         }
-    
+
     downtime_str = ""
     if downtime_minutes:
         downtime_str = f"Service was down for approximately {downtime_minutes} minutes. "
-    
+
     event = NetworkEvent(
         event_type=NotificationType.CARTOGRAPHER_UP,
         priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_UP),
@@ -664,11 +717,13 @@ async def notify_cartographer_up(
             "reported_at": datetime.utcnow().isoformat(),
         },
     )
-    
-    subscribers = cartographer_status_service.get_subscribers_for_event(NotificationType.CARTOGRAPHER_UP)
+
+    subscribers = cartographer_status_service.get_subscribers_for_event(
+        NotificationType.CARTOGRAPHER_UP
+    )
     notification_id = str(uuid.uuid4())
     successful = 0
-    
+
     for subscriber in subscribers:
         try:
             record = await send_notification_email(
@@ -680,7 +735,7 @@ async def notify_cartographer_up(
                 successful += 1
         except Exception as e:
             logger.error(f"Failed to send to {subscriber.email_address}: {e}")
-    
+
     return {
         "success": successful > 0,
         "subscribers_notified": successful,
@@ -695,29 +750,34 @@ async def notify_cartographer_down(
 ):
     """
     Send a notification that Cartographer is going down or has gone down.
-    
+
     This can be called by:
     - External monitoring systems when they detect the service is unreachable
     - Administrators before planned maintenance
     - The service itself before a graceful shutdown
-    
+
     NOTE: This endpoint now uses the new Cartographer Status service.
     """
+    from ..models import (
+        NetworkEvent,
+        NotificationPriority,
+        NotificationType,
+        get_default_priority_for_type,
+    )
     from ..services.cartographer_status import cartographer_status_service
-    from ..services.email_service import send_notification_email, is_email_configured
-    from ..models import NetworkEvent, NotificationType, NotificationPriority, get_default_priority_for_type
-    
+    from ..services.email_service import is_email_configured, send_notification_email
+
     if not is_email_configured():
         return {
             "success": False,
             "subscribers_notified": 0,
             "error": "Email service not configured",
         }
-    
+
     services_str = ""
     if affected_services:
         services_str = f"Affected services: {', '.join(affected_services)}. "
-    
+
     event = NetworkEvent(
         event_type=NotificationType.CARTOGRAPHER_DOWN,
         priority=get_default_priority_for_type(NotificationType.CARTOGRAPHER_DOWN),
@@ -730,11 +790,13 @@ async def notify_cartographer_down(
             "reported_at": datetime.utcnow().isoformat(),
         },
     )
-    
-    subscribers = cartographer_status_service.get_subscribers_for_event(NotificationType.CARTOGRAPHER_DOWN)
+
+    subscribers = cartographer_status_service.get_subscribers_for_event(
+        NotificationType.CARTOGRAPHER_DOWN
+    )
     notification_id = str(uuid.uuid4())
     successful = 0
-    
+
     for subscriber in subscribers:
         try:
             record = await send_notification_email(
@@ -746,7 +808,7 @@ async def notify_cartographer_down(
                 successful += 1
         except Exception as e:
             logger.error(f"Failed to send to {subscriber.email_address}: {e}")
-    
+
     return {
         "success": successful > 0,
         "subscribers_notified": successful,
@@ -756,11 +818,12 @@ async def notify_cartographer_down(
 
 # ==================== Version Update Notifications ====================
 
+
 @router.get("/version")
 async def get_version_status():
     """
     Get current version status and last check info.
-    
+
     Returns information about the current version, latest available version,
     and whether an update is available.
     """
@@ -771,11 +834,11 @@ async def get_version_status():
 async def check_for_updates(send_notification: bool = True):
     """
     Manually trigger a version check and get results.
-    
+
     This will check GitHub for the latest version and return whether
     an update is available. If an update is found and send_notification is True,
     this will also trigger notifications to all networks with SYSTEM_STATUS enabled.
-    
+
     Args:
         send_notification: If True (default), send notifications when update found
     """
@@ -786,13 +849,12 @@ async def check_for_updates(send_notification: bool = True):
 async def send_version_notification():
     """
     Manually send a version update notification to all subscribed users.
-    
+
     This will check for updates and force-send notifications regardless
     of whether users have already been notified about this version.
-    
+
     Networks must have SYSTEM_STATUS in their enabled_notification_types
     to receive version update notifications.
     """
     # Force send notification (bypass "already notified" check)
     return await version_checker.check_now(send_notification=True, force=True)
-

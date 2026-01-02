@@ -1,6 +1,7 @@
 """
 Auth dependencies for assistant service routes.
 """
+
 from .auth import (
     AuthenticatedUser,
     UserRole,
@@ -16,4 +17,3 @@ __all__ = [
     "require_auth",
     "require_auth_with_rate_limit",
 ]
-

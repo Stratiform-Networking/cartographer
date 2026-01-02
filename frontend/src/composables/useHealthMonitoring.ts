@@ -1,6 +1,6 @@
 /**
  * Health monitoring composable
- * 
+ *
  * Manages health monitoring state and orchestrates health API calls.
  */
 
@@ -26,9 +26,16 @@ export function useHealthMonitoring() {
   /**
    * Register devices for passive monitoring and trigger immediate check
    */
-  async function registerDevices(ips: string[], networkId: string, triggerCheck = true): Promise<void> {
+  async function registerDevices(
+    ips: string[],
+    networkId: string,
+    triggerCheck = true
+  ): Promise<void> {
     try {
-      console.log(`[Health] Sending ${ips.length} IPs to backend for monitoring (network ${networkId}):`, ips);
+      console.log(
+        `[Health] Sending ${ips.length} IPs to backend for monitoring (network ${networkId}):`,
+        ips
+      );
       const response = await healthApi.registerDevices(ips, networkId);
       console.log('[Health] Backend response:', response);
 

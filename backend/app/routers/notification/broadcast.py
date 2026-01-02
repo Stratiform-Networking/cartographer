@@ -8,27 +8,22 @@ Handles broadcast and scheduled notification endpoints:
 - Version update notifications
 - Cartographer status subscriptions
 """
-from fastapi import APIRouter, HTTPException, Request, Depends, Query
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Request
 from fastapi import Request as FastAPIRequest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...database import get_db
-from ...dependencies import (
-    AuthenticatedUser,
-    require_auth,
-    require_write_access,
-    require_owner,
-)
+from ...dependencies import AuthenticatedUser, require_auth, require_owner, require_write_access
 from ...services.network_service import get_network_member_user_ids
-from ...services.proxy_service import (
-    proxy_notification_request,
-    proxy_cartographer_status_request,
-)
+from ...services.proxy_service import proxy_cartographer_status_request, proxy_notification_request
 
 router = APIRouter(tags=["notification-broadcast"])
 
 
 # ==================== Network Broadcast (Owner Only) ====================
+
 
 @router.post("/broadcast")
 async def send_global_notification(
@@ -38,7 +33,7 @@ async def send_global_notification(
 ):
     """
     Send a network-scoped broadcast notification to all users in a network. Owner only.
-    
+
     Expects a JSON body with:
     - network_id: str - The network UUID to broadcast to (required)
     - title: str - The notification title
@@ -48,13 +43,13 @@ async def send_global_notification(
     """
     body = await request.json()
     network_id = body.get("network_id")
-    
+
     if not network_id:
         raise HTTPException(status_code=400, detail="network_id is required")
-    
+
     # Ensure network_id is a string (UUID)
     network_id = str(network_id)
-    
+
     # Get all network members (owner + users with permissions)
     try:
         user_ids = await get_network_member_user_ids(network_id, db)
@@ -62,7 +57,7 @@ async def send_global_notification(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get network members: {str(e)}")
-    
+
     # Build the network event for the notification service
     return await proxy_notification_request(
         "POST",
@@ -92,11 +87,11 @@ async def send_network_notification(
 ):
     """
     Send a notification to all users in a network.
-    
+
     Backend fetches network members, then proxies to notification service.
     """
     body = await request.json()
-    
+
     # Get all network members
     try:
         user_ids = await get_network_member_user_ids(network_id, db)
@@ -104,7 +99,7 @@ async def send_network_notification(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get network members: {str(e)}")
-    
+
     # Proxy to notification service with user_ids
     return await proxy_notification_request(
         "POST",
@@ -118,6 +113,7 @@ async def send_network_notification(
 
 
 # ==================== Scheduled Broadcasts (Owner Only) ====================
+
 
 @router.get("/scheduled")
 async def get_scheduled_broadcasts(
@@ -139,7 +135,7 @@ async def create_scheduled_broadcast(
 ):
     """
     Create a new scheduled broadcast. Owner only.
-    
+
     Expects a JSON body with:
     - title: str - The notification title
     - message: str - The notification message
@@ -174,7 +170,7 @@ async def update_scheduled_broadcast(
     """
     Update a scheduled broadcast. Owner only.
     Only pending broadcasts can be updated.
-    
+
     Expects a JSON body with any of:
     - title: str - The notification title
     - message: str - The notification message
@@ -216,6 +212,7 @@ async def mark_broadcast_seen(
 
 # ==================== Service Status Notifications ====================
 
+
 @router.post("/service-status/up")
 async def notify_service_up(
     request: Request,
@@ -223,7 +220,7 @@ async def notify_service_up(
 ):
     """
     Send a notification that Cartographer is back online. Owner only.
-    
+
     Can be used by administrators or external monitoring systems.
     """
     body = await request.json() if request.headers.get("content-type") == "application/json" else {}
@@ -244,7 +241,7 @@ async def notify_service_down(
 ):
     """
     Send a notification that Cartographer is going/has gone down. Owner only.
-    
+
     Can be used:
     - Before planned maintenance
     - By external monitoring systems
@@ -263,13 +260,14 @@ async def notify_service_down(
 
 # ==================== Version Update Notifications ====================
 
+
 @router.get("/version")
 async def get_version_status(
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """
     Get current version status and last check info.
-    
+
     Returns information about the current version, latest available version,
     and whether an update is available.
     """
@@ -282,7 +280,7 @@ async def check_for_updates(
 ):
     """
     Manually trigger a version check and get results.
-    
+
     This will check GitHub for the latest version and return whether
     an update is available.
     """
@@ -295,7 +293,7 @@ async def send_version_notification(
 ):
     """
     Send a version update notification to all subscribed users.
-    
+
     This will check for updates and send SYSTEM_STATUS notifications
     to all users who have that notification type enabled.
     """
@@ -303,6 +301,7 @@ async def send_version_notification(
 
 
 # ==================== Cartographer Status Subscriptions ====================
+
 
 @router.get("/cartographer-status/subscription")
 async def get_cartographer_status_subscription(
@@ -318,7 +317,9 @@ async def create_cartographer_status_subscription(
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """Create or update Cartographer status subscription"""
-    return await proxy_cartographer_status_request("POST", "/subscription", json_body=body, user_id=user.user_id)
+    return await proxy_cartographer_status_request(
+        "POST", "/subscription", json_body=body, user_id=user.user_id
+    )
 
 
 @router.put("/cartographer-status/subscription")
@@ -327,7 +328,9 @@ async def update_cartographer_status_subscription(
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """Update Cartographer status subscription"""
-    return await proxy_cartographer_status_request("PUT", "/subscription", json_body=body, user_id=user.user_id)
+    return await proxy_cartographer_status_request(
+        "PUT", "/subscription", json_body=body, user_id=user.user_id
+    )
 
 
 @router.delete("/cartographer-status/subscription")
@@ -344,5 +347,6 @@ async def test_global_discord(
     user: AuthenticatedUser = Depends(require_auth),
 ):
     """Test Discord notifications for global settings"""
-    return await proxy_cartographer_status_request("POST", "/test/discord", json_body=body, user_id=user.user_id)
-
+    return await proxy_cartographer_status_request(
+        "POST", "/test/discord", json_body=body, user_id=user.user_id
+    )

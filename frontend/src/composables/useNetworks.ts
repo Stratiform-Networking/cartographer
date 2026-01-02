@@ -1,6 +1,6 @@
 /**
  * Networks composable
- * 
+ *
  * Manages network state and orchestrates network API calls.
  */
 
@@ -13,7 +13,6 @@ import type {
   NetworkLayoutResponse,
   CreateNetworkData,
   UpdateNetworkData,
-  NetworkPermissionRole,
   NetworkPermission,
   CreateNetworkPermission,
 } from '../types/networks';
@@ -25,7 +24,6 @@ export type {
   NetworkLayoutResponse,
   CreateNetworkData,
   UpdateNetworkData,
-  NetworkPermissionRole,
   NetworkPermission,
   CreateNetworkPermission,
 } from '../types/networks';
@@ -120,7 +118,10 @@ export function useNetworks() {
     }
   }
 
-  async function saveNetworkLayout(id: string, layoutData: SavedLayout): Promise<NetworkLayoutResponse> {
+  async function saveNetworkLayout(
+    id: string,
+    layoutData: SavedLayout
+  ): Promise<NetworkLayoutResponse> {
     try {
       return await networksApi.saveNetworkLayout(id, layoutData);
     } catch (e) {

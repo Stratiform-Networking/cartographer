@@ -1,10 +1,12 @@
 """
 Shared test fixtures for auth service unit tests.
 """
+
 import os
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, AsyncMock
 
 # Set test environment before imports - use SQLite for testing
 os.environ["AUTH_DATA_DIR"] = "/tmp/test-auth-data"

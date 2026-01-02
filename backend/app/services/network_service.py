@@ -4,6 +4,7 @@ Network service layer for business logic related to networks.
 This module contains extracted business logic from routers/networks.py
 to maintain proper layer separation (routers -> services -> repositories).
 """
+
 import secrets
 
 from fastapi import HTTPException, status
@@ -28,17 +29,17 @@ async def get_network_with_access(
 ) -> tuple[Network, bool, PermissionRole | None]:
     """
     Get a network and verify user has access.
-    
+
     Args:
         network_id: The network UUID to look up.
         user_id: The user ID requesting access.
         db: Database session.
         require_write: Whether write access is required.
         is_service: Whether this is a service token (has full access).
-    
+
     Returns:
         Tuple of (network, is_owner, permission_role).
-    
+
     Raises:
         HTTPException(404) if not found or user has no access.
         HTTPException(403) if write access required but user only has viewer role.
@@ -94,18 +95,18 @@ async def get_network_member_user_ids(
 ) -> list[str]:
     """
     Get all user IDs who have access to a network.
-    
+
     Returns a list of user IDs including:
     - The network owner
     - All users with viewer/editor permissions
-    
+
     Args:
         network_id: The network UUID.
         db: Database session.
-    
+
     Returns:
         List of user IDs with access to the network.
-    
+
     Raises:
         HTTPException(404) if network not found.
     """
@@ -124,9 +125,7 @@ async def get_network_member_user_ids(
 
     # Add all users with permissions
     perm_result = await db.execute(
-        select(NetworkPermission.user_id).where(
-            NetworkPermission.network_id == network_id
-        )
+        select(NetworkPermission.user_id).where(NetworkPermission.network_id == network_id)
     )
     permission_user_ids = perm_result.scalars().all()
     user_ids.extend(permission_user_ids)
@@ -138,4 +137,3 @@ async def get_network_member_user_ids(
 def is_service_token(user_id: str) -> bool:
     """Check if a user_id represents a service token."""
     return user_id in ("service", "metrics-service")
-

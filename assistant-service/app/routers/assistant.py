@@ -4,34 +4,34 @@ Assistant Router
 API endpoints for the AI assistant, including streaming chat.
 """
 
+import asyncio
 import json
 import logging
-import asyncio
-from typing import Any
 from datetime import datetime, timedelta
+from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..dependencies import AuthenticatedUser, require_auth, require_auth_with_rate_limit
 from ..models import (
-    ModelProvider,
+    AssistantConfig,
     ChatRequest,
     ChatResponse,
-    ProviderStatus,
-    AssistantConfig,
+    ModelProvider,
     NetworkContextSummary,
+    ProviderStatus,
 )
 from ..providers import (
-    BaseProvider,
-    ProviderConfig,
-    OpenAIProvider,
     AnthropicProvider,
+    BaseProvider,
     GeminiProvider,
     OllamaProvider,
+    OpenAIProvider,
+    ProviderConfig,
 )
 from ..providers.base import ChatMessage as ProviderChatMessage
 from ..services.metrics_context import metrics_context_service
@@ -44,25 +44,28 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 # ==================== Model List Cache ====================
 
+
 class ModelCache:
     """Cache for provider model lists to avoid repeated API calls"""
-    
+
     def __init__(self, ttl_seconds: int = 300):  # 5 minute cache
         self._cache: dict[str, tuple[list[str], datetime]] = {}
         self._ttl = timedelta(seconds=ttl_seconds)
         self._lock = asyncio.Lock()
-    
-    async def get_models(self, provider: ModelProvider, provider_instance: BaseProvider) -> list[str]:
+
+    async def get_models(
+        self, provider: ModelProvider, provider_instance: BaseProvider
+    ) -> list[str]:
         """Get models for a provider, using cache if available"""
         cache_key = provider.value
         now = datetime.utcnow()
-        
+
         # Check cache
         if cache_key in self._cache:
             models, cached_at = self._cache[cache_key]
             if now - cached_at < self._ttl:
                 return models
-        
+
         # Fetch fresh models
         async with self._lock:
             # Double-check after acquiring lock
@@ -70,13 +73,13 @@ class ModelCache:
                 models, cached_at = self._cache[cache_key]
                 if now - cached_at < self._ttl:
                     return models
-            
+
             # Fetch from API - let exceptions propagate
             models = await provider_instance.list_models()
             self._cache[cache_key] = (models, now)
             logger.info(f"Cached {len(models)} models for {provider.value}")
             return models
-    
+
     def invalidate(self, provider: ModelProvider | None = None):
         """Invalidate cache for a specific provider or all providers"""
         if provider:
@@ -110,38 +113,41 @@ Guidelines:
 """
 
 
-def get_provider(provider_type: ModelProvider, config: ProviderConfig | None = None) -> BaseProvider:
+def get_provider(
+    provider_type: ModelProvider, config: ProviderConfig | None = None
+) -> BaseProvider:
     """Get the appropriate provider instance"""
     if config is None:
         config = ProviderConfig()
-    
+
     providers = {
         ModelProvider.OPENAI: OpenAIProvider,
         ModelProvider.ANTHROPIC: AnthropicProvider,
         ModelProvider.GEMINI: GeminiProvider,
         ModelProvider.OLLAMA: OllamaProvider,
     }
-    
+
     provider_class = providers.get(provider_type)
     if not provider_class:
         raise ValueError(f"Unknown provider: {provider_type}")
-    
+
     return provider_class(config)
 
 
 # ==================== Configuration Endpoints ====================
 
+
 @router.get("/config", response_model=AssistantConfig)
 async def get_config(user: AuthenticatedUser = Depends(require_auth)):
     """Get assistant configuration and provider status. Requires authentication."""
     providers_status = []
-    
+
     # Fetch all provider statuses concurrently
     async def get_provider_status(provider_type: ModelProvider) -> ProviderStatus:
         try:
             provider = get_provider(provider_type)
             available = await provider.is_available()
-            
+
             if not available:
                 return ProviderStatus(
                     provider=provider_type,
@@ -149,7 +155,7 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
                     configured=False,
                     default_model=provider.default_model,
                 )
-            
+
             # Try to get models, but don't fail the whole provider if this fails
             models = []
             error_msg = None
@@ -160,7 +166,7 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
                 error_msg = f"Could not list models: {str(e)}"
                 # Use default model as fallback
                 models = [provider.default_model]
-            
+
             return ProviderStatus(
                 provider=provider_type,
                 available=True,
@@ -178,18 +184,18 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
                 default_model="",
                 error=str(e),
             )
-    
+
     # Run all provider checks concurrently
     tasks = [get_provider_status(pt) for pt in ModelProvider]
     providers_status = await asyncio.gather(*tasks)
-    
+
     # Determine default provider (first available)
     default = ModelProvider.OPENAI
     for status in providers_status:
         if status.available:
             default = status.provider
             break
-    
+
     return AssistantConfig(
         providers=list(providers_status),
         default_provider=default,
@@ -201,51 +207,52 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
 async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
     """List all providers and their availability. Requires authentication."""
     result = []
-    
+
     for provider_type in ModelProvider:
         try:
             provider = get_provider(provider_type)
             available = await provider.is_available()
-            
-            result.append({
-                "provider": provider_type.value,
-                "available": available,
-                "default_model": provider.default_model,
-            })
+
+            result.append(
+                {
+                    "provider": provider_type.value,
+                    "available": available,
+                    "default_model": provider.default_model,
+                }
+            )
         except Exception as e:
-            result.append({
-                "provider": provider_type.value,
-                "available": False,
-                "error": str(e),
-            })
-    
+            result.append(
+                {
+                    "provider": provider_type.value,
+                    "available": False,
+                    "error": str(e),
+                }
+            )
+
     return {"providers": result}
 
 
 @router.get("/models/{provider}")
 async def list_models(
-    provider: ModelProvider,
-    refresh: bool = False,
-    user: AuthenticatedUser = Depends(require_auth)
+    provider: ModelProvider, refresh: bool = False, user: AuthenticatedUser = Depends(require_auth)
 ):
     """List available models for a specific provider. Requires authentication.
-    
+
     Args:
         provider: The AI provider to list models for
         refresh: If true, bypass cache and fetch fresh model list
     """
     try:
         prov = get_provider(provider)
-        
+
         if not await prov.is_available():
             raise HTTPException(
-                status_code=503,
-                detail=f"Provider {provider.value} is not configured or available"
+                status_code=503, detail=f"Provider {provider.value} is not configured or available"
             )
-        
+
         if refresh:
             model_cache.invalidate(provider)
-        
+
         models = await model_cache.get_models(provider, prov)
         return {
             "provider": provider.value,
@@ -263,7 +270,7 @@ async def list_models(
 async def refresh_all_models(user: AuthenticatedUser = Depends(require_auth)):
     """Refresh model lists for all providers. Requires authentication."""
     model_cache.invalidate()
-    
+
     results = {}
     for provider_type in ModelProvider:
         try:
@@ -285,25 +292,26 @@ async def refresh_all_models(user: AuthenticatedUser = Depends(require_auth)):
                 "success": False,
                 "error": str(e),
             }
-    
+
     return {"refreshed": True, "providers": results}
 
 
 # ==================== Context Endpoints ====================
 
+
 @router.get("/context", response_model=NetworkContextSummary)
 async def get_network_context(
     network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
-    user: AuthenticatedUser = Depends(require_auth)
+    user: AuthenticatedUser = Depends(require_auth),
 ):
     """Get the current network context that would be provided to the assistant. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID for multi-tenant mode. If not provided,
                    uses legacy single-network mode.
     """
     _, summary = await metrics_context_service.build_context_string(network_id=network_id)
-    
+
     return NetworkContextSummary(
         total_nodes=summary.get("total_nodes", 0),
         healthy_nodes=summary.get("healthy_nodes", 0),
@@ -317,21 +325,23 @@ async def get_network_context(
 @router.post("/context/refresh")
 async def refresh_context(
     network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
-    user: AuthenticatedUser = Depends(require_auth)
+    user: AuthenticatedUser = Depends(require_auth),
 ):
     """Clear cached context and fetch fresh data from the metrics service. Requires authentication.
-    
+
     This triggers the metrics service to regenerate its snapshot with
     the latest data (including recent speed test results, health checks, etc.)
     before building the context string.
-    
+
     Args:
         network_id: Optional network ID for multi-tenant mode.
     """
     metrics_context_service.clear_cache()
     # Use force_refresh=True to tell the metrics service to regenerate its snapshot
-    _, summary = await metrics_context_service.build_context_string(force_refresh=True, network_id=network_id)
-    
+    _, summary = await metrics_context_service.build_context_string(
+        force_refresh=True, network_id=network_id
+    )
+
     return {
         "success": True,
         "message": "Context refreshed",
@@ -343,27 +353,29 @@ async def refresh_context(
 async def get_context_status(user: AuthenticatedUser = Depends(require_auth)):
     """Get the current status of the context service. Requires authentication."""
     status = metrics_context_service.get_status()
-    
+
     # Add additional info
     status["loading"] = not status["snapshot_available"]
     status["ready"] = status["snapshot_available"]
-    
+
     return status
 
 
 @router.get("/context/debug")
 async def get_context_debug(
     network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
-    user: AuthenticatedUser = Depends(require_auth)
+    user: AuthenticatedUser = Depends(require_auth),
 ):
     """Debug endpoint to see the full context string being sent to AI. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID for multi-tenant mode.
     """
     metrics_context_service.clear_cache()  # Force fresh data
-    context_string, summary = await metrics_context_service.build_context_string(network_id=network_id)
-    
+    context_string, summary = await metrics_context_service.build_context_string(
+        network_id=network_id
+    )
+
     return {
         "context_string": context_string,
         "summary": summary,
@@ -374,16 +386,16 @@ async def get_context_debug(
 @router.get("/context/raw")
 async def get_context_raw(
     network_id: str | None = Query(None, description="Network ID for multi-tenant mode"),
-    user: AuthenticatedUser = Depends(require_auth)
+    user: AuthenticatedUser = Depends(require_auth),
 ):
     """Debug endpoint to see raw snapshot data from metrics service. Requires authentication.
-    
+
     Args:
         network_id: Optional network ID for multi-tenant mode.
     """
     # First, let's get the raw snapshot from metrics service
     snapshot = await metrics_context_service.fetch_network_snapshot(network_id=network_id)
-    
+
     # Also try to get the layout directly to compare
     layout_data = None
     try:
@@ -391,31 +403,38 @@ async def get_context_raw(
             params: dict[str, Any] = {}
             if network_id is not None:
                 params["network_id"] = network_id
-            response = await client.get(f"{settings.metrics_service_url}/api/metrics/debug/layout", params=params)
+            response = await client.get(
+                f"{settings.metrics_service_url}/api/metrics/debug/layout", params=params
+            )
             if response.status_code == 200:
                 layout_data = response.json()
     except Exception as e:
         layout_data = {"error": str(e)}
-    
+
     if not snapshot:
-        return {"error": "Failed to fetch snapshot from metrics service", "layout_debug": layout_data}
-    
+        return {
+            "error": "Failed to fetch snapshot from metrics service",
+            "layout_debug": layout_data,
+        }
+
     # Extract key data for debugging
     nodes = snapshot.get("nodes", {})
     gateways = snapshot.get("gateways", [])
-    
+
     # Get detailed node info
     node_details = []
     for node_id, node in nodes.items():
-        node_details.append({
-            "id": node_id,
-            "name": node.get("name"),
-            "ip": node.get("ip"),
-            "role": node.get("role"),
-            "notes": node.get("notes"),
-            "has_isp_info": node.get("isp_info") is not None,
-        })
-    
+        node_details.append(
+            {
+                "id": node_id,
+                "name": node.get("name"),
+                "ip": node.get("ip"),
+                "role": node.get("role"),
+                "notes": node.get("notes"),
+                "has_isp_info": node.get("isp_info") is not None,
+            }
+        )
+
     # Get gateway details
     gateway_details = []
     for gw in gateways:
@@ -436,23 +455,26 @@ async def get_context_raw(
                 "client_isp": speed_test.get("client_isp"),
                 "server_sponsor": speed_test.get("server_sponsor"),
                 "server_location": speed_test.get("server_location"),
-                "timestamp": str(speed_test.get("timestamp")) if speed_test.get("timestamp") else None,
+                "timestamp": (
+                    str(speed_test.get("timestamp")) if speed_test.get("timestamp") else None
+                ),
             }
         for tip in gw.get("test_ips", []):
-            gw_detail["test_ips"].append({
-                "ip": tip.get("ip"),
-                "label": tip.get("label"),
-                "status": tip.get("status"),
-                "status_type": str(type(tip.get("status"))),
-            })
+            gw_detail["test_ips"].append(
+                {
+                    "ip": tip.get("ip"),
+                    "label": tip.get("label"),
+                    "status": tip.get("status"),
+                    "status_type": str(type(tip.get("status"))),
+                }
+            )
         gateway_details.append(gw_detail)
-    
+
     # Filter to count only actual devices (exclude groups, matching frontend)
     device_count = sum(
-        1 for node_id, node in nodes.items()
-        if node.get("role", "").lower() != "group"
+        1 for node_id, node in nodes.items() if node.get("role", "").lower() != "group"
     )
-    
+
     return {
         "snapshot_available": True,
         "total_nodes": device_count,
@@ -479,43 +501,44 @@ async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_c
         temperature=request.temperature,
         max_tokens=request.max_tokens,
     )
-    
+
     try:
         provider = get_provider(request.provider, provider_config)
-        
+
         if not await provider.is_available():
             raise HTTPException(
-                status_code=503,
-                detail=f"Provider {request.provider.value} is not configured"
+                status_code=503, detail=f"Provider {request.provider.value} is not configured"
             )
-        
+
         # Build system prompt with network context
         if request.include_network_context:
-            context, _ = await metrics_context_service.build_context_string(network_id=request.network_id)
+            context, _ = await metrics_context_service.build_context_string(
+                network_id=request.network_id
+            )
             system_prompt = SYSTEM_PROMPT_TEMPLATE.format(network_context=context)
         else:
             system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
                 network_context="(Network context not included in this request)"
             )
-        
+
         # Convert conversation history
         messages = [
             ProviderChatMessage(role=msg.role.value, content=msg.content)
             for msg in request.conversation_history
         ]
-        
+
         # Add current message
         messages.append(ProviderChatMessage(role="user", content=request.message))
-        
+
         # Get response
         response_text = await provider.chat(messages, system_prompt)
-        
+
         return ChatResponse(
             message=response_text,
             provider=request.provider,
             model=request.model or provider.default_model,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -535,54 +558,55 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
         temperature=request.temperature,
         max_tokens=request.max_tokens,
     )
-    
+
     try:
         provider = get_provider(request.provider, provider_config)
-        
+
         if not await provider.is_available():
             raise HTTPException(
-                status_code=503,
-                detail=f"Provider {request.provider.value} is not configured"
+                status_code=503, detail=f"Provider {request.provider.value} is not configured"
             )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     async def generate():
         try:
             # Build system prompt with network context
             if request.include_network_context:
-                context, summary = await metrics_context_service.build_context_string(network_id=request.network_id)
+                context, summary = await metrics_context_service.build_context_string(
+                    network_id=request.network_id
+                )
                 system_prompt = SYSTEM_PROMPT_TEMPLATE.format(network_context=context)
-                
+
                 # Send context summary first
                 yield f"data: {json.dumps({'type': 'context', 'summary': summary})}\n\n"
             else:
                 system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
                     network_context="(Network context not included in this request)"
                 )
-            
+
             # Convert conversation history
             messages = [
                 ProviderChatMessage(role=msg.role.value, content=msg.content)
                 for msg in request.conversation_history
             ]
-            
+
             # Add current message
             messages.append(ProviderChatMessage(role="user", content=request.message))
-            
+
             # Stream response
             async for chunk in provider.stream_chat(messages, system_prompt):
                 yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
-            
+
             # Send done signal
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            
+
         except Exception as e:
             logger.error(f"Stream error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-    
+
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
@@ -596,18 +620,19 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
 
 # ==================== Rate Limit Status ====================
 
+
 @router.get("/chat/limit")
 async def get_chat_limit_status(user: AuthenticatedUser = Depends(require_auth)):
     """
     Get the current chat rate limit status for the authenticated user.
     Returns usage count, limit, remaining, time until reset, and exempt status.
-    
+
     Users with roles in ASSISTANT_RATE_LIMIT_EXEMPT_ROLES have unlimited access.
     """
     status = await get_rate_limit_status(
         user.user_id, "chat", settings.assistant_chat_limit_per_day, user_role=user.role.value
     )
-    
+
     # If user is exempt, they have unlimited access
     if status.get("is_exempt"):
         return {
@@ -618,7 +643,7 @@ async def get_chat_limit_status(user: AuthenticatedUser = Depends(require_auth))
             "is_limited": False,
             "is_exempt": True,
         }
-    
+
     return {
         "used": status["used"],
         "limit": status["limit"],

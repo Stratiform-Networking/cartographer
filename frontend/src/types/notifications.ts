@@ -35,7 +35,9 @@ export type NetworkNotificationType =
 export type GlobalNotificationType = 'cartographer_up' | 'cartographer_down';
 
 // Priority overrides for specific notification types (user customization)
-export type NotificationTypePriorityOverrides = Partial<Record<NotificationType, NotificationPriority>>;
+export type NotificationTypePriorityOverrides = Partial<
+  Record<NotificationType, NotificationPriority>
+>;
 
 // ==================== Config Types ====================
 
@@ -252,4 +254,3 @@ export interface CartographerStatusSubscription {
   cartographer_up_enabled?: boolean;
   cartographer_down_enabled?: boolean;
 }
-

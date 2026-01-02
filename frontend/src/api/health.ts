@@ -1,6 +1,6 @@
 /**
  * Health monitoring API module
- * 
+ *
  * All health check and monitoring API calls.
  */
 
@@ -51,7 +51,9 @@ export async function getMonitoringConfig(): Promise<MonitoringConfig> {
   return response.data;
 }
 
-export async function updateMonitoringConfig(config: Partial<MonitoringConfig>): Promise<MonitoringConfig> {
+export async function updateMonitoringConfig(
+  config: Partial<MonitoringConfig>
+): Promise<MonitoringConfig> {
   const response = await client.post<MonitoringConfig>('/api/health/monitoring/config', config);
   return response.data;
 }
@@ -82,12 +84,16 @@ export async function checkDeviceHealth(ip: string): Promise<DeviceMetrics> {
 // ==================== Gateway Test IPs API ====================
 
 export async function getGatewayTestIPsConfig(gatewayIp: string): Promise<GatewayTestIPConfig> {
-  const response = await client.get<GatewayTestIPConfig>(`/api/health/gateway/${gatewayIp}/test-ips`);
+  const response = await client.get<GatewayTestIPConfig>(
+    `/api/health/gateway/${gatewayIp}/test-ips`
+  );
   return response.data;
 }
 
 export async function getGatewayTestIPsCached(gatewayIp: string): Promise<GatewayTestIPsResponse> {
-  const response = await client.get<GatewayTestIPsResponse>(`/api/health/gateway/${gatewayIp}/test-ips/cached`);
+  const response = await client.get<GatewayTestIPsResponse>(
+    `/api/health/gateway/${gatewayIp}/test-ips/cached`
+  );
   return response.data;
 }
 
@@ -102,7 +108,9 @@ export async function saveGatewayTestIPs(
 }
 
 export async function checkGatewayTestIPs(gatewayIp: string): Promise<GatewayTestIPsResponse> {
-  const response = await client.get<GatewayTestIPsResponse>(`/api/health/gateway/${gatewayIp}/test-ips/check`);
+  const response = await client.get<GatewayTestIPsResponse>(
+    `/api/health/gateway/${gatewayIp}/test-ips/check`
+  );
   return response.data;
 }
 
@@ -113,13 +121,17 @@ export async function deleteGatewayTestIPs(gatewayIp: string): Promise<void> {
 // ==================== Speed Test API ====================
 
 export async function getSpeedTestResult(gatewayIp?: string): Promise<SpeedTestResult> {
-  const endpoint = gatewayIp ? `/api/health/gateway/${gatewayIp}/speedtest` : '/api/health/speedtest';
+  const endpoint = gatewayIp
+    ? `/api/health/gateway/${gatewayIp}/speedtest`
+    : '/api/health/speedtest';
   const response = await client.get<SpeedTestResult>(endpoint);
   return response.data;
 }
 
 export async function runSpeedTest(gatewayIp?: string): Promise<SpeedTestResult> {
-  const endpoint = gatewayIp ? `/api/health/gateway/${gatewayIp}/speedtest` : '/api/health/speedtest';
+  const endpoint = gatewayIp
+    ? `/api/health/gateway/${gatewayIp}/speedtest`
+    : '/api/health/speedtest';
   const response = await client.post<SpeedTestResult>(
     endpoint,
     {},
@@ -127,4 +139,3 @@ export async function runSpeedTest(gatewayIp?: string): Promise<SpeedTestResult>
   );
   return response.data;
 }
-

@@ -1,14 +1,15 @@
 """
 Shared test fixtures for backend unit tests.
 """
-import os
-import asyncio
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Generator, AsyncGenerator
-import tempfile
-import json
 
+import asyncio
+import json
+import os
+import tempfile
+from typing import AsyncGenerator, Generator
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 from httpx import AsyncClient, Response
 
@@ -23,7 +24,7 @@ os.environ["NOTIFICATION_SERVICE_URL"] = "http://test-notification:8005"
 @pytest.fixture
 def mock_httpx_client():
     """Mock httpx.AsyncClient for testing HTTP calls"""
-    with patch('httpx.AsyncClient') as mock:
+    with patch("httpx.AsyncClient") as mock:
         client_instance = AsyncMock()
         mock.return_value.__aenter__.return_value = client_instance
         mock.return_value.__aexit__.return_value = None
@@ -33,31 +34,19 @@ def mock_httpx_client():
 @pytest.fixture
 def sample_user_data():
     """Sample authenticated user data"""
-    return {
-        "user_id": "user-123",
-        "username": "testuser",
-        "role": "owner"
-    }
+    return {"user_id": "user-123", "username": "testuser", "role": "owner"}
 
 
 @pytest.fixture
 def sample_readonly_user():
     """Sample member (read-only) user data"""
-    return {
-        "user_id": "user-456",
-        "username": "member_user",
-        "role": "member"
-    }
+    return {"user_id": "user-456", "username": "member_user", "role": "member"}
 
 
 @pytest.fixture
 def sample_readwrite_user():
     """Sample admin (read-write) user data"""
-    return {
-        "user_id": "user-789",
-        "username": "admin_user",
-        "role": "admin"
-    }
+    return {"user_id": "user-789", "username": "admin_user", "role": "admin"}
 
 
 @pytest.fixture
@@ -84,7 +73,7 @@ def sample_network_layout():
                     "hostname": "desktop-pc",
                     "type": "device",
                     "parentId": "192.168.1.1",
-                    "children": []
+                    "children": [],
                 },
                 {
                     "id": "192.168.1.20",
@@ -92,9 +81,9 @@ def sample_network_layout():
                     "hostname": "laptop",
                     "type": "device",
                     "parentId": "192.168.1.1",
-                    "children": []
-                }
-            ]
+                    "children": [],
+                },
+            ],
         }
     }
 
@@ -108,26 +97,22 @@ def sample_embed_config():
         "showOwner": False,
         "ownerDisplayName": None,
         "createdAt": "2024-01-01T00:00:00Z",
-        "updatedAt": "2024-01-01T00:00:00Z"
+        "updatedAt": "2024-01-01T00:00:00Z",
     }
 
 
 @pytest.fixture
 def mock_auth_response():
     """Mock successful auth service response"""
-    return {
-        "valid": True,
-        "user_id": "user-123",
-        "username": "testuser",
-        "role": "owner"
-    }
+    return {"valid": True, "user_id": "user-123", "username": "testuser", "role": "owner"}
 
 
-def create_mock_response(status_code: int = 200, json_data: dict = None, text: str = "") -> MagicMock:
+def create_mock_response(
+    status_code: int = 200, json_data: dict = None, text: str = ""
+) -> MagicMock:
     """Helper to create mock httpx Response objects"""
     response = MagicMock(spec=Response)
     response.status_code = status_code
     response.text = text or json.dumps(json_data or {})
     response.json.return_value = json_data or {}
     return response
-

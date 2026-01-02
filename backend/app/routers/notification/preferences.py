@@ -7,18 +7,17 @@ Handles all notification preference endpoints:
 - User-specific preferences
 - Legacy preferences (deprecated)
 """
-from fastapi import APIRouter, Request, Depends, Query
 
-from ...dependencies import (
-    AuthenticatedUser,
-    require_auth,
-)
+from fastapi import APIRouter, Depends, Request
+
+from ...dependencies import AuthenticatedUser, require_auth
 from ...services.proxy_service import proxy_notification_request
 
 router = APIRouter(tags=["notification-preferences"])
 
 
 # ==================== Per-Network Preferences ====================
+
 
 @router.get("/networks/{network_id}/preferences")
 async def get_network_preferences(
@@ -64,6 +63,7 @@ async def delete_network_preferences(
 
 # ==================== Global Preferences (Cartographer Up/Down) ====================
 
+
 @router.get("/global/preferences")
 async def get_global_preferences(
     user: AuthenticatedUser = Depends(require_auth),
@@ -92,6 +92,7 @@ async def update_global_preferences(
 
 
 # ==================== User-Specific Network Preferences ====================
+
 
 @router.get("/users/me/networks/{network_id}/preferences")
 async def get_user_network_preferences(
@@ -137,6 +138,7 @@ async def delete_user_network_preferences(
 
 # ==================== User-Specific Global Preferences ====================
 
+
 @router.get("/users/me/global/preferences")
 async def get_user_global_preferences(
     user: AuthenticatedUser = Depends(require_auth),
@@ -165,6 +167,7 @@ async def update_user_global_preferences(
 
 
 # ==================== Legacy Preferences (deprecated) ====================
+
 
 @router.get("/preferences")
 async def get_preferences(
@@ -203,4 +206,3 @@ async def delete_preferences(
         "/preferences",
         headers={"X-User-Id": user.user_id},
     )
-

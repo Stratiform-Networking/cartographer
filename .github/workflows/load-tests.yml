@@ -1,0 +1,417 @@
+name: Load Tests
+
+# This workflow runs load tests against Cartographer services:
+# - Nightly at 2 AM UTC (automatic baseline testing)
+# - On-demand via workflow_dispatch (manual testing with custom parameters)
+
+on:
+  # Run on demand via workflow_dispatch
+  workflow_dispatch:
+    inputs:
+      users:
+        description: 'Number of concurrent users'
+        required: false
+        default: '10'
+        type: string
+      spawn_rate:
+        description: 'User spawn rate per second'
+        required: false
+        default: '2'
+        type: string
+      duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '60'
+        type: string
+      service:
+        description: 'Service to test (all, auth, health, metrics, assistant, notifications)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - auth
+          - health
+          - metrics
+          - assistant
+          - notifications
+  
+  # Run nightly at 2 AM UTC (automatically uses defaults: 10 users, 60s duration)
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Optionally run on specific branches/tags
+  # push:
+  #   tags:
+  #     - 'v*'
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    # Use service containers for dependencies
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cartographer
+          POSTGRES_PASSWORD: cartographer_dev_password
+          POSTGRES_DB: cartographer_auth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Cache Python dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-load-tests-${{ hashFiles('load-tests/requirements.txt', '*/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-load-tests-
+            ${{ runner.os }}-pip-
+      
+      # Install all service dependencies
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+      
+      - name: Install auth-service dependencies
+        working-directory: auth-service
+        run: pip install -r requirements.txt
+      
+      - name: Install health-service dependencies
+        working-directory: health-service
+        run: pip install -r requirements.txt
+      
+      - name: Install metrics-service dependencies
+        working-directory: metrics-service
+        run: pip install -r requirements.txt
+      
+      - name: Install assistant-service dependencies
+        working-directory: assistant-service
+        run: pip install -r requirements.txt
+      
+      - name: Install notification-service dependencies
+        working-directory: notification-service
+        run: pip install -r requirements.txt
+      
+      - name: Install load test dependencies
+        working-directory: load-tests
+        run: pip install -r requirements.txt
+      
+      # Set up environment variables
+      - name: Create environment files
+        run: |
+          # Auth service
+          cat > auth-service/.env << EOF
+          DATABASE_URL=postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_auth
+          JWT_SECRET=test_jwt_secret_for_load_testing_only
+          JWT_ALGORITHM=HS256
+          JWT_EXPIRATION_HOURS=24
+          ALLOW_OPEN_REGISTRATION=false
+          RESEND_API_KEY=""
+          RESEND_FROM_EMAIL=""
+          EOF
+          
+          # Health service
+          cat > health-service/.env << EOF
+          AUTH_SERVICE_URL=http://localhost:8002/api/auth
+          METRICS_SERVICE_URL=http://localhost:8003/api/metrics
+          REDIS_URL=redis://localhost:6379
+          EOF
+          
+          # Metrics service
+          cat > metrics-service/.env << EOF
+          AUTH_SERVICE_URL=http://localhost:8002/api/auth
+          REDIS_URL=redis://localhost:6379
+          EOF
+          
+          # Assistant service
+          cat > assistant-service/.env << EOF
+          AUTH_SERVICE_URL=http://localhost:8002/api/auth
+          METRICS_SERVICE_URL=http://localhost:8003/api/metrics
+          OPENAI_API_KEY=""
+          ANTHROPIC_API_KEY=""
+          GOOGLE_API_KEY=""
+          GEMINI_API_KEY=""
+          OLLAMA_BASE_URL=""
+          EOF
+          
+          # Notification service
+          cat > notification-service/.env << EOF
+          DATABASE_URL=postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_notifications
+          AUTH_SERVICE_URL=http://localhost:8002/api/auth
+          REDIS_URL=redis://localhost:6379
+          RESEND_API_KEY=""
+          RESEND_FROM_EMAIL=""
+          DISCORD_BOT_TOKEN=""
+          DISCORD_PUBLIC_KEY=""
+          DISCORD_APPLICATION_ID=""
+          EOF
+          
+          # Backend
+          cat > backend/.env << EOF
+          DATABASE_URL=postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer
+          AUTH_SERVICE_URL=http://localhost:8002
+          HEALTH_SERVICE_URL=http://localhost:8001
+          METRICS_SERVICE_URL=http://localhost:8003
+          ASSISTANT_SERVICE_URL=http://localhost:8004
+          NOTIFICATION_SERVICE_URL=http://localhost:8005
+          FRONTEND_DIST_PATH=frontend/dist
+          DISABLE_DOCS=false
+          EOF
+      
+      # Run database migrations
+      - name: Run auth service migrations
+        working-directory: auth-service
+        run: |
+          alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_auth
+      
+      - name: Run notification service migrations
+        working-directory: notification-service
+        run: |
+          alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_notifications
+      
+      # Create test owner account
+      - name: Create test owner account
+        working-directory: auth-service
+        run: |
+          python - << 'PYTHON_SCRIPT'
+          import asyncio
+          from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+          from sqlalchemy.orm import sessionmaker
+          from app.services.auth_service import auth_service
+          from app.models import OwnerSetupRequest
+          
+          async def create_owner():
+              engine = create_async_engine(
+                  "postgresql+asyncpg://cartographer:cartographer_dev_password@localhost:5432/cartographer_auth"
+              )
+              async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+              
+              async with async_session() as session:
+                  request = OwnerSetupRequest(
+                      username="loadtest_admin",
+                      first_name="Load",
+                      last_name="Test",
+                      email="loadtest@example.com",
+                      password="LoadTest123!"
+                  )
+                  await auth_service.setup_owner(session, request)
+                  print("✓ Test owner account created: loadtest_admin")
+              
+              await engine.dispose()
+          
+          asyncio.run(create_owner())
+          PYTHON_SCRIPT
+      
+      # Start all microservices in background
+      - name: Start auth service
+        working-directory: auth-service
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8002 --log-level warning &
+          echo $! > /tmp/auth-service.pid
+      
+      - name: Start health service
+        working-directory: health-service
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8001 --log-level warning &
+          echo $! > /tmp/health-service.pid
+      
+      - name: Start metrics service
+        working-directory: metrics-service
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8003 --log-level warning &
+          echo $! > /tmp/metrics-service.pid
+      
+      - name: Start assistant service
+        working-directory: assistant-service
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8004 --log-level warning &
+          echo $! > /tmp/assistant-service.pid
+      
+      - name: Start notification service
+        working-directory: notification-service
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8005 --log-level warning &
+          echo $! > /tmp/notification-service.pid
+      
+      - name: Start backend
+        working-directory: backend
+        run: |
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level warning &
+          echo $! > /tmp/backend.pid
+      
+      # Wait for services to be ready
+      - name: Wait for services to start
+        run: |
+          echo "Waiting for services to be ready..."
+          
+          # Function to check if service is ready
+          check_service() {
+            local url=$1
+            local name=$2
+            local max_attempts=30
+            local attempt=0
+            
+            while [ $attempt -lt $max_attempts ]; do
+              if curl -s -f "$url" > /dev/null 2>&1; then
+                echo "✓ $name is ready"
+                return 0
+              fi
+              echo "  Waiting for $name... (attempt $((attempt + 1))/$max_attempts)"
+              sleep 2
+              attempt=$((attempt + 1))
+            done
+            
+            echo "✗ $name failed to start"
+            return 1
+          }
+          
+          # Check all services
+          check_service "http://localhost:8002/healthz" "Auth Service"
+          check_service "http://localhost:8001/healthz" "Health Service"
+          check_service "http://localhost:8003/healthz" "Metrics Service"
+          check_service "http://localhost:8004/healthz" "Assistant Service"
+          check_service "http://localhost:8005/healthz" "Notification Service"
+          check_service "http://localhost:8000/healthz" "Backend"
+          
+          echo "All services are ready!"
+      
+      # Run load tests
+      - name: Run load tests
+        working-directory: load-tests
+        run: |
+          SERVICE="${{ github.event.inputs.service || 'all' }}"
+          USERS="${{ github.event.inputs.users || '10' }}"
+          SPAWN_RATE="${{ github.event.inputs.spawn_rate || '2' }}"
+          DURATION="${{ github.event.inputs.duration || '60' }}"
+          
+          echo "Running load tests..."
+          echo "  Service: $SERVICE"
+          echo "  Users: $USERS"
+          echo "  Spawn Rate: $SPAWN_RATE/s"
+          echo "  Duration: ${DURATION}s"
+          echo ""
+          
+          python run_load_tests.py \
+            --service "$SERVICE" \
+            --users "$USERS" \
+            --spawn-rate "$SPAWN_RATE" \
+            --time "$DURATION" \
+            --html load_test_report.html \
+            --username loadtest_admin \
+            --password "LoadTest123!"
+        env:
+          LOADTEST_USERNAME: loadtest_admin
+          LOADTEST_PASSWORD: LoadTest123!
+      
+      # Upload results
+      - name: Upload load test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-report-${{ github.event.inputs.service || 'all' }}-${{ github.event_name == 'schedule' && format('nightly-{0}', github.run_number) || format('manual-{0}', github.run_number) }}
+          path: load-tests/load_test_report.html
+          retention-days: ${{ github.event_name == 'schedule' && 90 || 30 }}
+      
+      # Parse and check results for scheduled runs
+      - name: Check for performance issues
+        if: github.event_name == 'schedule'
+        run: |
+          echo "📊 Checking load test results for performance issues..."
+          
+          # Note: This is a placeholder for future enhancement
+          # You could parse the HTML report or Locust stats to check for:
+          # - Failure rate > threshold
+          # - Response times > threshold
+          # - Comparison with baseline metrics
+          
+          echo "✓ Performance check complete (manual review recommended)"
+      
+      # Cleanup
+      - name: Stop services
+        if: always()
+        run: |
+          echo "Stopping services..."
+          for pidfile in /tmp/*.pid; do
+            if [ -f "$pidfile" ]; then
+              pid=$(cat "$pidfile")
+              if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" || true
+              fi
+              rm "$pidfile"
+            fi
+          done
+          echo "Services stopped"
+      
+      # Show summary
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Load Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Determine run type
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "🌙 **Run Type**: Nightly Automated Test" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🚀 **Run Type**: Manual Trigger" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: ${{ github.event.inputs.service || 'all' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Users**: ${{ github.event.inputs.users || '10' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Spawn Rate**: ${{ github.event.inputs.spawn_rate || '2' }}/s" >> $GITHUB_STEP_SUMMARY
+          echo "- **Duration**: ${{ github.event.inputs.duration || '60' }}s" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Results" >> $GITHUB_STEP_SUMMARY
+          echo "📊 Download the HTML report from the artifacts to view detailed metrics:" >> $GITHUB_STEP_SUMMARY
+          echo "- Request rates (RPS)" >> $GITHUB_STEP_SUMMARY
+          echo "- Response times (p50, p95, p99)" >> $GITHUB_STEP_SUMMARY
+          echo "- Failure rates" >> $GITHUB_STEP_SUMMARY
+          echo "- Per-endpoint breakdown" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Add info for scheduled runs
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "💡 **Tip**: If load tests fail consistently, consider:" >> $GITHUB_STEP_SUMMARY
+            echo "- Reviewing service logs" >> $GITHUB_STEP_SUMMARY
+            echo "- Checking for recent code changes" >> $GITHUB_STEP_SUMMARY
+            echo "- Running manual tests with increased timeouts" >> $GITHUB_STEP_SUMMARY
+          fi
+

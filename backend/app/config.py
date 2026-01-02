@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     usage_batch_size: int = 10
     usage_batch_interval_seconds: float = 5.0
 
+    # Redis for caching
+    redis_url: str = "redis://localhost:6379"
+    redis_db: int = 2  # DB 2 for backend cache (0=metrics, 1=assistant)
+    redis_cache_enabled: bool = True
+    
+    # Cache TTLs (seconds)
+    cache_ttl_network_list: int = 60  # 1 minute
+    cache_ttl_provider_list: int = 300  # 5 minutes
+    cache_ttl_config: int = 60  # 1 minute
+
     @property
     def resolved_frontend_dist(self) -> Path:
         """Resolve frontend dist path, auto-detecting if not set."""

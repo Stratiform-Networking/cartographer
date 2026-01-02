@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..database import get_db
 from ..dependencies.auth import AuthenticatedUser, require_auth
 from ..models.network import Network, NetworkNotificationSettings, NetworkPermission, PermissionRole
@@ -20,9 +21,11 @@ from ..schemas import (
     PermissionCreate,
     PermissionResponse,
 )
+from ..services.cache_service import CacheService, get_cache
 from ..services.network_service import generate_agent_key, get_network_with_access, is_service_token
 
 router = APIRouter(prefix="/networks", tags=["Networks"])
+settings = get_settings()
 
 
 # ============================================================================
@@ -35,6 +38,7 @@ async def create_network(
     network_data: NetworkCreate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
+    cache: CacheService = Depends(get_cache),
 ):
     """Create a new network for the current user."""
     # Generate unique agent key for future cloud sync
@@ -49,6 +53,10 @@ async def create_network(
     db.add(network)
     await db.commit()
     await db.refresh(network)
+
+    # Invalidate network list cache for this user
+    cache_key = cache.make_key("networks", "user", current_user.user_id)
+    await cache.delete(cache_key)
 
     # Build response with ownership info
     response = NetworkResponse.model_validate(network)
@@ -85,16 +93,19 @@ def _build_network_response(
 async def list_networks(
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
+    cache: CacheService = Depends(get_cache),
 ):
     """List all networks accessible to the current user.
 
     For service tokens (internal service-to-service calls), returns ALL active networks
     in the system to support metrics generation across all networks.
+    
+    Implements caching with 60s TTL for regular users.
     """
     is_service = is_service_token(current_user.user_id)
 
+    # Service tokens: no caching (always get fresh data for metrics)
     if is_service:
-        # Service tokens get access to ALL networks for metrics generation
         result = await db.execute(
             select(Network).where(Network.is_active.is_(True)).order_by(Network.created_at.desc())
         )
@@ -104,31 +115,49 @@ async def list_networks(
             for network in all_networks
         ]
 
-    # Regular user: Get networks owned by user
-    owned_result = await db.execute(
-        select(Network)
-        .where(Network.user_id == current_user.user_id, Network.is_active.is_(True))
-        .order_by(Network.created_at.desc())
-    )
-    owned_networks = owned_result.scalars().all()
+    # Regular users: cache network list
+    cache_key = cache.make_key("networks", "user", current_user.user_id)
 
-    # Get networks shared with user
-    shared_result = await db.execute(
-        select(Network, NetworkPermission.role)
-        .join(NetworkPermission, Network.id == NetworkPermission.network_id)
-        .where(
-            NetworkPermission.user_id == current_user.user_id,
-            Network.is_active.is_(True),
+    async def fetch_user_networks():
+        # Get networks owned by user
+        owned_result = await db.execute(
+            select(Network)
+            .where(Network.user_id == current_user.user_id, Network.is_active.is_(True))
+            .order_by(Network.created_at.desc())
         )
-        .order_by(Network.created_at.desc())
-    )
-    shared_networks = shared_result.all()
+        owned_networks = owned_result.scalars().all()
 
-    # Build consolidated response list using list comprehensions
-    return [_build_network_response(network, is_owner=True) for network in owned_networks] + [
-        _build_network_response(network, is_owner=False, permission=role)
-        for network, role in shared_networks
-    ]
+        # Get networks shared with user
+        shared_result = await db.execute(
+            select(Network, NetworkPermission.role)
+            .join(NetworkPermission, Network.id == NetworkPermission.network_id)
+            .where(
+                NetworkPermission.user_id == current_user.user_id,
+                Network.is_active.is_(True),
+            )
+            .order_by(Network.created_at.desc())
+        )
+        shared_networks = shared_result.all()
+
+        # Build consolidated response list
+        networks = [_build_network_response(network, is_owner=True) for network in owned_networks]
+        networks.extend([
+            _build_network_response(network, is_owner=False, permission=role)
+            for network, role in shared_networks
+        ])
+        
+        # Convert to dict for JSON serialization
+        return [net.model_dump() for net in networks]
+
+    # Get from cache or compute
+    cached_networks = await cache.get_or_compute(
+        cache_key,
+        fetch_user_networks,
+        ttl=settings.cache_ttl_network_list
+    )
+    
+    # Convert back to Pydantic models
+    return [NetworkResponse(**net) for net in cached_networks]
 
 
 @router.get("/{network_id}", response_model=NetworkResponse)
@@ -159,6 +188,7 @@ async def update_network(
     update_data: NetworkUpdate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
+    cache: CacheService = Depends(get_cache),
 ):
     """Update a network's metadata."""
     network, is_owner, permission = await get_network_with_access(
@@ -178,6 +208,10 @@ async def update_network(
     await db.commit()
     await db.refresh(network)
 
+    # Invalidate network list cache for owner
+    cache_key = cache.make_key("networks", "user", network.user_id)
+    await cache.delete(cache_key)
+
     response = NetworkResponse.model_validate(network)
     response.owner_id = network.user_id
     response.is_owner = is_owner
@@ -191,8 +225,39 @@ async def delete_network(
     network_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
+    cache: CacheService = Depends(get_cache),
 ):
     """Delete a network. Only the owner can delete."""
+    network, is_owner, _ = await get_network_with_access(
+        network_id,
+        current_user.user_id,
+        db,
+        is_service=is_service_token(current_user.user_id),
+    )
+
+    # Only owner can delete
+    if not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the network owner can delete the network",
+        )
+
+    # Soft delete: mark as inactive
+    network.is_active = False
+    await db.commit()
+
+    # Invalidate network list cache for owner and all members
+    cache_key_owner = cache.make_key("networks", "user", network.user_id)
+    await cache.delete(cache_key_owner)
+    
+    # Also invalidate cache for users with permissions
+    perm_result = await db.execute(
+        select(NetworkPermission.user_id).where(NetworkPermission.network_id == network_id)
+    )
+    member_ids = perm_result.scalars().all()
+    for member_id in member_ids:
+        cache_key_member = cache.make_key("networks", "user", member_id)
+        await cache.delete(cache_key_member)
     network, is_owner, _ = await get_network_with_access(
         network_id,
         current_user.user_id,
@@ -311,6 +376,7 @@ async def create_permission(
     perm_data: PermissionCreate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
+    cache: CacheService = Depends(get_cache),
 ):
     """Share a network with another user. Only the owner can share."""
     network, is_owner, _ = await get_network_with_access(
@@ -357,6 +423,10 @@ async def create_permission(
     await db.commit()
     await db.refresh(new_perm)
 
+    # Invalidate cache for the new member
+    cache_key = cache.make_key("networks", "user", perm_data.user_id)
+    await cache.delete(cache_key)
+
     return PermissionResponse.model_validate(new_perm)
 
 
@@ -366,6 +436,7 @@ async def delete_permission(
     user_id: str,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
+    cache: CacheService = Depends(get_cache),
 ):
     """Remove a user's access to a network. Only the owner can remove access."""
     network, is_owner, _ = await get_network_with_access(
@@ -399,6 +470,10 @@ async def delete_permission(
 
     await db.delete(perm_to_delete)
     await db.commit()
+
+    # Invalidate cache for the removed member
+    cache_key = cache.make_key("networks", "user", user_id)
+    await cache.delete(cache_key)
 
 
 # ============================================================================

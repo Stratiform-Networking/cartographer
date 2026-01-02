@@ -45,6 +45,68 @@ class UserPreferencesService:
         )
         return result.scalar_one_or_none()
 
+    async def get_network_preferences_batch(
+        self,
+        db: AsyncSession,
+        user_ids: list[str],
+        network_id: str,
+    ) -> dict[str, UserNetworkNotificationPrefs]:
+        """
+        Batch fetch network preferences for multiple users.
+        
+        Instead of querying preferences one user at a time, fetch all at once.
+        
+        Args:
+            db: Database session
+            user_ids: List of user IDs to fetch preferences for
+            network_id: Network ID
+            
+        Returns:
+            Dictionary mapping user_id -> preferences (only users with prefs)
+        """
+        if not user_ids:
+            return {}
+        
+        result = await db.execute(
+            select(UserNetworkNotificationPrefs).where(
+                UserNetworkNotificationPrefs.user_id.in_(user_ids),
+                UserNetworkNotificationPrefs.network_id == network_id,
+            )
+        )
+        prefs_list = result.scalars().all()
+        
+        # Return as dict for O(1) lookup
+        return {prefs.user_id: prefs for prefs in prefs_list}
+    
+    async def get_user_emails_batch(
+        self,
+        db: AsyncSession,
+        user_ids: list[str],
+    ) -> dict[str, str]:
+        """
+        Batch fetch user emails for multiple users.
+        
+        Args:
+            db: Database session
+            user_ids: List of user IDs to fetch emails for
+            
+        Returns:
+            Dictionary mapping user_id -> email (only users with emails)
+        """
+        if not user_ids:
+            return {}
+        
+        try:
+            result = await db.execute(
+                text("SELECT id, email FROM users WHERE id = ANY(:user_ids) AND is_active = true"),
+                {"user_ids": user_ids},
+            )
+            rows = result.fetchall()
+            return {row[0]: row[1] for row in rows if row[1]}
+        except Exception as e:
+            logger.warning(f"Could not batch fetch user emails: {e}")
+            return {}
+
     async def get_or_create_network_preferences(
         self,
         db: AsyncSession,

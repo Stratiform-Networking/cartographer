@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     redis_db: int = 1
 
+    # Caching
+    cache_ttl_providers: int = 300  # 5 minutes (providers don't change often)
+
     # Rate limiting
     assistant_chat_limit_per_day: int = 99999
     assistant_rate_limit_exempt_roles: str = ""  # comma-separated, e.g., "admin,owner"

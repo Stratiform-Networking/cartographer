@@ -56,6 +56,10 @@ services:
       - FRONTEND_DIST=/app/frontend/dist
       # Database connection (PostgreSQL)
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
+      # Redis for query caching
+      - REDIS_URL=redis://localhost:6379
+      - REDIS_DB=2
+      - REDIS_CACHE_ENABLED=true
       # Health service is on localhost when using host network
       - HEALTH_SERVICE_URL=http://localhost:8001
       # Auth service is on localhost when using host network
@@ -73,6 +77,8 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       health:
         condition: service_healthy

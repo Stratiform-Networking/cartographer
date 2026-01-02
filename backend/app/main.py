@@ -24,6 +24,7 @@ from .routers.metrics_proxy import router as metrics_proxy_router
 from .routers.networks import router as networks_router
 from .routers.notification_proxy import router as notification_proxy_router
 from .routers.static import create_static_router, mount_assets
+from .services.cache_service import cache_service
 from .services.http_client import http_pool, register_all_services
 from .services.usage_middleware import UsageTrackingMiddleware
 
@@ -63,6 +64,7 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown tasks:
     - Database initialization
     - Data migrations
+    - Cache service initialization
     - HTTP client pool warm-up
     - Graceful shutdown
     """
@@ -73,6 +75,10 @@ async def lifespan(app: FastAPI):
 
     # Run data migrations
     await run_migrations()
+
+    # Initialize cache service
+    logger.info("Initializing cache service...")
+    await cache_service.initialize()
 
     # Register and initialize HTTP client pool
     logger.info("Registering services with HTTP client pool...")
@@ -88,7 +94,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown: Close HTTP client pool gracefully
+    # Shutdown: Close connections gracefully
+    logger.info("Shutting down - closing cache service...")
+    await cache_service.close()
+    
     logger.info("Shutting down - closing HTTP client pool...")
     await http_pool.close_all()
 

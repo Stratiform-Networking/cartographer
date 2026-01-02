@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -40,6 +41,30 @@ from ..services.rate_limit import get_rate_limit_status
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
+
+
+# ==================== Redis Cache ====================
+
+_redis_client: aioredis.Redis | None = None
+
+
+async def get_redis() -> aioredis.Redis | None:
+    """Get Redis client (cached)"""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            _redis_client = await aioredis.from_url(
+                settings.redis_url,
+                db=settings.redis_db,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=2.0,
+            )
+            await _redis_client.ping()
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}. Caching disabled.")
+            _redis_client = None
+    return _redis_client
 
 
 # ==================== Model List Cache ====================
@@ -205,7 +230,25 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
 
 @router.get("/providers")
 async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
-    """List all providers and their availability. Requires authentication."""
+    """
+    List all providers and their availability. Requires authentication.
+    
+    Implements caching with 5-minute TTL to avoid repeated provider checks.
+    """
+    cache_key = "providers:list"
+    redis = await get_redis()
+    
+    # Try cache first
+    if redis:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                logger.debug(f"Cache HIT: {cache_key}")
+                return json.loads(cached)
+        except Exception as e:
+            logger.warning(f"Cache read error: {e}")
+    
+    # Cache miss - compute result
     result = []
 
     for provider_type in ModelProvider:
@@ -229,7 +272,21 @@ async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
                 }
             )
 
-    return {"providers": result}
+    response = {"providers": result}
+    
+    # Cache the result (best effort)
+    if redis:
+        try:
+            await redis.setex(
+                cache_key,
+                settings.cache_ttl_providers,
+                json.dumps(response)
+            )
+            logger.debug(f"Cache SET: {cache_key} (TTL: {settings.cache_ttl_providers}s)")
+        except Exception as e:
+            logger.warning(f"Cache write error: {e}")
+
+    return response
 
 
 @router.get("/models/{provider}")

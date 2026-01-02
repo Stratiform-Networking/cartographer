@@ -261,7 +261,11 @@ class NotificationDispatchService:
         event: NetworkEvent,
         scheduled_at: datetime | None = None,
     ) -> dict[str, list[NotificationRecord]]:
-        """Send notification to all users in a network"""
+        """
+        Send notification to all users in a network.
+
+        Uses batch queries to fetch preferences and emails for all users at once.
+        """
         results = {}
 
         # If scheduled, store for later (would need scheduled broadcast system)
@@ -270,21 +274,126 @@ class NotificationDispatchService:
             logger.warning("Scheduled notifications not yet implemented")
             return results
 
-        # Send to each user
-        for user_id in user_ids:
-            # Get user email from database
-            user_email = await user_preferences_service.get_user_email(db, user_id)
+        # Batch fetch user emails and preferences (avoid N+1 queries)
+        user_emails = await user_preferences_service.get_user_emails_batch(db, user_ids)
+        user_prefs = await user_preferences_service.get_network_preferences_batch(
+            db, user_ids, network_id
+        )
 
-            user_records = await self.send_to_user(
-                db=db,
-                user_id=user_id,
+        # Send to each user (now with pre-fetched data)
+        for user_id in user_ids:
+            # Get user email from batch results
+            user_email = user_emails.get(user_id)
+            
+            # Get or create preferences (create if not in batch)
+            if user_id in user_prefs:
+                prefs = user_prefs[user_id]
+            else:
+                # Create default preferences for users without any
+                prefs = await user_preferences_service.get_or_create_network_preferences(
+                    db, user_id, network_id, user_email=user_email
+                )
+
+            # Check if should notify
+            should_notify, reason = self._should_notify_user(prefs, event)
+            if not should_notify:
+                logger.info(f"Skipping notification for user {user_id}: {reason}")
+                continue
+
+            # Dispatch notifications (email/discord)
+            user_records = await self._dispatch_notifications_for_user(
+                prefs=prefs,
+                user_email=user_email,
                 network_id=network_id,
                 event=event,
-                user_email=user_email,
             )
             results[user_id] = user_records
 
         return results
+
+    async def _dispatch_notifications_for_user(
+        self,
+        prefs: UserNetworkNotificationPrefs,
+        user_email: str | None,
+        network_id: str,
+        event: NetworkEvent,
+    ) -> list[NotificationRecord]:
+        """
+        Internal helper to dispatch notifications to email/discord channels.
+        
+        Extracted from send_to_user to allow batch processing.
+        """
+        records = []
+        notification_id = str(uuid.uuid4())
+        
+        # Send email if enabled
+        if prefs.email_enabled:
+            if not is_email_configured():
+                record = NotificationRecord(
+                    notification_id=notification_id,
+                    event_id=event.event_id,
+                    network_id=network_id,
+                    channel=NotificationChannel.EMAIL,
+                    success=False,
+                    error_message="Email service not configured",
+                    title=event.title,
+                    message=event.message,
+                    priority=event.priority,
+                )
+                records.append(record)
+            elif user_email:
+                record = await send_notification_email(
+                    to_email=user_email,
+                    event=event,
+                    notification_id=notification_id,
+                )
+                record.network_id = network_id
+                records.append(record)
+            else:
+                logger.warning(f"User email not found, skipping email notification")
+
+        # Send Discord if enabled
+        if prefs.discord_enabled and prefs.discord_user_id:
+            if not is_discord_configured():
+                record = NotificationRecord(
+                    notification_id=notification_id,
+                    event_id=event.event_id,
+                    network_id=network_id,
+                    channel=NotificationChannel.DISCORD,
+                    success=False,
+                    error_message="Discord service not configured",
+                    title=event.title,
+                    message=event.message,
+                    priority=event.priority,
+                )
+                records.append(record)
+            else:
+                try:
+                    from ..services.discord_service import send_discord_dm
+
+                    record = await send_discord_dm(
+                        discord_user_id=prefs.discord_user_id,
+                        event=event,
+                        notification_id=notification_id,
+                    )
+                    record.network_id = network_id
+                    records.append(record)
+                except Exception as e:
+                    logger.error(f"Failed to send Discord notification: {e}")
+                    record = NotificationRecord(
+                        notification_id=notification_id,
+                        event_id=event.event_id,
+                        network_id=network_id,
+                        channel=NotificationChannel.DISCORD,
+                        success=False,
+                        error_message=str(e),
+                        title=event.title,
+                        message=event.message,
+                        priority=event.priority,
+                    )
+                    records.append(record)
+        
+        return records
 
     async def send_global_notification(
         self,

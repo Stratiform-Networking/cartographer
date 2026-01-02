@@ -352,3 +352,13 @@ class CartographerCapacityUser(HttpUser):
         """Health check endpoint"""
         self.client.get("/healthz", name="/healthz")
 
+
+# Set the LoadTestShape class for capacity discovery
+# This is picked up by Locust automatically
+class LoadTestShape(CapacityDiscoveryShape):
+    """
+    Use the CapacityDiscoveryShape for this test.
+    This class name (LoadTestShape) is what Locust looks for.
+    """
+    pass
+

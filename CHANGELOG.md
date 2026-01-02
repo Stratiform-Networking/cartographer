@@ -5,6 +5,34 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.17.9](https://github.com/devartech/cartographer/compare/v0.17.8...v0.17.9) (2026-01-02)
+
+
+### ♻️ Code Refactoring
+
+* backend for architecture + development ([af206d0](https://github.com/devartech/cartographer/commit/af206d054b1f7d46852941d7b3cce8599e9edb5c))
+* clean uo assistant-service ([ddb751e](https://github.com/devartech/cartographer/commit/ddb751ecc59e01e7984b8abe25206be6e3f92b3e))
+* clean up auth service ([39204e5](https://github.com/devartech/cartographer/commit/39204e592b6341297acc35098971963a831ac14b))
+* clean up health-service ([276fb5f](https://github.com/devartech/cartographer/commit/276fb5f5bef80b2d37deebe8206a0ae06c5b3490))
+* intense frontend refactor + test ([c458c8d](https://github.com/devartech/cartographer/commit/c458c8de8d6a23957965e1747f2513a35c7acd66))
+* major frontend refactor ([3059290](https://github.com/devartech/cartographer/commit/3059290149c1b1226322463a89e85cab448c6614))
+* metrics service ([6b61abd](https://github.com/devartech/cartographer/commit/6b61abd3c663435ff10392bd84e802ee1258a691))
+* notification service ([b872fe1](https://github.com/devartech/cartographer/commit/b872fe1690f3ad35a79f2cedbac230fce57154fe))
+
+
+### 📚 Documentation
+
+* add status badges ([14a0225](https://github.com/devartech/cartographer/commit/14a0225bbc7aae6251c4d57f43f5618d3bf21367))
+* cleanup docs ([b3f0d27](https://github.com/devartech/cartographer/commit/b3f0d27a68e82b2e81f47711e13adeaf67c4c87e))
+* fix doc link ([209d52d](https://github.com/devartech/cartographer/commit/209d52d1ec8281f924531e50304a7c6e86340f4a))
+* fix locations ([cf64dfa](https://github.com/devartech/cartographer/commit/cf64dfa26e239d0fb30b6703fd6935e7a4fd5179))
+* update app image ([0e1878b](https://github.com/devartech/cartographer/commit/0e1878bfad18fb44709cab3230264912906f5c28))
+
+
+### ⚡ Performance Improvements
+
+* add DB performance improvements ([f283d1f](https://github.com/devartech/cartographer/commit/f283d1f50ff1ea58bef1b1d5e3827062588cd2c7))
+
 ### [0.17.8](https://github.com/devartech/cartographer/compare/v0.17.7...v0.17.8) (2025-12-17)
 
 

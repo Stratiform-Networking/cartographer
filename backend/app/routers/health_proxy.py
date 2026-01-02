@@ -193,6 +193,12 @@ async def get_cached_test_ip_metrics(
     return await proxy_health_request("GET", f"/gateway/{gateway_ip}/test-ips/cached")
 
 
+@router.get("/gateway/test-ips/all/metrics")
+async def get_all_gateway_test_ip_metrics(user: AuthenticatedUser = Depends(require_auth)):
+    """Proxy get all gateway test IP metrics. Requires authentication."""
+    return await proxy_health_request("GET", "/gateway/test-ips/all/metrics")
+
+
 # ==================== Speed Test Endpoints ====================
 
 

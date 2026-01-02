@@ -306,7 +306,7 @@ class CartographerWriteUser(AuthenticatedUser):
     def notifications_update_preferences(self):
         """Update notification preferences"""
         with self.client.put(
-            "/api/notifications/preferences",
+            "/api/notifications/global/preferences",
             headers=self._auth_headers(),
             json={
                 "email_enabled": random.choice([True, False]),

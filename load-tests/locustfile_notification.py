@@ -101,17 +101,15 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
     @task(2)
     @tag("preferences", "write")
     def update_preferences(self):
-        """Update notification preferences"""
+        """Update global notification preferences"""
         with self.client.put(
-            "/api/notifications/preferences",
+            "/api/notifications/global/preferences",
             headers=self._auth_headers(),
             json={
                 "email_enabled": random.choice([True, False]),
                 "discord_enabled": random.choice([True, False]),
-                "device_offline_enabled": True,
-                "device_degraded_enabled": True,
             },
-            name="/api/notifications/preferences (update)",
+            name="/api/notifications/global/preferences (update)",
             catch_response=True
         ) as response:
             if response.status_code in [200, 400]:

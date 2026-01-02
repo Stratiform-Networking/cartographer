@@ -6,12 +6,15 @@ Performance optimizations:
 - Uses shared HTTP client pool with connection reuse
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
+- Redis caching for config and providers (reduces backend load)
 """
 
+import json
 from fastapi import APIRouter, Depends, Request
 
 from ..config import get_settings
 from ..dependencies import AuthenticatedUser, require_auth
+from ..services.cache_service import CacheService, get_cache
 from ..services.proxy_service import extract_auth_headers, proxy_assistant_request
 from ..services.streaming_service import proxy_streaming_request
 
@@ -23,15 +26,39 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 
 @router.get("/config")
-async def get_config(request: Request, user: AuthenticatedUser = Depends(require_auth)):
-    """Get assistant configuration. Requires authentication."""
-    return await proxy_assistant_request("GET", "/config", request)
+async def get_config(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """Get assistant configuration. Requires authentication. Cached for 5 minutes."""
+    cache_key = "assistant:config"
+
+    async def fetch_config():
+        response = await proxy_assistant_request("GET", "/config", request)
+        if hasattr(response, "body"):
+            return json.loads(response.body)
+        return response
+
+    return await cache.get_or_compute(cache_key, fetch_config, ttl=300)
 
 
 @router.get("/providers")
-async def list_providers(request: Request, user: AuthenticatedUser = Depends(require_auth)):
-    """List available AI providers. Requires authentication."""
-    return await proxy_assistant_request("GET", "/providers", request)
+async def list_providers(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """List available AI providers. Requires authentication. Cached for 5 minutes."""
+    cache_key = "assistant:providers"
+
+    async def fetch_providers():
+        response = await proxy_assistant_request("GET", "/providers", request)
+        if hasattr(response, "body"):
+            return json.loads(response.body)
+        return response
+
+    return await cache.get_or_compute(cache_key, fetch_providers, ttl=300)
 
 
 @router.get("/models/{provider}")

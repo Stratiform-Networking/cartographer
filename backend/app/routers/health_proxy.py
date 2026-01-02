@@ -6,11 +6,14 @@ Performance optimizations:
 - Uses shared HTTP client pool with connection reuse
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
+- Redis caching for frequently polled endpoints
 """
 
+import json
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..dependencies import AuthenticatedUser, require_auth, require_write_access
+from ..services.cache_service import CacheService, get_cache
 from ..services.proxy_service import proxy_health_request
 
 router = APIRouter(prefix="/health", tags=["health"])
@@ -43,9 +46,20 @@ async def get_cached(ip: str, user: AuthenticatedUser = Depends(require_auth)):
 
 
 @router.get("/cached")
-async def get_all_cached(user: AuthenticatedUser = Depends(require_auth)):
-    """Proxy get all cached metrics. Requires authentication."""
-    return await proxy_health_request("GET", "/cached")
+async def get_all_cached(
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """Proxy get all cached metrics. Requires authentication. Cached for 10 seconds."""
+    cache_key = "health:cached:all"
+
+    async def fetch_cached():
+        response = await proxy_health_request("GET", "/cached")
+        if hasattr(response, "body"):
+            return json.loads(response.body)
+        return response
+
+    return await cache.get_or_compute(cache_key, fetch_cached, ttl=10)
 
 
 @router.delete("/cache")
@@ -123,9 +137,20 @@ async def set_monitoring_config(
 
 
 @router.get("/monitoring/status")
-async def get_monitoring_status(user: AuthenticatedUser = Depends(require_auth)):
-    """Proxy get monitoring status. Requires authentication."""
-    return await proxy_health_request("GET", "/monitoring/status")
+async def get_monitoring_status(
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """Proxy get monitoring status. Requires authentication. Cached for 10 seconds."""
+    cache_key = "health:monitoring:status"
+
+    async def fetch_status():
+        response = await proxy_health_request("GET", "/monitoring/status")
+        if hasattr(response, "body"):
+            return json.loads(response.body)
+        return response
+
+    return await cache.get_or_compute(cache_key, fetch_status, ttl=10)
 
 
 @router.post("/monitoring/start")
@@ -194,9 +219,22 @@ async def get_cached_test_ip_metrics(
 
 
 @router.get("/gateway/test-ips/all/metrics")
-async def get_all_gateway_test_ip_metrics(user: AuthenticatedUser = Depends(require_auth)):
-    """Proxy get all gateway test IP metrics. Requires authentication."""
-    return await proxy_health_request("GET", "/gateway/test-ips/all/metrics")
+async def get_all_gateway_test_ip_metrics(
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """Proxy get all gateway test IP metrics. Requires authentication. Cached for 15 seconds."""
+    cache_key = "health:gateway:test-ips:all:metrics"
+
+    async def fetch_metrics():
+        response = await proxy_health_request("GET", "/gateway/test-ips/all/metrics")
+        if hasattr(response, "body"):
+            import json
+
+            return json.loads(response.body)
+        return response
+
+    return await cache.get_or_compute(cache_key, fetch_metrics, ttl=15)
 
 
 # ==================== Speed Test Endpoints ====================

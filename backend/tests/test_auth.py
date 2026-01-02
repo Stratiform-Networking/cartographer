@@ -68,20 +68,28 @@ class TestVerifyTokenWithAuthService:
     """Tests for token verification with auth service"""
 
     @pytest.fixture
-    def mock_httpx(self):
-        """Mock httpx.AsyncClient for auth service calls"""
-        with patch("app.services.auth_service.httpx.AsyncClient") as mock:
+    def mock_http_pool(self):
+        """Mock http_pool.request for auth service calls"""
+        with patch("app.services.auth_service.http_pool.request") as mock:
             yield mock
 
-    async def test_valid_token_returns_user(self, mock_httpx, mock_auth_response):
+    @pytest.fixture
+    def mock_cache_service(self):
+        """Mock cache_service for token caching"""
+        # cache_service is imported dynamically inside the function
+        with patch("app.services.cache_service.cache_service") as mock:
+            mock.get = AsyncMock(return_value=None)  # Cache miss
+            mock.set = AsyncMock(return_value=True)
+            yield mock
+
+    async def test_valid_token_returns_user(self, mock_http_pool, mock_cache_service, mock_auth_response):
         """Valid token should return AuthenticatedUser"""
-        mock_client = AsyncMock()
+        import json
+
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = mock_auth_response
-        mock_client.post.return_value = mock_response
-
-        mock_httpx.return_value.__aenter__.return_value = mock_client
+        mock_response.body = json.dumps(mock_auth_response).encode()
+        mock_http_pool.return_value = mock_response
 
         user = await verify_token_with_auth_service("valid-token")
 
@@ -90,69 +98,58 @@ class TestVerifyTokenWithAuthService:
         assert user.username == "testuser"
         assert user.role == UserRole.OWNER
 
-    async def test_invalid_token_returns_none(self, mock_httpx):
+    async def test_invalid_token_returns_none(self, mock_http_pool, mock_cache_service):
         """Invalid token should return None"""
-        mock_client = AsyncMock()
+        import json
+
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"valid": False}
-        mock_client.post.return_value = mock_response
-
-        mock_httpx.return_value.__aenter__.return_value = mock_client
+        mock_response.body = json.dumps({"valid": False}).encode()
+        mock_http_pool.return_value = mock_response
 
         user = await verify_token_with_auth_service("invalid-token")
 
         assert user is None
 
-    async def test_auth_service_401_returns_none(self, mock_httpx):
+    async def test_auth_service_401_returns_none(self, mock_http_pool, mock_cache_service):
         """401 from auth service should return None"""
-        mock_client = AsyncMock()
         mock_response = MagicMock()
         mock_response.status_code = 401
-        mock_client.post.return_value = mock_response
-
-        mock_httpx.return_value.__aenter__.return_value = mock_client
+        mock_http_pool.return_value = mock_response
 
         user = await verify_token_with_auth_service("bad-token")
 
         assert user is None
 
-    async def test_auth_service_connect_error_raises_503(self, mock_httpx):
-        """Connection error to auth service should raise 503"""
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = httpx.ConnectError("Connection refused")
-
-        mock_httpx.return_value.__aenter__.return_value = mock_client
+    async def test_auth_service_503_raises_exception(self, mock_http_pool, mock_cache_service):
+        """503 from http_pool should be re-raised"""
+        mock_http_pool.side_effect = HTTPException(status_code=503, detail="Auth service unavailable")
 
         with pytest.raises(HTTPException) as exc_info:
             await verify_token_with_auth_service("token")
 
         assert exc_info.value.status_code == 503
-        assert "Auth service unavailable" in exc_info.value.detail
 
-    async def test_auth_service_timeout_raises_504(self, mock_httpx):
-        """Timeout from auth service should raise 504"""
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = httpx.TimeoutException("Timeout")
-
-        mock_httpx.return_value.__aenter__.return_value = mock_client
-
-        with pytest.raises(HTTPException) as exc_info:
-            await verify_token_with_auth_service("token")
-
-        assert exc_info.value.status_code == 504
-        assert "Auth service timeout" in exc_info.value.detail
-
-    async def test_unexpected_error_returns_none(self, mock_httpx):
+    async def test_unexpected_error_returns_none(self, mock_http_pool, mock_cache_service):
         """Unexpected error should return None (not crash)"""
-        mock_client = AsyncMock()
-        mock_client.post.side_effect = ValueError("Unexpected error")
-
-        mock_httpx.return_value.__aenter__.return_value = mock_client
+        mock_http_pool.side_effect = ValueError("Unexpected error")
 
         user = await verify_token_with_auth_service("token")
 
         assert user is None
+
+    async def test_cached_token_returns_cached_result(self, mock_http_pool, mock_cache_service):
+        """Cached token verification should return cached result without calling http_pool"""
+        cached_user = {"user_id": "cached-123", "username": "cacheduser", "role": "owner"}
+        mock_cache_service.get = AsyncMock(return_value=cached_user)
+
+        user = await verify_token_with_auth_service("cached-token")
+
+        # The wrapper converts to AuthenticatedUser
+        assert user.user_id == "cached-123"
+        assert user.username == "cacheduser"
+        assert user.role == UserRole.OWNER
+        mock_http_pool.assert_not_called()  # Should not make HTTP call
 
 
 class TestVerifyServiceToken:

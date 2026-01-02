@@ -97,11 +97,11 @@ class TestHealthProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/cached/192.168.1.1" in call_kwargs["path"]
 
-    async def test_get_all_cached(self, mock_http_pool, owner_user):
+    async def test_get_all_cached(self, mock_http_pool, owner_user, mock_cache):
         """get_all_cached should request all cached metrics"""
         from app.routers.health_proxy import get_all_cached
 
-        await get_all_cached(user=owner_user)
+        await get_all_cached(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["path"].endswith("/cached")
@@ -193,11 +193,11 @@ class TestHealthProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["json_body"] == {"interval": 60}
 
-    async def test_get_monitoring_status(self, mock_http_pool, owner_user):
+    async def test_get_monitoring_status(self, mock_http_pool, owner_user, mock_cache):
         """get_monitoring_status should work"""
         from app.routers.health_proxy import get_monitoring_status
 
-        await get_monitoring_status(user=owner_user)
+        await get_monitoring_status(user=owner_user, cache=mock_cache)
 
         assert mock_http_pool.request.called
 
@@ -404,14 +404,14 @@ class TestAuthProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/logout" in call_kwargs["path"]
 
-    async def test_get_session(self, mock_http_pool, owner_user):
+    async def test_get_session(self, mock_http_pool, owner_user, mock_cache):
         """get_session should GET (requires auth)"""
         from app.routers.auth_proxy import get_session
 
         mock_request = MagicMock()
         mock_request.headers = {"Authorization": "Bearer token"}
 
-        await get_session(request=mock_request, user=owner_user)
+        await get_session(request=mock_request, user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["method"] == "GET"
@@ -703,11 +703,11 @@ class TestMetricsProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/cached" in call_kwargs["path"]
 
-    async def test_get_config(self, mock_http_pool, owner_user):
+    async def test_get_config(self, mock_http_pool, owner_user, mock_cache):
         """get_config should GET"""
         from app.routers.metrics_proxy import get_config
 
-        await get_config(user=owner_user)
+        await get_config(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/config" in call_kwargs["path"]
@@ -724,20 +724,20 @@ class TestMetricsProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["json_body"] == {"refresh_interval": 30}
 
-    async def test_get_summary(self, mock_http_pool, owner_user):
+    async def test_get_summary(self, mock_http_pool, owner_user, mock_cache):
         """get_summary should GET"""
         from app.routers.metrics_proxy import get_summary
 
-        await get_summary(user=owner_user)
+        await get_summary(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/summary" in call_kwargs["path"]
 
-    async def test_get_summary_with_network_id(self, mock_http_pool, owner_user):
+    async def test_get_summary_with_network_id(self, mock_http_pool, owner_user, mock_cache):
         """get_summary should pass network_id param"""
         from app.routers.metrics_proxy import get_summary
 
-        await get_summary(network_id="net-summary", user=owner_user)
+        await get_summary(network_id="net-summary", user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["params"]["network_id"] == "net-summary"
@@ -892,21 +892,21 @@ class TestMetricsProxyRouter:
         assert "/usage/record/batch" in call_kwargs["path"]
         assert call_kwargs["method"] == "POST"
 
-    async def test_get_usage_stats(self, mock_http_pool, owner_user):
+    async def test_get_usage_stats(self, mock_http_pool, owner_user, mock_cache):
         """get_usage_stats should GET with auth"""
         from app.routers.metrics_proxy import get_usage_stats
 
-        await get_usage_stats(service=None, user=owner_user)
+        await get_usage_stats(service=None, user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/usage/stats" in call_kwargs["path"]
         assert call_kwargs["method"] == "GET"
 
-    async def test_get_usage_stats_filtered(self, mock_http_pool, owner_user):
+    async def test_get_usage_stats_filtered(self, mock_http_pool, owner_user, mock_cache):
         """get_usage_stats should filter by service"""
         from app.routers.metrics_proxy import get_usage_stats
 
-        await get_usage_stats(service="health-service", user=owner_user)
+        await get_usage_stats(service="health-service", user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["params"]["service"] == "health-service"
@@ -963,20 +963,20 @@ class TestAssistantProxyRouter:
         request.headers = mock_headers
         return request
 
-    async def test_get_config(self, mock_http_pool, owner_user, mock_request):
+    async def test_get_config(self, mock_http_pool, owner_user, mock_request, mock_cache):
         """get_config should GET"""
         from app.routers.assistant_proxy import get_config
 
-        await get_config(request=mock_request, user=owner_user)
+        await get_config(request=mock_request, user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/config" in call_kwargs["path"]
 
-    async def test_list_providers(self, mock_http_pool, owner_user, mock_request):
+    async def test_list_providers(self, mock_http_pool, owner_user, mock_request, mock_cache):
         """list_providers should GET"""
         from app.routers.assistant_proxy import list_providers
 
-        await list_providers(request=mock_request, user=owner_user)
+        await list_providers(request=mock_request, user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/providers" in call_kwargs["path"]
@@ -1384,41 +1384,41 @@ class TestNotificationProxyRouter:
 
     # ==================== Legacy Preferences Tests ====================
 
-    async def test_get_preferences(self, mock_http_pool, owner_user):
+    async def test_get_preferences(self, mock_http_pool, owner_user, mock_cache):
         """get_preferences should GET with user header"""
         from app.routers.notification_proxy import get_preferences
 
-        await get_preferences(user=owner_user)
+        await get_preferences(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["headers"]["X-User-Id"] == owner_user.user_id
 
-    async def test_update_preferences(self, mock_http_pool, owner_user):
+    async def test_update_preferences(self, mock_http_pool, owner_user, mock_cache):
         """update_preferences should PUT with body"""
         from app.routers.notification_proxy import update_preferences
 
         mock_request = MagicMock()
         mock_request.json = AsyncMock(return_value={"email_enabled": True})
 
-        await update_preferences(request=mock_request, user=owner_user)
+        await update_preferences(request=mock_request, user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["method"] == "PUT"
 
-    async def test_delete_preferences(self, mock_http_pool, owner_user):
+    async def test_delete_preferences(self, mock_http_pool, owner_user, mock_cache):
         """delete_preferences should DELETE"""
         from app.routers.notification_proxy import delete_preferences
 
-        await delete_preferences(user=owner_user)
+        await delete_preferences(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["method"] == "DELETE"
 
-    async def test_get_service_status(self, mock_http_pool, owner_user):
+    async def test_get_service_status(self, mock_http_pool, owner_user, mock_cache):
         """get_service_status should GET"""
         from app.routers.notification_proxy import get_service_status
 
-        await get_service_status(user=owner_user)
+        await get_service_status(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/status" in call_kwargs["path"]
@@ -1742,23 +1742,23 @@ class TestNotificationProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/discord/info" in call_kwargs["path"]
 
-    async def test_get_global_preferences(self, mock_http_pool, owner_user):
+    async def test_get_global_preferences(self, mock_http_pool, owner_user, mock_cache):
         """get_global_preferences should GET"""
         from app.routers.notification_proxy import get_global_preferences
 
-        await get_global_preferences(user=owner_user)
+        await get_global_preferences(user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert "/global/preferences" in call_kwargs["path"]
 
-    async def test_update_global_preferences(self, mock_http_pool, owner_user):
+    async def test_update_global_preferences(self, mock_http_pool, owner_user, mock_cache):
         """update_global_preferences should PUT with body"""
         from app.routers.notification_proxy import update_global_preferences
 
         mock_request = MagicMock()
         mock_request.json = AsyncMock(return_value={"enabled": True})
 
-        await update_global_preferences(request=mock_request, user=owner_user)
+        await update_global_preferences(request=mock_request, user=owner_user, cache=mock_cache)
 
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["method"] == "PUT"

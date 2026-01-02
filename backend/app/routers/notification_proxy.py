@@ -13,11 +13,14 @@ Performance optimizations:
 - Uses shared HTTP client pool with connection reuse
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
+- Redis caching for status and preferences endpoints
 """
 
+import json
 from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import AuthenticatedUser, require_auth, require_owner, require_write_access
+from ..services.cache_service import CacheService, get_cache
 from ..services.proxy_service import proxy_notification_request
 
 # Import sub-routers
@@ -89,9 +92,18 @@ router.include_router(email_router)
 @router.get("/status")
 async def get_service_status(
     user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
 ):
-    """Get notification service status including available channels."""
-    return await proxy_notification_request("GET", "/status")
+    """Get notification service status including available channels. Cached for 30 seconds."""
+    cache_key = "notifications:status"
+
+    async def fetch_status():
+        response = await proxy_notification_request("GET", "/status")
+        if hasattr(response, "body"):
+            return json.loads(response.body)
+        return response
+
+    return await cache.get_or_compute(cache_key, fetch_status, ttl=30)
 
 
 # ==================== History & Stats ====================

@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .routers.metrics import router as metrics_router
+from .services.http_client import http_client
 from .services.metrics_aggregator import metrics_aggregator
 from .services.redis_publisher import redis_publisher
 from .services.usage_middleware import UsageTrackingMiddleware
@@ -48,6 +49,10 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting Cartographer Metrics Service...")
+
+    # Initialize shared HTTP client for service-to-service communication
+    await http_client.initialize()
+    logger.info("HTTP client initialized with connection pooling")
 
     # Connect to Redis first
     redis_connected = await redis_publisher.connect()
@@ -95,6 +100,10 @@ async def lifespan(app: FastAPI):
     # Disconnect from Redis
     await redis_publisher.disconnect()
     logger.info("Disconnected from Redis")
+
+    # Close HTTP client
+    await http_client.close()
+    logger.info("HTTP client closed")
 
 
 def create_app() -> FastAPI:

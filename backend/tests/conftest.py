@@ -107,6 +107,28 @@ def mock_auth_response():
     return {"valid": True, "user_id": "user-123", "username": "testuser", "role": "owner"}
 
 
+@pytest.fixture
+def mock_cache():
+    """Mock CacheService for testing endpoints with caching"""
+    import asyncio
+
+    cache = MagicMock()
+    cache.get = AsyncMock(return_value=None)
+    cache.set = AsyncMock(return_value=True)
+    cache.delete = AsyncMock(return_value=True)
+    cache.make_key = MagicMock(side_effect=lambda *args: ":".join(args))
+
+    async def mock_get_or_compute(key, fn, ttl=None):
+        """Mock get_or_compute that properly awaits the callback if it's a coroutine"""
+        result = fn()
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
+
+    cache.get_or_compute = mock_get_or_compute
+    return cache
+
+
 def create_mock_response(
     status_code: int = 200, json_data: dict = None, text: str = ""
 ) -> MagicMock:

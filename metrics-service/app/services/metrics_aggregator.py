@@ -3,6 +3,10 @@ Metrics Aggregator Service
 
 Collects and aggregates data from the health service and backend
 to produce comprehensive network topology snapshots.
+
+Performance optimizations:
+- Uses shared HTTP client with connection pooling (not new clients per request)
+- Parallel data fetching via asyncio.gather
 """
 
 import asyncio
@@ -15,6 +19,7 @@ import httpx
 import jwt
 
 from ..config import settings
+from .http_client import http_client
 from ..models import (
     CheckHistoryEntry,
     DeviceRole,
@@ -105,20 +110,20 @@ class MetricsAggregator:
             List of network IDs (UUIDs) that have layouts configured.
         """
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{settings.backend_service_url}/api/networks", headers=SERVICE_AUTH_HEADER
-                )
-                if response.status_code == 200:
-                    networks = response.json()
-                    # Extract network IDs from the response
-                    network_ids = [n.get("id") for n in networks if n.get("id") is not None]
-                    logger.info(f"Found {len(network_ids)} networks to generate snapshots for")
-                    return network_ids
-                elif response.status_code == 401:
-                    logger.error("Authentication failed fetching networks - check JWT_SECRET")
-                else:
-                    logger.warning(f"Failed to fetch networks: {response.status_code}")
+            response = await http_client.get(
+                f"{settings.backend_service_url}/api/networks",
+                headers=SERVICE_AUTH_HEADER,
+            )
+            if response.status_code == 200:
+                networks = response.json()
+                # Extract network IDs from the response
+                network_ids = [n.get("id") for n in networks if n.get("id") is not None]
+                logger.info(f"Found {len(network_ids)} networks to generate snapshots for")
+                return network_ids
+            elif response.status_code == 401:
+                logger.error("Authentication failed fetching networks - check JWT_SECRET")
+            else:
+                logger.warning(f"Failed to fetch networks: {response.status_code}")
         except httpx.ConnectError:
             logger.warning("Backend service unavailable - cannot fetch networks list")
         except Exception as e:
@@ -135,50 +140,49 @@ class MetricsAggregator:
                        for backwards compatibility only.
         """
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                if network_id is not None:
-                    # Use multi-tenant endpoint - requires explicit network_id
-                    response = await client.get(
-                        f"{settings.backend_service_url}/api/networks/{network_id}/layout",
-                        headers=SERVICE_AUTH_HEADER,
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        # Multi-tenant endpoint returns layout_data directly (not wrapped in exists/layout)
-                        layout_data = data.get("layout_data")
-                        if layout_data:
-                            logger.debug(f"Fetched layout for network {network_id}")
-                            return layout_data
-                        else:
-                            logger.debug(f"Network {network_id} has no layout data yet")
-                    elif response.status_code == 401:
-                        logger.error("Authentication failed fetching layout - check JWT_SECRET")
-                    elif response.status_code == 404:
-                        logger.warning(f"Network {network_id} not found or no layout exists")
-                    elif response.status_code == 500:
-                        logger.error(f"Backend error fetching layout for network {network_id}")
-                    return None
-                else:
-                    # Legacy single-file endpoint for backwards compatibility only
-                    # This should only be used for non-multi-tenant deployments
-                    response = await client.get(
-                        f"{settings.backend_service_url}/api/load-layout",
-                        headers=SERVICE_AUTH_HEADER,
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get("exists") and data.get("layout"):
-                            logger.debug("Using legacy single-file layout")
-                            return data.get("layout")
-                    elif response.status_code == 401:
-                        logger.error("Authentication failed fetching layout - check JWT_SECRET")
+            if network_id is not None:
+                # Use multi-tenant endpoint - requires explicit network_id
+                response = await http_client.get(
+                    f"{settings.backend_service_url}/api/networks/{network_id}/layout",
+                    headers=SERVICE_AUTH_HEADER,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    # Multi-tenant endpoint returns layout_data directly (not wrapped in exists/layout)
+                    layout_data = data.get("layout_data")
+                    if layout_data:
+                        logger.debug(f"Fetched layout for network {network_id}")
+                        return layout_data
+                    else:
+                        logger.debug(f"Network {network_id} has no layout data yet")
+                elif response.status_code == 401:
+                    logger.error("Authentication failed fetching layout - check JWT_SECRET")
+                elif response.status_code == 404:
+                    logger.warning(f"Network {network_id} not found or no layout exists")
+                elif response.status_code == 500:
+                    logger.error(f"Backend error fetching layout for network {network_id}")
+                return None
+            else:
+                # Legacy single-file endpoint for backwards compatibility only
+                # This should only be used for non-multi-tenant deployments
+                response = await http_client.get(
+                    f"{settings.backend_service_url}/api/load-layout",
+                    headers=SERVICE_AUTH_HEADER,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("exists") and data.get("layout"):
+                        logger.debug("Using legacy single-file layout")
+                        return data.get("layout")
+                elif response.status_code == 401:
+                    logger.error("Authentication failed fetching layout - check JWT_SECRET")
 
-                    # No legacy layout - this is expected in multi-tenant mode
-                    # Clients must provide network_id
-                    logger.debug(
-                        "No legacy layout found - network_id required for multi-tenant mode"
-                    )
-                    return None
+                # No legacy layout - this is expected in multi-tenant mode
+                # Clients must provide network_id
+                logger.debug(
+                    "No legacy layout found - network_id required for multi-tenant mode"
+                )
+                return None
         except httpx.ConnectError:
             logger.warning("Backend service unavailable - cannot fetch network layout")
             return None
@@ -189,11 +193,10 @@ class MetricsAggregator:
     async def _fetch_health_metrics(self) -> dict[str, Any]:
         """Fetch all cached health metrics from the health service."""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{settings.health_service_url}/api/health/cached")
-                if response.status_code == 200:
-                    return response.json()
-                return {}
+            response = await http_client.get(f"{settings.health_service_url}/api/health/cached")
+            if response.status_code == 200:
+                return response.json()
+            return {}
         except httpx.ConnectError:
             logger.warning("Health service unavailable - cannot fetch health metrics")
             return {}
@@ -204,23 +207,22 @@ class MetricsAggregator:
     async def _fetch_gateway_test_ips(self) -> dict[str, Any]:
         """Fetch all gateway test IP metrics (with status) from health service."""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Use the metrics endpoint which includes status, not just config
-                response = await client.get(
-                    f"{settings.health_service_url}/api/health/gateway/test-ips/all/metrics"
-                )
-                if response.status_code == 200:
-                    return response.json()
-                # Fallback to old endpoint if new one doesn't exist
-                logger.warning(
-                    "New metrics endpoint not available, falling back to config endpoint"
-                )
-                response = await client.get(
-                    f"{settings.health_service_url}/api/health/gateway/test-ips/all"
-                )
-                if response.status_code == 200:
-                    return response.json()
-                return {}
+            # Use the metrics endpoint which includes status, not just config
+            response = await http_client.get(
+                f"{settings.health_service_url}/api/health/gateway/test-ips/all/metrics"
+            )
+            if response.status_code == 200:
+                return response.json()
+            # Fallback to old endpoint if new one doesn't exist
+            logger.warning(
+                "New metrics endpoint not available, falling back to config endpoint"
+            )
+            response = await http_client.get(
+                f"{settings.health_service_url}/api/health/gateway/test-ips/all"
+            )
+            if response.status_code == 200:
+                return response.json()
+            return {}
         except httpx.ConnectError:
             logger.warning("Health service unavailable - cannot fetch gateway test IPs")
             return {}
@@ -231,13 +233,12 @@ class MetricsAggregator:
     async def _fetch_speed_test_results(self) -> dict[str, Any]:
         """Fetch all stored speed test results from health service."""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{settings.health_service_url}/api/health/speedtest/all"
-                )
-                if response.status_code == 200:
-                    return response.json()
-                return {}
+            response = await http_client.get(
+                f"{settings.health_service_url}/api/health/speedtest/all"
+            )
+            if response.status_code == 200:
+                return response.json()
+            return {}
         except httpx.ConnectError:
             logger.warning("Health service unavailable - cannot fetch speed test results")
             return {}
@@ -248,13 +249,12 @@ class MetricsAggregator:
     async def _fetch_monitoring_status(self) -> dict[str, Any] | None:
         """Fetch monitoring status from health service."""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    f"{settings.health_service_url}/api/health/monitoring/status"
-                )
-                if response.status_code == 200:
-                    return response.json()
-                return None
+            response = await http_client.get(
+                f"{settings.health_service_url}/api/health/monitoring/status"
+            )
+            if response.status_code == 200:
+                return response.json()
+            return None
         except httpx.ConnectError:
             logger.warning("Health service unavailable - cannot fetch monitoring status")
             return None
@@ -870,40 +870,42 @@ class MetricsAggregator:
         Trigger a speed test via the health service and publish the result.
         """
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.post(f"{settings.health_service_url}/api/health/speedtest")
-                if response.status_code == 200:
-                    data = response.json()
+            response = await http_client.post(
+                f"{settings.health_service_url}/api/health/speedtest",
+                timeout=120.0,
+            )
+            if response.status_code == 200:
+                data = response.json()
 
-                    timestamp = data.get("timestamp")
-                    if isinstance(timestamp, str):
-                        try:
-                            timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                        except Exception:
-                            timestamp = datetime.utcnow()
+                timestamp = data.get("timestamp")
+                if isinstance(timestamp, str):
+                    try:
+                        timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    except Exception:
+                        timestamp = datetime.utcnow()
 
-                    result = SpeedTestMetrics(
-                        success=data.get("success", False),
-                        timestamp=timestamp or datetime.utcnow(),
-                        download_mbps=data.get("download_mbps"),
-                        upload_mbps=data.get("upload_mbps"),
-                        ping_ms=data.get("ping_ms"),
-                        server_name=data.get("server_name"),
-                        server_location=data.get("server_location"),
-                        server_sponsor=data.get("server_sponsor"),
-                        client_ip=data.get("client_ip"),
-                        client_isp=data.get("client_isp"),
-                        error_message=data.get("error_message"),
-                        duration_seconds=data.get("duration_seconds"),
-                    )
+                result = SpeedTestMetrics(
+                    success=data.get("success", False),
+                    timestamp=timestamp or datetime.utcnow(),
+                    download_mbps=data.get("download_mbps"),
+                    upload_mbps=data.get("upload_mbps"),
+                    ping_ms=data.get("ping_ms"),
+                    server_name=data.get("server_name"),
+                    server_location=data.get("server_location"),
+                    server_sponsor=data.get("server_sponsor"),
+                    client_ip=data.get("client_ip"),
+                    client_isp=data.get("client_isp"),
+                    error_message=data.get("error_message"),
+                    duration_seconds=data.get("duration_seconds"),
+                )
 
-                    # Store for inclusion in next snapshot
-                    self._last_speed_test[gateway_ip] = result
+                # Store for inclusion in next snapshot
+                self._last_speed_test[gateway_ip] = result
 
-                    # Publish immediately
-                    await redis_publisher.publish_speed_test_result(gateway_ip, result)
+                # Publish immediately
+                await redis_publisher.publish_speed_test_result(gateway_ip, result)
 
-                    return result
+                return result
 
         except httpx.ConnectError:
             logger.error("Health service unavailable - cannot run speed test")

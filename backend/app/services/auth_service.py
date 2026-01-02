@@ -4,15 +4,24 @@ Authentication service for token verification.
 Handles:
 - Service-to-service JWT token verification (local)
 - User token verification via external auth service
+- Cached token verification to reduce auth service load
+
+Performance optimizations:
+- Uses shared HTTP client pool (connection reuse)
+- Redis caching for verified tokens (5 minute TTL)
+- Local JWT decode for expired token fast-fail
 """
 
+import json
+import hashlib
 import logging
 
-import httpx
 import jwt
 from fastapi import HTTPException
 
 from ..config import get_settings
+from .http_client import http_pool
+from .cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +68,9 @@ def verify_service_token(token: str, settings=None):
 async def verify_token_with_auth_service(token: str, settings=None) -> dict | None:
     """Verify a token by calling the auth service.
 
+    Uses the shared HTTP client pool for connection reuse and adds
+    Redis caching to reduce auth service load.
+
     Args:
         token: JWT token string
         settings: Optional settings override for testing
@@ -72,28 +84,45 @@ async def verify_token_with_auth_service(token: str, settings=None) -> dict | No
     if settings is None:
         settings = get_settings()
 
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+    cache_key = f"auth:verify:{token_hash}"
+
+    # Check cache first
+    cached = await cache_service.get(cache_key)
+    if cached is not None:
+        logger.debug("Token verification cache HIT")
+        return cached
+
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{settings.auth_service_url}/api/auth/verify",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+        # Use shared HTTP pool instead of creating new client
+        response = await http_pool.request(
+            service_name="auth",
+            method="POST",
+            path="/api/auth/verify",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
+        )
 
-            if response.status_code != 200:
-                logger.debug(f"Token verification failed with status {response.status_code}")
-                return None
+        # http_pool returns JSONResponse, extract content
+        if response.status_code != 200:
+            logger.debug(f"Token verification failed with status {response.status_code}")
+            return None
 
-            data = response.json()
-            if not data.get("valid"):
-                return None
+        # Parse response body
+        data = json.loads(response.body)
+        if not data.get("valid"):
+            return None
 
-            return {"user_id": data["user_id"], "username": data["username"], "role": data["role"]}
-    except httpx.ConnectError:
-        logger.error(f"Failed to connect to auth service at {settings.auth_service_url}")
-        raise HTTPException(status_code=503, detail="Auth service unavailable")
-    except httpx.TimeoutException:
-        logger.error("Timeout connecting to auth service")
-        raise HTTPException(status_code=504, detail="Auth service timeout")
+        result = {"user_id": data["user_id"], "username": data["username"], "role": data["role"]}
+
+        # Cache successful verification for 5 minutes
+        # This dramatically reduces auth service load under high concurrency
+        await cache_service.set(cache_key, result, ttl=300)
+        logger.debug("Token verification cached")
+
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error verifying token: {e}")
         return None

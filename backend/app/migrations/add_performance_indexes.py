@@ -21,7 +21,7 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from ..config import settings
+from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 async def add_performance_indexes():
     """Add performance indexes using CONCURRENTLY to avoid table locks."""
     
+    settings = get_settings()
     engine = create_async_engine(settings.database_url, echo=False)
     
     indexes = [

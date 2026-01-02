@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: Close connections gracefully
     logger.info("Shutting down - closing cache service...")
     await cache_service.close()
-    
+
     logger.info("Shutting down - closing HTTP client pool...")
     await http_pool.close_all()
 

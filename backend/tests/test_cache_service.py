@@ -176,6 +176,7 @@ class TestCacheService:
     async def test_delete_pattern_success(self, cache_service, mock_redis):
         """Test successful pattern delete."""
         cache_service._client = mock_redis
+
         # Mock scan_iter to return some keys
         async def mock_scan(**kwargs):
             for key in ["user:1:data", "user:1:prefs"]:
@@ -273,4 +274,3 @@ class TestCacheService:
 
         # Different dict order should produce same hash
         assert key1 == key2
-

@@ -166,12 +166,12 @@ def get_provider(
 async def get_config(user: AuthenticatedUser = Depends(require_auth)):
     """
     Get assistant configuration and provider status. Requires authentication.
-    
+
     Implements caching with 5-minute TTL to avoid repeated provider checks.
     """
     cache_key = "assistant:config"
     redis = await get_redis()
-    
+
     # Try cache first
     if redis:
         try:
@@ -183,7 +183,7 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
                 return AssistantConfig(**cached_data)
         except Exception as e:
             logger.warning(f"Cache read error: {e}")
-    
+
     # Cache miss - compute result
     providers_status = []
 
@@ -246,15 +246,13 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
         default_provider=default,
         network_context_enabled=True,
     )
-    
+
     # Cache the result (best effort)
     if redis:
         try:
             # Convert Pydantic model to dict for JSON serialization
             await redis.setex(
-                cache_key,
-                settings.cache_ttl_providers,
-                json.dumps(result.model_dump())
+                cache_key, settings.cache_ttl_providers, json.dumps(result.model_dump())
             )
             logger.debug(f"Cache SET: {cache_key} (TTL: {settings.cache_ttl_providers}s)")
         except Exception as e:
@@ -267,12 +265,12 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
 async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
     """
     List all providers and their availability. Requires authentication.
-    
+
     Implements caching with 5-minute TTL to avoid repeated provider checks.
     """
     cache_key = "providers:list"
     redis = await get_redis()
-    
+
     # Try cache first
     if redis:
         try:
@@ -282,7 +280,7 @@ async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
                 return json.loads(cached)
         except Exception as e:
             logger.warning(f"Cache read error: {e}")
-    
+
     # Cache miss - compute result
     result = []
 
@@ -308,15 +306,11 @@ async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
             )
 
     response = {"providers": result}
-    
+
     # Cache the result (best effort)
     if redis:
         try:
-            await redis.setex(
-                cache_key,
-                settings.cache_ttl_providers,
-                json.dumps(response)
-            )
+            await redis.setex(cache_key, settings.cache_ttl_providers, json.dumps(response))
             logger.debug(f"Cache SET: {cache_key} (TTL: {settings.cache_ttl_providers}s)")
         except Exception as e:
             logger.warning(f"Cache write error: {e}")

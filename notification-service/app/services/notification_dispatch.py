@@ -284,7 +284,7 @@ class NotificationDispatchService:
         for user_id in user_ids:
             # Get user email from batch results
             user_email = user_emails.get(user_id)
-            
+
             # Get or create preferences (create if not in batch)
             if user_id in user_prefs:
                 prefs = user_prefs[user_id]
@@ -320,12 +320,12 @@ class NotificationDispatchService:
     ) -> list[NotificationRecord]:
         """
         Internal helper to dispatch notifications to email/discord channels.
-        
+
         Extracted from send_to_user to allow batch processing.
         """
         records = []
         notification_id = str(uuid.uuid4())
-        
+
         # Send email if enabled
         if prefs.email_enabled:
             if not is_email_configured():
@@ -392,7 +392,7 @@ class NotificationDispatchService:
                         priority=event.priority,
                     )
                     records.append(record)
-        
+
         return records
 
     async def send_global_notification(

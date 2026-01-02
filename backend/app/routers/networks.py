@@ -99,7 +99,7 @@ async def list_networks(
 
     For service tokens (internal service-to-service calls), returns ALL active networks
     in the system to support metrics generation across all networks.
-    
+
     Implements caching with 60s TTL for regular users.
     """
     is_service = is_service_token(current_user.user_id)
@@ -141,21 +141,21 @@ async def list_networks(
 
         # Build consolidated response list
         networks = [_build_network_response(network, is_owner=True) for network in owned_networks]
-        networks.extend([
-            _build_network_response(network, is_owner=False, permission=role)
-            for network, role in shared_networks
-        ])
-        
+        networks.extend(
+            [
+                _build_network_response(network, is_owner=False, permission=role)
+                for network, role in shared_networks
+            ]
+        )
+
         # Convert to dict for JSON serialization
         return [net.model_dump() for net in networks]
 
     # Get from cache or compute
     cached_networks = await cache.get_or_compute(
-        cache_key,
-        fetch_user_networks,
-        ttl=settings.cache_ttl_network_list
+        cache_key, fetch_user_networks, ttl=settings.cache_ttl_network_list
     )
-    
+
     # Convert back to Pydantic models
     return [NetworkResponse(**net) for net in cached_networks]
 
@@ -249,7 +249,7 @@ async def delete_network(
     # Invalidate network list cache for owner and all members
     cache_key_owner = cache.make_key("networks", "user", network.user_id)
     await cache.delete(cache_key_owner)
-    
+
     # Also invalidate cache for users with permissions
     perm_result = await db.execute(
         select(NetworkPermission.user_id).where(NetworkPermission.network_id == network_id)

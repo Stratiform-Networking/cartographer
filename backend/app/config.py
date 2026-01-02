@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     redis_db: int = 2  # DB 2 for backend cache (0=metrics, 1=assistant)
     redis_cache_enabled: bool = True
-    
+
     # Cache TTLs (seconds)
     cache_ttl_network_list: int = 60  # 1 minute
     cache_ttl_provider_list: int = 300  # 5 minutes

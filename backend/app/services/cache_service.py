@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 class CacheService:
     """
     Redis-backed cache service with graceful degradation.
-    
+
     Features:
     - Automatic JSON serialization
     - TTL support per operation
@@ -64,9 +64,7 @@ class CacheService:
 
             # Test connection
             await self._client.ping()
-            logger.info(
-                f"Redis cache initialized: {settings.redis_url} (DB {settings.redis_db})"
-            )
+            logger.info(f"Redis cache initialized: {settings.redis_url} (DB {settings.redis_db})")
         except Exception as e:
             logger.error(f"Failed to initialize Redis cache: {e}")
             logger.warning("Cache service will operate in pass-through mode")
@@ -85,10 +83,10 @@ class CacheService:
     async def get(self, key: str) -> Any | None:
         """
         Get a value from cache.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             Deserialized value or None if not found/error
         """
@@ -111,20 +109,15 @@ class CacheService:
             await self.delete(key)
             return None
 
-    async def set(
-        self,
-        key: str,
-        value: Any,
-        ttl: int | None = None
-    ) -> bool:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """
         Set a value in cache.
-        
+
         Args:
             key: Cache key
             value: Value to cache (must be JSON serializable)
             ttl: Time-to-live in seconds (None = no expiration)
-            
+
         Returns:
             True if cached successfully, False otherwise
         """
@@ -146,10 +139,10 @@ class CacheService:
     async def delete(self, key: str) -> bool:
         """
         Delete a cache entry.
-        
+
         Args:
             key: Cache key
-            
+
         Returns:
             True if deleted, False otherwise
         """
@@ -167,10 +160,10 @@ class CacheService:
     async def delete_pattern(self, pattern: str) -> int:
         """
         Delete all keys matching a pattern.
-        
+
         Args:
             pattern: Redis key pattern (e.g., "user:123:*")
-            
+
         Returns:
             Number of keys deleted
         """
@@ -191,22 +184,17 @@ class CacheService:
             logger.warning(f"Cache DELETE pattern error for '{pattern}': {e}")
             return 0
 
-    async def get_or_compute(
-        self,
-        key: str,
-        compute_fn: Callable,
-        ttl: int | None = None
-    ) -> Any:
+    async def get_or_compute(self, key: str, compute_fn: Callable, ttl: int | None = None) -> Any:
         """
         Get from cache or compute and cache the result.
-        
+
         This is the primary caching pattern for query results.
-        
+
         Args:
             key: Cache key
             compute_fn: Async function to compute value on cache miss
             ttl: TTL in seconds for cached value
-            
+
         Returns:
             Cached or computed value
         """
@@ -227,10 +215,10 @@ class CacheService:
     def make_key(*parts: str) -> str:
         """
         Generate a cache key from parts.
-        
+
         Args:
             *parts: Key components (e.g., "networks", "user", user_id)
-            
+
         Returns:
             Formatted cache key (e.g., "networks:user:abc123")
         """
@@ -240,13 +228,13 @@ class CacheService:
     def make_hash_key(prefix: str, data: dict) -> str:
         """
         Generate a cache key with hash suffix for complex query parameters.
-        
+
         Useful for caching query results with many parameters.
-        
+
         Args:
             prefix: Key prefix (e.g., "query:networks")
             data: Dictionary of query parameters
-            
+
         Returns:
             Cache key with deterministic hash (e.g., "query:networks:a1b2c3")
         """
@@ -275,4 +263,3 @@ async def lifespan_cache():
 async def get_cache() -> CacheService:
     """FastAPI dependency to inject cache service."""
     return cache_service
-

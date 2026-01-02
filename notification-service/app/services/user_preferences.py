@@ -53,20 +53,20 @@ class UserPreferencesService:
     ) -> dict[str, UserNetworkNotificationPrefs]:
         """
         Batch fetch network preferences for multiple users.
-        
+
         Instead of querying preferences one user at a time, fetch all at once.
-        
+
         Args:
             db: Database session
             user_ids: List of user IDs to fetch preferences for
             network_id: Network ID
-            
+
         Returns:
             Dictionary mapping user_id -> preferences (only users with prefs)
         """
         if not user_ids:
             return {}
-        
+
         result = await db.execute(
             select(UserNetworkNotificationPrefs).where(
                 UserNetworkNotificationPrefs.user_id.in_(user_ids),
@@ -74,10 +74,10 @@ class UserPreferencesService:
             )
         )
         prefs_list = result.scalars().all()
-        
+
         # Return as dict for O(1) lookup
         return {prefs.user_id: prefs for prefs in prefs_list}
-    
+
     async def get_user_emails_batch(
         self,
         db: AsyncSession,
@@ -85,17 +85,17 @@ class UserPreferencesService:
     ) -> dict[str, str]:
         """
         Batch fetch user emails for multiple users.
-        
+
         Args:
             db: Database session
             user_ids: List of user IDs to fetch emails for
-            
+
         Returns:
             Dictionary mapping user_id -> email (only users with emails)
         """
         if not user_ids:
             return {}
-        
+
         try:
             result = await db.execute(
                 text("SELECT id, email FROM users WHERE id = ANY(:user_ids) AND is_active = true"),

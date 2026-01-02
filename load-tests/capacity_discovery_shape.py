@@ -80,7 +80,21 @@ class CapacityDiscoveryShape(LoadTestShape):
         print(f"  Spawn Rate:        {self.spawn_rate}/s")
         print(f"  P95 Threshold:     {self.p95_threshold}ms")
         print(f"  Error Threshold:   {self.error_threshold*100:.1f}%")
+        print(f"{'='*70}")
+        print(f"⚠️  NOTE: --run-time flag is IGNORED by this shape")
+        print(f"⚠️  Test will stop automatically when finding capacity limit")
         print(f"{'='*70}\n")
+    
+    @property
+    def run_time(self):
+        """
+        Override run_time property to prevent Locust from using --run-time flag.
+        
+        When using a LoadTestShape, Locust's --run-time/-t flag should be ignored
+        because the shape controls when the test stops. This property ensures that
+        even if --run-time is passed, it won't affect capacity discovery.
+        """
+        return None
     
     def tick(self) -> Optional[Tuple[int, float]]:
         """

@@ -50,6 +50,7 @@ class CapacityDiscoveryShape(LoadTestShape):
     # Internal state (use _test_start_time to avoid parent class conflicts)
     _test_start_time = None
     current_step = 0
+    last_logged_step = -1  # Track last logged step to avoid spam
     stopped = False
     stop_reason = None
     knee_point = None
@@ -106,9 +107,6 @@ class CapacityDiscoveryShape(LoadTestShape):
         if target_users > self.max_users:
             target_users = self.max_users
         
-        # Debug: Log what we're calculating
-        print(f"[DEBUG] run_time={run_time:.1f}s, step={self.current_step}, target={target_users}")
-        
         # Check if we've hit max users and should stop
         if target_users >= self.max_users and self.current_step > 0:
             self.stopped = True
@@ -129,11 +127,12 @@ class CapacityDiscoveryShape(LoadTestShape):
             print(f"   (Performance degraded at {target_users} users)\n")
             return None
         
-        # Log current step
-        if self.current_step == 0 or (run_time > 0 and run_time % self.ramp_interval < 1):
+        # Log current step only when it changes
+        if self.current_step != self.last_logged_step:
             elapsed_min = int(run_time / 60)
             print(f"⏱️  Step {self.current_step + 1} ({elapsed_min}m {int(run_time % 60)}s): "
                   f"Ramping to {target_users} users...")
+            self.last_logged_step = self.current_step
         
         return (target_users, self.spawn_rate)
     
@@ -143,35 +142,35 @@ class CapacityDiscoveryShape(LoadTestShape):
         Returns True if performance has degraded beyond thresholds.
         """
         try:
-            # Access Locust's statistics
-            from locust import stats as locust_stats
-            
-            if not locust_stats.stats or not locust_stats.stats.total:
+            # Access Locust's statistics through the environment runner
+            if not self.runner or not self.runner.stats:
                 return False
             
-            total_stats = locust_stats.stats.total
+            stats = self.runner.stats
+            if not stats.total or stats.total.num_requests == 0:
+                return False
+            
+            total_stats = stats.total
             
             # Check error rate
             if total_stats.num_requests > 100:  # Only check after significant traffic
-                error_rate = total_stats.num_failures / total_stats.num_requests
+                error_rate = total_stats.fail_ratio
                 if error_rate > self.error_threshold:
                     self.stop_reason = f"Error rate {error_rate*100:.2f}% exceeded threshold {self.error_threshold*100:.1f}%"
                     return True
             
-            # Check P95 latency (if available)
-            # Note: Locust doesn't expose percentiles directly in real-time
-            # We approximate using average response time as a proxy
+            # Check average response time as a proxy for P95
             if total_stats.num_requests > 100:
                 avg_response_time = total_stats.avg_response_time
-                # Use a heuristic: if avg exceeds threshold, P95 likely does too
-                if avg_response_time > self.p95_threshold * 0.7:  # 70% of threshold
+                # Use a heuristic: if avg exceeds 70% of threshold, performance is degrading
+                if avg_response_time > self.p95_threshold * 0.7:
                     self.stop_reason = f"Avg response time {avg_response_time:.0f}ms approaching P95 threshold {self.p95_threshold}ms"
                     return True
             
             return False
             
         except Exception as e:
-            # If we can't get stats, continue ramping
+            # If we can't get stats, continue ramping (don't stop the test)
             print(f"⚠️  Warning: Could not check metrics: {e}")
             return False
 

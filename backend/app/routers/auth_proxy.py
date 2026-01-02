@@ -6,6 +6,7 @@ Performance optimizations:
 - Uses shared HTTP client pool with connection reuse
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
+- Redis caching for session data
 
 Security:
 - Public endpoints (login, setup, invite accept) have no auth requirement
@@ -16,6 +17,7 @@ Security:
 from fastapi import APIRouter, Depends, Request
 
 from ..dependencies import AuthenticatedUser, require_auth, require_owner
+from ..services.cache_service import CacheService, get_cache
 from ..services.proxy_service import proxy_auth_request
 
 router = APIRouter(tags=["auth"])
@@ -56,9 +58,27 @@ async def logout(request: Request, user: AuthenticatedUser = Depends(require_aut
 
 
 @router.get("/auth/session")
-async def get_session(request: Request, user: AuthenticatedUser = Depends(require_auth)):
-    """Get current session information. Requires authentication."""
-    return await proxy_auth_request("GET", "/session", request)
+async def get_session(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """
+    Get current session information. Requires authentication.
+    
+    Cached per-user for 60 seconds to reduce auth service load.
+    """
+    cache_key = cache.make_key("session", user.user_id)
+    
+    async def fetch_session():
+        response = await proxy_auth_request("GET", "/session", request)
+        # Extract JSON from response
+        if hasattr(response, "body"):
+            import json
+            return json.loads(response.body)
+        return response
+    
+    return await cache.get_or_compute(cache_key, fetch_session, ttl=60)
 
 
 @router.post("/auth/verify")

@@ -6,12 +6,14 @@ Performance optimizations:
 - Uses shared HTTP client pool with connection reuse
 - Circuit breaker prevents cascade failures
 - Connections are pre-warmed on startup
+- Redis caching for config, snapshots, and summaries
 """
 
 from fastapi import APIRouter, Depends, Request, WebSocket
 
 from ..config import get_settings
 from ..dependencies import AuthenticatedUser, require_auth, require_write_access
+from ..services.cache_service import CacheService, get_cache
 from ..services.proxy_service import proxy_metrics_request
 from ..services.websocket_proxy_service import build_ws_url, proxy_websocket
 
@@ -81,9 +83,21 @@ async def get_cached_snapshot(user: AuthenticatedUser = Depends(require_auth)):
 
 
 @router.get("/config")
-async def get_config(user: AuthenticatedUser = Depends(require_auth)):
-    """Proxy get metrics config. Requires authentication."""
-    return await proxy_metrics_request("GET", "/config")
+async def get_config(
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
+):
+    """Proxy get metrics config. Requires authentication. Cached for 5 minutes."""
+    cache_key = "metrics:config"
+    
+    async def fetch_config():
+        response = await proxy_metrics_request("GET", "/config")
+        if hasattr(response, "body"):
+            import json
+            return json.loads(response.body)
+        return response
+    
+    return await cache.get_or_compute(cache_key, fetch_config, ttl=300)
 
 
 @router.post("/config")
@@ -98,17 +112,31 @@ async def update_config(request: Request, user: AuthenticatedUser = Depends(requ
 
 @router.get("/summary")
 async def get_summary(
-    network_id: str | None = None, user: AuthenticatedUser = Depends(require_auth)
+    network_id: str | None = None,
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
 ):
-    """Proxy get network summary. Requires authentication.
-
+    """
+    Proxy get network summary. Requires authentication.
+    
+    Cached for 15 seconds per network - lighter weight than full snapshot.
+    
     Args:
         network_id: Optional network ID for multi-tenant mode.
     """
-    params = {}
-    if network_id is not None:
-        params["network_id"] = network_id
-    return await proxy_metrics_request("GET", "/summary", params=params if params else None)
+    cache_key = cache.make_key("metrics", "summary", network_id or "default")
+    
+    async def fetch_summary():
+        params = {}
+        if network_id is not None:
+            params["network_id"] = network_id
+        response = await proxy_metrics_request("GET", "/summary", params=params if params else None)
+        if hasattr(response, "body"):
+            import json
+            return json.loads(response.body)
+        return response
+    
+    return await cache.get_or_compute(cache_key, fetch_summary, ttl=15)
 
 
 @router.get("/nodes/{node_id}")
@@ -225,13 +253,24 @@ async def record_usage_batch(request: Request):
 
 @router.get("/usage/stats")
 async def get_usage_stats(
-    service: str | None = None, user: AuthenticatedUser = Depends(require_auth)
+    service: str | None = None,
+    user: AuthenticatedUser = Depends(require_auth),
+    cache: CacheService = Depends(get_cache),
 ):
-    """Proxy get usage stats. Requires authentication."""
-    params = {}
-    if service:
-        params["service"] = service
-    return await proxy_metrics_request("GET", "/usage/stats", params=params if params else None)
+    """Proxy get usage stats. Requires authentication. Cached for 30 seconds."""
+    cache_key = cache.make_key("metrics", "usage", "stats", service or "all")
+    
+    async def fetch_stats():
+        params = {}
+        if service:
+            params["service"] = service
+        response = await proxy_metrics_request("GET", "/usage/stats", params=params if params else None)
+        if hasattr(response, "body"):
+            import json
+            return json.loads(response.body)
+        return response
+    
+    return await cache.get_or_compute(cache_key, fetch_stats, ttl=30)
 
 
 @router.delete("/usage/stats")

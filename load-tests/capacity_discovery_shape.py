@@ -47,8 +47,8 @@ class CapacityDiscoveryShape(LoadTestShape):
     error_threshold = 0.01      # 1% error rate threshold
     spawn_rate = 5              # Spawn 5 users per second
     
-    # Internal state
-    start_time = None
+    # Internal state (use _test_start_time to avoid parent class conflicts)
+    _test_start_time = None
     current_step = 0
     stopped = False
     stop_reason = None
@@ -56,8 +56,8 @@ class CapacityDiscoveryShape(LoadTestShape):
     
     def __init__(self):
         super().__init__()
-        # Don't initialize start_time here - do it on first tick()
-        # self.start_time will be set when tick() is first called
+        # Explicitly override any parent class initialization of start_time
+        self._test_start_time = None  # Use a different name to avoid conflicts
         
         # Read configuration from environment if available
         import os
@@ -86,15 +86,15 @@ class CapacityDiscoveryShape(LoadTestShape):
         Returns the current target user count and spawn rate.
         Returns None to stop the test.
         """
-        # Initialize start_time on first tick (not in __init__)
-        if self.start_time is None:
-            self.start_time = time.time()
-            print(f"[DEBUG] Initialized start_time at {self.start_time}")
+        # Initialize test start time on first tick (use our own variable)
+        if self._test_start_time is None:
+            self._test_start_time = time.time()
+            print(f"[DEBUG] Initialized _test_start_time at {self._test_start_time}")
         
         if self.stopped:
             return None
         
-        run_time = time.time() - self.start_time
+        run_time = time.time() - self._test_start_time
         
         # Calculate current step based on elapsed time
         self.current_step = int(run_time / self.ramp_interval)

@@ -96,18 +96,25 @@ class CapacityDiscoveryShape(LoadTestShape):
         # Calculate target user count
         target_users = self.initial_users + (self.current_step * self.ramp_step)
         
-        # Check if we've reached max users
-        if target_users >= self.max_users:
+        # Cap at max_users
+        if target_users > self.max_users:
             target_users = self.max_users
+        
+        # Debug: Log what we're calculating
+        print(f"[DEBUG] run_time={run_time:.1f}s, step={self.current_step}, target={target_users}")
+        
+        # Check if we've hit max users and should stop
+        if target_users >= self.max_users and self.current_step > 0:
             self.stopped = True
             self.stop_reason = f"Max users reached ({self.max_users})"
             self.knee_point = self.max_users
             print(f"\n⚠️  CAPACITY TEST COMPLETE: {self.stop_reason}")
             print(f"🎯 System handled {self.knee_point} concurrent users successfully\n")
+            # Return max_users one last time, then stop on next tick
             return (target_users, self.spawn_rate)
         
-        # Check performance metrics (if we have stats)
-        if self._should_stop_based_on_metrics():
+        # Check performance metrics (if we have stats and we're past first step)
+        if self.current_step > 0 and self._should_stop_based_on_metrics():
             self.stopped = True
             # Knee point is the previous step (before degradation)
             self.knee_point = max(self.initial_users, target_users - self.ramp_step)
@@ -117,7 +124,7 @@ class CapacityDiscoveryShape(LoadTestShape):
             return None
         
         # Log current step
-        if run_time > 0 and run_time % self.ramp_interval < 1:
+        if self.current_step == 0 or (run_time > 0 and run_time % self.ramp_interval < 1):
             elapsed_min = int(run_time / 60)
             print(f"⏱️  Step {self.current_step + 1} ({elapsed_min}m {int(run_time % 60)}s): "
                   f"Ramping to {target_users} users...")

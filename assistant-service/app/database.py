@@ -23,8 +23,11 @@ if DATABASE_URL:
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
-        pool_size=5,
-        max_overflow=10,
+        pool_pre_ping=True,  # Test connections before using
+        pool_size=15,  # Moderate traffic - rate-limited endpoint
+        max_overflow=25,  # Handle burst traffic
+        pool_timeout=30,  # Seconds to wait for connection from pool
+        pool_recycle=3600,  # Recycle connections after 1 hour
     )
     AsyncSessionLocal = async_sessionmaker(
         bind=engine,

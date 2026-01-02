@@ -17,9 +17,11 @@ _engine_kwargs: dict = {
 if "sqlite" not in settings.database_url:
     _engine_kwargs.update(
         {
-            "pool_pre_ping": True,
-            "pool_size": 5,
-            "max_overflow": 10,
+            "pool_pre_ping": True,  # Test connections before using
+            "pool_size": 20,  # Increased from 5 for better concurrency
+            "max_overflow": 30,  # Increased from 10 for peak load handling
+            "pool_timeout": 30,  # Seconds to wait for connection from pool
+            "pool_recycle": 3600,  # Recycle connections after 1 hour
         }
     )
 

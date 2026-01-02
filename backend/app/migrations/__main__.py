@@ -5,13 +5,15 @@ Usage:
     python -m app.migrations [command]
 
 Commands:
-    layout  - Migrate JSON layout file to database
-    uuid    - Convert network IDs from integer to UUID
-    all     - Run all migrations in order
+    layout      - Migrate JSON layout file to database
+    uuid        - Convert network IDs from integer to UUID
+    indexes     - Add performance indexes (CONCURRENTLY)
+    all         - Run all migrations in order
     
 Examples:
     python -m app.migrations layout
     python -m app.migrations uuid
+    python -m app.migrations indexes
     python -m app.migrations all
 """
 
@@ -19,6 +21,7 @@ import asyncio
 import logging
 import sys
 
+from .add_performance_indexes import add_performance_indexes
 from .migrate_layout import run_migration as run_layout_migration
 from .migrate_network_id_to_uuid import run_migration as run_uuid_migration
 
@@ -37,6 +40,7 @@ async def run_all_migrations() -> bool:
     Order:
     1. UUID migration (schema change)
     2. Layout migration (data migration)
+    3. Performance indexes (optimization)
     
     Returns:
         True if any migration was performed
@@ -53,6 +57,17 @@ async def run_all_migrations() -> bool:
     logger.info("Running layout migration...")
     logger.info("=" * 50)
     results.append(await run_layout_migration())
+    
+    logger.info("")
+    logger.info("=" * 50)
+    logger.info("Adding performance indexes...")
+    logger.info("=" * 50)
+    try:
+        await add_performance_indexes()
+        results.append(True)
+    except Exception as e:
+        logger.warning(f"Performance indexes skipped: {e}")
+        results.append(False)
     
     return any(results)
 
@@ -89,6 +104,10 @@ def main() -> int:
                 print("\n✅ UUID migration completed successfully!")
             else:
                 print("\n⏭️  UUID migration skipped (already using UUID or no table found)")
+        
+        elif command == "indexes":
+            asyncio.run(add_performance_indexes())
+            print("\n✅ Performance indexes added successfully!")
                 
         elif command == "all":
             result = asyncio.run(run_all_migrations())

@@ -14,13 +14,15 @@ from .config import settings
 logger = logging.getLogger(__name__)
 
 
-# Create async engine
+# Create async engine with optimized connection pool for high traffic
 engine = create_async_engine(
     settings.database_url,
     echo=False,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    pool_pre_ping=True,  # Test connections before using
+    pool_size=30,  # Increased from 5 - highest traffic service
+    max_overflow=40,  # Increased from 10 for peak load handling
+    pool_timeout=30,  # Seconds to wait for connection from pool
+    pool_recycle=3600,  # Recycle connections after 1 hour
 )
 
 # Session factory

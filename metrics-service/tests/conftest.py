@@ -248,3 +248,14 @@ def redis_publisher_instance():
 
     publisher = RedisPublisher()
     yield publisher
+
+
+@pytest.fixture
+def mock_http_client():
+    """Mock the shared http_client for testing"""
+    with patch("app.services.metrics_aggregator.http_client") as mock:
+        mock.get = AsyncMock()
+        mock.post = AsyncMock()
+        mock.initialize = AsyncMock()
+        mock.close = AsyncMock()
+        yield mock

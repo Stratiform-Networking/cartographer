@@ -45,121 +45,102 @@ class TestMetricsAggregatorInit:
 class TestDataFetching:
     """Tests for data fetching methods"""
 
-    async def test_fetch_network_layout_success(self, metrics_aggregator_instance, sample_layout):
+    async def test_fetch_network_layout_success(
+        self, metrics_aggregator_instance, sample_layout, mock_http_client
+    ):
         """Should fetch network layout successfully"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"exists": True, "layout": sample_layout}
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        layout = await metrics_aggregator_instance._fetch_network_layout()
 
-            layout = await metrics_aggregator_instance._fetch_network_layout()
+        assert layout is not None
+        assert "root" in layout
 
-            assert layout is not None
-            assert "root" in layout
-
-    async def test_fetch_network_layout_not_exists(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_not_exists(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return None when layout doesn't exist"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"exists": False}
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        layout = await metrics_aggregator_instance._fetch_network_layout()
 
-            layout = await metrics_aggregator_instance._fetch_network_layout()
+        assert layout is None
 
-            assert layout is None
-
-    async def test_fetch_network_layout_auth_error(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_auth_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should handle auth error"""
         mock_response = MagicMock()
         mock_response.status_code = 401
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        layout = await metrics_aggregator_instance._fetch_network_layout()
 
-            layout = await metrics_aggregator_instance._fetch_network_layout()
+        assert layout is None
 
-            assert layout is None
-
-    async def test_fetch_network_layout_connect_error(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_connect_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should handle connection error"""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+        mock_http_client.get.side_effect = httpx.ConnectError("Connection refused")
 
-            layout = await metrics_aggregator_instance._fetch_network_layout()
+        layout = await metrics_aggregator_instance._fetch_network_layout()
 
-            assert layout is None
+        assert layout is None
 
-    async def test_fetch_network_layout_exception(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_exception(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should handle generic exception"""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=Exception("Unexpected error")
-            )
+        mock_http_client.get.side_effect = Exception("Unexpected error")
 
-            layout = await metrics_aggregator_instance._fetch_network_layout()
+        layout = await metrics_aggregator_instance._fetch_network_layout()
 
-            assert layout is None
+        assert layout is None
 
     async def test_fetch_health_metrics_success(
-        self, metrics_aggregator_instance, sample_health_metrics
+        self, metrics_aggregator_instance, sample_health_metrics, mock_http_client
     ):
         """Should fetch health metrics successfully"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = sample_health_metrics
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        metrics = await metrics_aggregator_instance._fetch_health_metrics()
 
-            metrics = await metrics_aggregator_instance._fetch_health_metrics()
+        assert metrics is not None
+        assert "192.168.1.1" in metrics
 
-            assert metrics is not None
-            assert "192.168.1.1" in metrics
-
-    async def test_fetch_health_metrics_error(self, metrics_aggregator_instance):
+    async def test_fetch_health_metrics_error(self, metrics_aggregator_instance, mock_http_client):
         """Should return empty dict on error"""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+        mock_http_client.get.side_effect = httpx.ConnectError("Connection refused")
 
-            metrics = await metrics_aggregator_instance._fetch_health_metrics()
+        metrics = await metrics_aggregator_instance._fetch_health_metrics()
 
-            assert metrics == {}
+        assert metrics == {}
 
     async def test_fetch_gateway_test_ips_success(
-        self, metrics_aggregator_instance, sample_gateway_test_ips
+        self, metrics_aggregator_instance, sample_gateway_test_ips, mock_http_client
     ):
         """Should fetch gateway test IPs"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = sample_gateway_test_ips
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        test_ips = await metrics_aggregator_instance._fetch_gateway_test_ips()
 
-            test_ips = await metrics_aggregator_instance._fetch_gateway_test_ips()
-
-            assert "192.168.1.1" in test_ips
+        assert "192.168.1.1" in test_ips
 
     async def test_fetch_gateway_test_ips_fallback(
-        self, metrics_aggregator_instance, sample_gateway_test_ips
+        self, metrics_aggregator_instance, sample_gateway_test_ips, mock_http_client
     ):
         """Should fallback to old endpoint"""
         mock_response_fail = MagicMock()
@@ -169,60 +150,49 @@ class TestDataFetching:
         mock_response_success.status_code = 200
         mock_response_success.json.return_value = sample_gateway_test_ips
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=[mock_response_fail, mock_response_success]
-            )
+        mock_http_client.get.side_effect = [mock_response_fail, mock_response_success]
 
-            test_ips = await metrics_aggregator_instance._fetch_gateway_test_ips()
+        test_ips = await metrics_aggregator_instance._fetch_gateway_test_ips()
 
-            assert "192.168.1.1" in test_ips
+        assert "192.168.1.1" in test_ips
 
     async def test_fetch_speed_test_results_success(
-        self, metrics_aggregator_instance, sample_speed_test_results
+        self, metrics_aggregator_instance, sample_speed_test_results, mock_http_client
     ):
         """Should fetch speed test results"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = sample_speed_test_results
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        results = await metrics_aggregator_instance._fetch_speed_test_results()
 
-            results = await metrics_aggregator_instance._fetch_speed_test_results()
+        assert "192.168.1.1" in results
 
-            assert "192.168.1.1" in results
-
-    async def test_fetch_monitoring_status_success(self, metrics_aggregator_instance):
+    async def test_fetch_monitoring_status_success(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should fetch monitoring status"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"is_monitoring": True}
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        status = await metrics_aggregator_instance._fetch_monitoring_status()
 
-            status = await metrics_aggregator_instance._fetch_monitoring_status()
+        assert status is not None
 
-            assert status is not None
-
-    async def test_fetch_monitoring_status_not_found(self, metrics_aggregator_instance):
+    async def test_fetch_monitoring_status_not_found(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return None when not found"""
         mock_response = MagicMock()
         mock_response.status_code = 404
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
+        status = await metrics_aggregator_instance._fetch_monitoring_status()
 
-            status = await metrics_aggregator_instance._fetch_monitoring_status()
-
-            assert status is None
+        assert status is None
 
 
 class TestDataTransformation:
@@ -554,7 +524,7 @@ class TestPublishing:
 class TestSpeedTest:
     """Tests for speed test triggering"""
 
-    async def test_trigger_speed_test_success(self, metrics_aggregator_instance):
+    async def test_trigger_speed_test_success(self, metrics_aggregator_instance, mock_http_client):
         """Should trigger speed test successfully"""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -565,28 +535,23 @@ class TestSpeedTest:
             "upload_mbps": 50.0,
             "ping_ms": 15.0,
         }
+        mock_http_client.post.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+        with patch("app.services.metrics_aggregator.redis_publisher") as mock_publisher:
+            mock_publisher.publish_speed_test_result = AsyncMock(return_value=True)
 
-            with patch("app.services.metrics_aggregator.redis_publisher") as mock_publisher:
-                mock_publisher.publish_speed_test_result = AsyncMock(return_value=True)
-
-                result = await metrics_aggregator_instance.trigger_speed_test("192.168.1.1")
+            result = await metrics_aggregator_instance.trigger_speed_test("192.168.1.1")
 
         assert result is not None
         assert result.download_mbps == 100.0
 
-    async def test_trigger_speed_test_connect_error(self, metrics_aggregator_instance):
+    async def test_trigger_speed_test_connect_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return None on connection error"""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+        mock_http_client.post.side_effect = httpx.ConnectError("Connection refused")
 
-            result = await metrics_aggregator_instance.trigger_speed_test("192.168.1.1")
+        result = await metrics_aggregator_instance.trigger_speed_test("192.168.1.1")
 
         assert result is None
 
@@ -666,7 +631,9 @@ class TestConfiguration:
 class TestFetchAllNetworkIds:
     """Tests for _fetch_all_network_ids method"""
 
-    async def test_fetch_all_network_ids_success(self, metrics_aggregator_instance):
+    async def test_fetch_all_network_ids_success(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should fetch network IDs successfully"""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -675,63 +642,53 @@ class TestFetchAllNetworkIds:
             {"id": "network-2", "name": "Network 2"},
             {"id": None, "name": "Invalid"},  # Should be filtered out
         ]
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_all_network_ids()
+        result = await metrics_aggregator_instance._fetch_all_network_ids()
 
         assert result == ["network-1", "network-2"]
 
-    async def test_fetch_all_network_ids_auth_error(self, metrics_aggregator_instance):
+    async def test_fetch_all_network_ids_auth_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return empty list on auth error"""
         mock_response = MagicMock()
         mock_response.status_code = 401
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_all_network_ids()
+        result = await metrics_aggregator_instance._fetch_all_network_ids()
 
         assert result == []
 
-    async def test_fetch_all_network_ids_other_error(self, metrics_aggregator_instance):
+    async def test_fetch_all_network_ids_other_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return empty list on other HTTP errors"""
         mock_response = MagicMock()
         mock_response.status_code = 500
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_all_network_ids()
+        result = await metrics_aggregator_instance._fetch_all_network_ids()
 
         assert result == []
 
-    async def test_fetch_all_network_ids_connect_error(self, metrics_aggregator_instance):
+    async def test_fetch_all_network_ids_connect_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return empty list on connection error"""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=httpx.ConnectError("Connection refused")
-            )
+        mock_http_client.get.side_effect = httpx.ConnectError("Connection refused")
 
-            result = await metrics_aggregator_instance._fetch_all_network_ids()
+        result = await metrics_aggregator_instance._fetch_all_network_ids()
 
         assert result == []
 
-    async def test_fetch_all_network_ids_generic_error(self, metrics_aggregator_instance):
+    async def test_fetch_all_network_ids_generic_error(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return empty list on generic error"""
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                side_effect=Exception("Error")
-            )
+        mock_http_client.get.side_effect = Exception("Error")
 
-            result = await metrics_aggregator_instance._fetch_all_network_ids()
+        result = await metrics_aggregator_instance._fetch_all_network_ids()
 
         assert result == []
 
@@ -740,62 +697,52 @@ class TestMultiTenantLayout:
     """Tests for multi-tenant network layout fetching"""
 
     async def test_fetch_network_layout_with_network_id_success(
-        self, metrics_aggregator_instance, sample_layout
+        self, metrics_aggregator_instance, sample_layout, mock_http_client
     ):
         """Should fetch layout for specific network ID"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"layout_data": sample_layout}
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_network_layout("network-123")
+        result = await metrics_aggregator_instance._fetch_network_layout("network-123")
 
         assert result == sample_layout
 
-    async def test_fetch_network_layout_with_network_id_no_data(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_with_network_id_no_data(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return None when network has no layout data"""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"layout_data": None}
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_network_layout("network-123")
+        result = await metrics_aggregator_instance._fetch_network_layout("network-123")
 
         assert result is None
 
-    async def test_fetch_network_layout_with_network_id_404(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_with_network_id_404(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return None when network not found"""
         mock_response = MagicMock()
         mock_response.status_code = 404
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_network_layout("network-123")
+        result = await metrics_aggregator_instance._fetch_network_layout("network-123")
 
         assert result is None
 
-    async def test_fetch_network_layout_with_network_id_500(self, metrics_aggregator_instance):
+    async def test_fetch_network_layout_with_network_id_500(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should return None on server error"""
         mock_response = MagicMock()
         mock_response.status_code = 500
+        mock_http_client.get.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-                return_value=mock_response
-            )
-
-            result = await metrics_aggregator_instance._fetch_network_layout("network-123")
+        result = await metrics_aggregator_instance._fetch_network_layout("network-123")
 
         assert result is None
 

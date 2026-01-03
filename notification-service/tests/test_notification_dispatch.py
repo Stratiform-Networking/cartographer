@@ -429,7 +429,11 @@ class TestSendToNetworkUsers:
         with patch("app.services.notification_dispatch.user_preferences_service") as mock_ups:
             # Mock batch methods that are awaited
             mock_ups.get_user_emails_batch = AsyncMock(
-                return_value={"user1": "u1@example.com", "user2": "u2@example.com", "user3": "u3@example.com"}
+                return_value={
+                    "user1": "u1@example.com",
+                    "user2": "u2@example.com",
+                    "user3": "u3@example.com",
+                }
             )
             mock_ups.get_network_preferences_batch = AsyncMock(
                 return_value={"user1": mock_prefs, "user2": mock_prefs, "user3": mock_prefs}

@@ -163,7 +163,9 @@ class TestMetricsAggregatorEdgeCases:
 
         assert result is None
 
-    async def test_trigger_speed_test_invalid_timestamp(self, metrics_aggregator_instance):
+    async def test_trigger_speed_test_invalid_timestamp(
+        self, metrics_aggregator_instance, mock_http_client
+    ):
         """Should handle invalid timestamp in response"""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -172,16 +174,12 @@ class TestMetricsAggregatorEdgeCases:
             "timestamp": "invalid",
             "download_mbps": 100.0,
         }
+        mock_http_client.post.return_value = mock_response
 
-        with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                return_value=mock_response
-            )
+        with patch("app.services.metrics_aggregator.redis_publisher") as mock_publisher:
+            mock_publisher.publish_speed_test_result = AsyncMock(return_value=True)
 
-            with patch("app.services.metrics_aggregator.redis_publisher") as mock_publisher:
-                mock_publisher.publish_speed_test_result = AsyncMock(return_value=True)
-
-                result = await metrics_aggregator_instance.trigger_speed_test("192.168.1.1")
+            result = await metrics_aggregator_instance.trigger_speed_test("192.168.1.1")
 
         assert result is not None
         assert result.download_mbps == 100.0
@@ -580,23 +578,27 @@ class TestLifespan:
         """Should handle Redis connection in lifespan"""
         from fastapi import FastAPI
 
-        from app.main import create_app, lifespan
+        from app.main import lifespan
 
         app = FastAPI()
 
-        with patch("app.main.redis_publisher") as mock_redis:
-            mock_redis.connect = AsyncMock(return_value=True)
-            mock_redis.store_last_snapshot = AsyncMock(return_value=True)
-            mock_redis.publish_topology_snapshot = AsyncMock(return_value=True)
-            mock_redis.disconnect = AsyncMock()
+        with patch("app.main.http_client") as mock_http:
+            mock_http.initialize = AsyncMock()
+            mock_http.close = AsyncMock()
 
-            with patch("app.main.metrics_aggregator") as mock_aggregator:
-                mock_aggregator.generate_snapshot = AsyncMock(return_value=None)
-                mock_aggregator.start_publishing = MagicMock()
-                mock_aggregator.stop_publishing = MagicMock()
+            with patch("app.main.redis_publisher") as mock_redis:
+                mock_redis.connect = AsyncMock(return_value=True)
+                mock_redis.store_last_snapshot = AsyncMock(return_value=True)
+                mock_redis.publish_topology_snapshot = AsyncMock(return_value=True)
+                mock_redis.disconnect = AsyncMock()
 
-                async with lifespan(app):
-                    pass
+                with patch("app.main.metrics_aggregator") as mock_aggregator:
+                    mock_aggregator.generate_all_snapshots = AsyncMock(return_value={})
+                    mock_aggregator.start_publishing = MagicMock()
+                    mock_aggregator.stop_publishing = MagicMock()
+
+                    async with lifespan(app):
+                        pass
 
         mock_redis.connect.assert_called_once()
         mock_aggregator.start_publishing.assert_called_once()
@@ -611,17 +613,21 @@ class TestLifespan:
 
         app = FastAPI()
 
-        with patch("app.main.redis_publisher") as mock_redis:
-            mock_redis.connect = AsyncMock(return_value=False)
-            mock_redis.disconnect = AsyncMock()
+        with patch("app.main.http_client") as mock_http:
+            mock_http.initialize = AsyncMock()
+            mock_http.close = AsyncMock()
 
-            with patch("app.main.metrics_aggregator") as mock_aggregator:
-                mock_aggregator.generate_snapshot = AsyncMock(return_value=None)
-                mock_aggregator.start_publishing = MagicMock()
-                mock_aggregator.stop_publishing = MagicMock()
+            with patch("app.main.redis_publisher") as mock_redis:
+                mock_redis.connect = AsyncMock(return_value=False)
+                mock_redis.disconnect = AsyncMock()
 
-                async with lifespan(app):
-                    pass
+                with patch("app.main.metrics_aggregator") as mock_aggregator:
+                    mock_aggregator.generate_all_snapshots = AsyncMock(return_value={})
+                    mock_aggregator.start_publishing = MagicMock()
+                    mock_aggregator.stop_publishing = MagicMock()
+
+                    async with lifespan(app):
+                        pass
 
         # Should still start even if Redis fails
         mock_aggregator.start_publishing.assert_called_once()
@@ -642,20 +648,24 @@ class TestLifespan:
         # Create a dict of network_id -> snapshot for multi-tenant mode
         snapshots = {"network-123": snapshot}
 
-        with patch("app.main.redis_publisher") as mock_redis:
-            mock_redis.connect = AsyncMock(return_value=True)
-            mock_redis.store_last_snapshot = AsyncMock(return_value=True)
-            mock_redis.publish_topology_snapshot = AsyncMock(return_value=True)
-            mock_redis.disconnect = AsyncMock()
+        with patch("app.main.http_client") as mock_http:
+            mock_http.initialize = AsyncMock()
+            mock_http.close = AsyncMock()
 
-            with patch("app.main.metrics_aggregator") as mock_aggregator:
-                # generate_all_snapshots returns a dict of network_id -> snapshot
-                mock_aggregator.generate_all_snapshots = AsyncMock(return_value=snapshots)
-                mock_aggregator.start_publishing = MagicMock()
-                mock_aggregator.stop_publishing = MagicMock()
+            with patch("app.main.redis_publisher") as mock_redis:
+                mock_redis.connect = AsyncMock(return_value=True)
+                mock_redis.store_last_snapshot = AsyncMock(return_value=True)
+                mock_redis.publish_topology_snapshot = AsyncMock(return_value=True)
+                mock_redis.disconnect = AsyncMock()
 
-                async with lifespan(app):
-                    pass
+                with patch("app.main.metrics_aggregator") as mock_aggregator:
+                    # generate_all_snapshots returns a dict of network_id -> snapshot
+                    mock_aggregator.generate_all_snapshots = AsyncMock(return_value=snapshots)
+                    mock_aggregator.start_publishing = MagicMock()
+                    mock_aggregator.stop_publishing = MagicMock()
+
+                    async with lifespan(app):
+                        pass
 
         mock_redis.store_last_snapshot.assert_called_once()
         mock_redis.publish_topology_snapshot.assert_called_once()
@@ -668,15 +678,21 @@ class TestLifespan:
 
         app = FastAPI()
 
-        with patch("app.main.redis_publisher") as mock_redis:
-            mock_redis.connect = AsyncMock(return_value=True)
-            mock_redis.disconnect = AsyncMock()
+        with patch("app.main.http_client") as mock_http:
+            mock_http.initialize = AsyncMock()
+            mock_http.close = AsyncMock()
 
-            with patch("app.main.metrics_aggregator") as mock_aggregator:
-                mock_aggregator.generate_snapshot = AsyncMock(side_effect=Exception("Error"))
-                mock_aggregator.start_publishing = MagicMock()
-                mock_aggregator.stop_publishing = MagicMock()
+            with patch("app.main.redis_publisher") as mock_redis:
+                mock_redis.connect = AsyncMock(return_value=True)
+                mock_redis.disconnect = AsyncMock()
 
-                # Should not raise
-                async with lifespan(app):
-                    pass
+                with patch("app.main.metrics_aggregator") as mock_aggregator:
+                    mock_aggregator.generate_all_snapshots = AsyncMock(
+                        side_effect=Exception("Error")
+                    )
+                    mock_aggregator.start_publishing = MagicMock()
+                    mock_aggregator.stop_publishing = MagicMock()
+
+                    # Should not raise
+                    async with lifespan(app):
+                        pass

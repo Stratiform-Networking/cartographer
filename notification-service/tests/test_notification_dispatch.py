@@ -416,18 +416,37 @@ class TestSendToNetworkUsers:
         """Should send to multiple users"""
         mock_db = AsyncMock()
 
-        with patch.object(dispatch_service, "send_to_user", new_callable=AsyncMock) as mock_send:
-            mock_send.return_value = []
+        # Create mock prefs that will pass _should_notify_user check
+        mock_prefs = MagicMock()
+        mock_prefs.email_enabled = True
+        mock_prefs.discord_enabled = False
+        mock_prefs.enabled_types = ["device_offline"]
+        mock_prefs.type_priorities = {}
+        mock_prefs.minimum_priority = "low"
+        mock_prefs.quiet_hours_enabled = False
+        mock_prefs.discord_user_id = None
 
-            with patch("app.services.notification_dispatch.user_preferences_service") as mock_ups:
-                mock_ups.get_user_email = AsyncMock(return_value="test@example.com")
+        with patch("app.services.notification_dispatch.user_preferences_service") as mock_ups:
+            # Mock batch methods that are awaited
+            mock_ups.get_user_emails_batch = AsyncMock(
+                return_value={"user1": "u1@example.com", "user2": "u2@example.com", "user3": "u3@example.com"}
+            )
+            mock_ups.get_network_preferences_batch = AsyncMock(
+                return_value={"user1": mock_prefs, "user2": mock_prefs, "user3": mock_prefs}
+            )
+
+            # Mock the dispatch method
+            with patch.object(
+                dispatch_service, "_dispatch_notifications_for_user", new_callable=AsyncMock
+            ) as mock_dispatch:
+                mock_dispatch.return_value = []
 
                 results = await dispatch_service.send_to_network_users(
                     mock_db, "network-123", ["user1", "user2", "user3"], sample_event
                 )
 
         assert len(results) == 3
-        assert mock_send.call_count == 3
+        assert mock_dispatch.call_count == 3
 
     @pytest.mark.asyncio
     async def test_send_to_network_users_scheduled(self, dispatch_service, sample_event):

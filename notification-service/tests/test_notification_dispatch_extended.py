@@ -519,7 +519,13 @@ class TestSendToNetworkUsers:
                 "app.services.notification_dispatch.send_notification_email", new_callable=AsyncMock
             ) as mock_send,
         ):
-
+            # Mock batch methods that are awaited
+            mock_prefs_svc.get_user_emails_batch = AsyncMock(
+                return_value={"user1": "u1@example.com", "user2": "u2@example.com"}
+            )
+            mock_prefs_svc.get_network_preferences_batch = AsyncMock(
+                return_value={"user1": prefs, "user2": prefs}
+            )
             mock_prefs_svc.get_or_create_network_preferences = AsyncMock(return_value=prefs)
             mock_prefs_svc.get_user_email = AsyncMock(return_value="test@example.com")
             mock_send.return_value = mock_record

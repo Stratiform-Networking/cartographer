@@ -874,3 +874,207 @@ class TestAdditionalCoverage:
         data = response.json()
         # Should still return config, with error in provider
         assert "providers" in data
+
+
+class TestRedisCaching:
+    """Tests for Redis caching paths in assistant router"""
+
+    async def test_redis_connection_failure(self):
+        """Should handle Redis connection failure gracefully"""
+        from app.routers.assistant import get_redis
+
+        with patch("app.routers.assistant.aioredis.from_url") as mock_from_url:
+            mock_redis = AsyncMock()
+            mock_redis.ping = AsyncMock(side_effect=Exception("Connection refused"))
+            mock_from_url.return_value = mock_redis
+
+            # Reset global state
+            import app.routers.assistant as router_module
+
+            router_module._redis_client = None
+
+            redis = await get_redis()
+            assert redis is None
+
+    async def test_cache_get_success(self):
+        """Should return cached data on cache hit"""
+        from app.routers.assistant import _cache_get
+
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value='{"key": "value"}')
+
+        result = await _cache_get(mock_redis, "test-key")
+
+        assert result == {"key": "value"}
+
+    async def test_cache_get_miss(self):
+        """Should return None on cache miss"""
+        from app.routers.assistant import _cache_get
+
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=None)
+
+        result = await _cache_get(mock_redis, "test-key")
+
+        assert result is None
+
+    async def test_cache_get_error(self):
+        """Should return None on cache read error"""
+        from app.routers.assistant import _cache_get
+
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(side_effect=Exception("Redis error"))
+
+        result = await _cache_get(mock_redis, "test-key")
+
+        assert result is None
+
+    async def test_cache_set_success(self):
+        """Should set cache value"""
+        from app.routers.assistant import _cache_set
+
+        mock_redis = AsyncMock()
+        mock_redis.setex = AsyncMock(return_value=True)
+
+        await _cache_set(mock_redis, "test-key", {"key": "value"}, 300)
+
+        mock_redis.setex.assert_called_once()
+
+    async def test_cache_set_error(self):
+        """Should handle cache write error gracefully"""
+        from app.routers.assistant import _cache_set
+
+        mock_redis = AsyncMock()
+        mock_redis.setex = AsyncMock(side_effect=Exception("Redis error"))
+
+        # Should not raise
+        await _cache_set(mock_redis, "test-key", {"key": "value"}, 300)
+
+    async def test_cache_set_no_redis(self):
+        """Should handle None redis client"""
+        from app.routers.assistant import _cache_set
+
+        # Should not raise
+        await _cache_set(None, "test-key", {"key": "value"}, 300)
+
+
+class TestProviderRefresh:
+    """Tests for model refresh with provider availability"""
+
+    def test_refresh_models_provider_not_available(self):
+        """Should handle provider not available in refresh"""
+        from fastapi.testclient import TestClient
+
+        app = create_test_app_with_auth()
+        client = TestClient(app)
+
+        with patch("app.routers.assistant.get_provider") as mock_get:
+            mock_provider = MagicMock()
+            mock_provider.is_available = AsyncMock(return_value=False)
+            mock_get.return_value = mock_provider
+
+            response = client.post("/api/assistant/models/refresh")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["refreshed"] is True
+        # Should have error for unavailable providers
+        for provider_data in data["providers"].values():
+            if not provider_data["success"]:
+                assert "not available" in provider_data["error"].lower()
+
+    def test_refresh_models_provider_exception(self):
+        """Should handle provider exception in refresh"""
+        from fastapi.testclient import TestClient
+
+        app = create_test_app_with_auth()
+        client = TestClient(app)
+
+        with patch("app.routers.assistant.get_provider") as mock_get:
+            mock_get.side_effect = Exception("Provider init failed")
+
+            response = client.post("/api/assistant/models/refresh")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["refreshed"] is True
+
+
+class TestRateLimitExempt:
+    """Tests for rate limit exempt users"""
+
+    def test_rate_limit_exempt_user(self):
+        """Should return exempt status for admin users"""
+        from fastapi.testclient import TestClient
+
+        from app.dependencies.auth import AuthenticatedUser, UserRole, require_auth
+        from app.routers.assistant import require_chat_auth
+
+        # Create admin user
+        admin_user = AuthenticatedUser(user_id="admin-user", username="admin", role=UserRole.ADMIN)
+
+        async def mock_admin_auth():
+            return admin_user
+
+        app = create_test_app_with_auth()
+        app.dependency_overrides[require_auth] = mock_admin_auth
+        app.dependency_overrides[require_chat_auth] = mock_admin_auth
+
+        client = TestClient(app)
+
+        with patch("app.routers.assistant.get_rate_limit_status") as mock_status:
+            mock_status.return_value = {
+                "used": 0,
+                "limit": 999999,
+                "remaining": 999999,
+                "resets_in_seconds": 86400,
+                "is_exempt": True,
+            }
+
+            # Correct route is /chat/limit not /rate-limit
+            response = client.get("/api/assistant/chat/limit")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_exempt"] is True
+        assert data["is_limited"] is False
+
+
+class TestBaseProviderMethods:
+    """Tests for base provider abstract methods"""
+
+    async def test_base_provider_list_models_default(self):
+        """Should return default model from list_models implementation"""
+        from app.providers.base import BaseProvider, ChatMessage, ProviderConfig
+
+        class ConcreteProvider(BaseProvider):
+            """Concrete implementation for testing"""
+
+            @property
+            def name(self) -> str:
+                return "test"
+
+            @property
+            def default_model(self) -> str:
+                return "test-model"
+
+            async def is_available(self) -> bool:
+                return False
+
+            async def chat(self, messages: list[ChatMessage], **kwargs) -> str:
+                raise NotImplementedError("Not implemented")
+
+            async def stream_chat(self, messages: list[ChatMessage], **kwargs):
+                raise NotImplementedError("Not implemented")
+                yield  # Make it a generator
+
+        config = ProviderConfig(api_key="test")
+        provider = ConcreteProvider(config)
+
+        # list_models returns the default model by default
+        result = await provider.list_models()
+        assert result == ["test-model"]
+
+        # is_available should return False (as implemented)
+        result = await provider.is_available()
+        assert result is False

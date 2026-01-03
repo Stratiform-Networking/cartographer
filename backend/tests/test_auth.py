@@ -76,8 +76,8 @@ class TestVerifyTokenWithAuthService:
     @pytest.fixture
     def mock_cache_service(self):
         """Mock cache_service for token caching"""
-        # cache_service is imported dynamically inside the function
-        with patch("app.services.cache_service.cache_service") as mock:
+        # Must patch where it's used (auth_service), not where it's defined
+        with patch("app.services.auth_service.cache_service") as mock:
             mock.get = AsyncMock(return_value=None)  # Cache miss
             mock.set = AsyncMock(return_value=True)
             yield mock

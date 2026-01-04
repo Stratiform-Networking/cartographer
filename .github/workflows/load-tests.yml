@@ -10,7 +10,7 @@ name: Load Tests
 #
 #   Algorithm:
 #     1. Start with initial_users (default: 10)
-#     2. Add ramp_step users (default: +10) every ramp_interval seconds (default: 90s)
+#     2. Add ramp_step users (default: +10) every ramp_interval seconds (default: 30s)
 #     3. Monitor: P95 latency < 200ms AND error rate < 1%
 #     4. Stop when thresholds exceeded (runs until failure - no user limit)
 #     5. Report the "knee point" = maximum sustainable capacity
@@ -18,7 +18,7 @@ name: Load Tests
 #   Configuration:
 #     - Initial Users:     10 (starting point)
 #     - Ramp Step:         +10 users per interval
-#     - Ramp Interval:     90s (1.5 minutes between ramps)
+#     - Ramp Interval:     30s between ramps
 #     - Max Duration:      3600s (1 hour)
 #     - P95 Threshold:     200ms
 #     - Error Threshold:   1%
@@ -71,7 +71,7 @@ on:
       ramp_interval:
         description: '[Capacity Discovery] Seconds between ramps'
         required: false
-        default: '90'
+        default: '30'
         type: string
       service:
         description: 'Service to test (all, auth, health, metrics, assistant, notifications)'
@@ -471,7 +471,7 @@ jobs:
           LOADTEST_PASSWORD: LoadTest123!
           RAMP_INITIAL_USERS: ${{ github.event.inputs.ramp_initial_users || '10' }}
           RAMP_STEP: ${{ github.event.inputs.ramp_step || '10' }}
-          RAMP_INTERVAL: ${{ github.event.inputs.ramp_interval || '90' }}
+          RAMP_INTERVAL: ${{ github.event.inputs.ramp_interval || '30' }}
           RAMP_MAX_DURATION: '3600'
           RAMP_P95_THRESHOLD: '200'
           RAMP_ERROR_THRESHOLD: '0.01'
@@ -691,7 +691,7 @@ jobs:
             echo "### 🔍 Capacity Discovery Settings" >> $GITHUB_STEP_SUMMARY
             echo "- **Initial Users**: ${{ github.event.inputs.ramp_initial_users || '10' }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Ramp Step**: +${{ github.event.inputs.ramp_step || '10' }} users" >> $GITHUB_STEP_SUMMARY
-            echo "- **Ramp Interval**: ${{ github.event.inputs.ramp_interval || '90' }}s" >> $GITHUB_STEP_SUMMARY
+            echo "- **Ramp Interval**: ${{ github.event.inputs.ramp_interval || '30' }}s" >> $GITHUB_STEP_SUMMARY
             echo "- **Max Users**: unlimited (runs until failure)" >> $GITHUB_STEP_SUMMARY
             echo "- **Max Duration**: 1 hour" >> $GITHUB_STEP_SUMMARY
             echo "- **Spawn Rate**: ${{ github.event.inputs.spawn_rate || '5' }}/s" >> $GITHUB_STEP_SUMMARY

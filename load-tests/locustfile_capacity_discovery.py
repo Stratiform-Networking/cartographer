@@ -15,7 +15,7 @@ Environment Variables:
 
     RAMP_INITIAL_USERS: Starting number of users (default: 10)
     RAMP_STEP: Users to add per step (default: 10)
-    RAMP_INTERVAL: Seconds between steps (default: 90)
+    RAMP_INTERVAL: Seconds between steps (default: 30)
     RAMP_MAX_DURATION: Maximum test duration in seconds (default: 3600 = 1 hour)
     RAMP_P95_THRESHOLD: P95 latency threshold in ms (default: 200)
     RAMP_ERROR_THRESHOLD: Error rate threshold (default: 0.01 = 1%)

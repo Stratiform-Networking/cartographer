@@ -6,7 +6,7 @@ system capacity by gradually increasing load until performance degrades.
 
 Algorithm:
 1. Start with initial_users (default: 10)
-2. Every ramp_interval seconds (default: 90s), add ramp_step users (default: 10)
+2. Every ramp_interval seconds (default: 30s), add ramp_step users (default: 10)
 3. Monitor performance metrics:
    - P95 latency threshold (default: 200ms for normal endpoints, 10s for long ops)
    - Error rate threshold (default: 1%)
@@ -32,7 +32,7 @@ class CapacityDiscoveryShape(LoadTestShape):
     Configuration via environment variables:
         RAMP_INITIAL_USERS: Starting number of users (default: 10)
         RAMP_STEP: Users to add per step (default: 10)
-        RAMP_INTERVAL: Seconds between steps (default: 90)
+        RAMP_INTERVAL: Seconds between steps (default: 30)
         RAMP_MAX_DURATION: Maximum test duration in seconds (default: 3600 = 1 hour)
         RAMP_P95_THRESHOLD: P95 latency threshold in ms (default: 200)
         RAMP_ERROR_THRESHOLD: Error rate threshold (default: 0.01 = 1%)
@@ -42,7 +42,7 @@ class CapacityDiscoveryShape(LoadTestShape):
     # Default configuration
     initial_users = 10          # Start with 10 users
     ramp_step = 10              # Add 10 users per step
-    ramp_interval = 90          # Every 90 seconds (1.5 min)
+    ramp_interval = 30          # Every 30 seconds
     max_duration = 3600         # 1 hour max duration
     p95_threshold = 200         # 200ms P95 latency threshold
     error_threshold = 0.01      # 1% error rate threshold
@@ -191,17 +191,17 @@ class CapacityDiscoveryShape(LoadTestShape):
 class FastCapacityDiscoveryShape(CapacityDiscoveryShape):
     """
     Faster capacity discovery for testing/development.
-    Ramps every 60 seconds instead of 90.
+    Ramps every 15 seconds (faster than default 30s).
     """
-    ramp_interval = 60
+    ramp_interval = 15
 
 
 class ConservativeCapacityDiscoveryShape(CapacityDiscoveryShape):
     """
     Conservative capacity discovery with longer stabilization time.
-    Ramps every 120 seconds (2 minutes) to allow full stabilization.
+    Ramps every 60 seconds (slower than default 30s) to allow full stabilization.
     """
-    ramp_interval = 120
+    ramp_interval = 60
     
     
 class HighCapacityDiscoveryShape(CapacityDiscoveryShape):

@@ -10,15 +10,31 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Auth Service configuration loaded from environment variables."""
 
+    # === Auth Provider Configuration ===
+    # Determines which authentication system to use
+    # "local" = bcrypt/JWT (self-hosted)
+    # "cloud" = Clerk + WorkOS (cloud-hosted)
+    auth_provider: str = "local"
+
     # Database
     database_url: str = (
         "postgresql+asyncpg://cartographer:cartographer_secret@localhost:5432/cartographer"
     )
 
-    # JWT Configuration
+    # JWT Configuration (used for both local and cloud modes)
     jwt_secret: str = "cartographer-dev-secret-change-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
+
+    # === Clerk Configuration (cloud mode) ===
+    clerk_publishable_key: str | None = None
+    clerk_secret_key: str | None = None
+    clerk_webhook_secret: str | None = None
+
+    # === WorkOS Configuration (enterprise SSO) ===
+    workos_api_key: str | None = None
+    workos_client_id: str | None = None
+    workos_webhook_secret: str | None = None
 
     # Invitation Settings
     invite_expiration_hours: int = 72

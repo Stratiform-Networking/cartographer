@@ -5,14 +5,13 @@ Compatible with cartographer-cloud user format with additional role field.
 
 import enum
 from datetime import datetime
-from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import String, Text
+from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from .database import Base
@@ -73,15 +72,20 @@ class User(Base):
 
     # User preferences (JSON blob for flexible storage)
     # Contains: { dark_mode?: boolean, ... }
-    preferences: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    last_login_at: Mapped[Optional[datetime]] = mapped_column(
+    last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships
+    provider_links: Mapped[list["ProviderLink"]] = relationship(
+        "ProviderLink", back_populates="user", cascade="all, delete-orphan"
     )
 
 
@@ -124,4 +128,36 @@ class Invite(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ProviderLink(Base):
+    """
+    Links external authentication provider users to local users.
+
+    Allows a user to have multiple authentication methods linked
+    (e.g., local password + Clerk social login + WorkOS SAML SSO).
+    This enables seamless migration between auth providers.
+    """
+
+    __tablename__ = "provider_links"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)  # "local", "clerk", "workos"
+    provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="provider_links")
+
+    # Ensure unique provider + provider_user_id combination
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_user_id", name="uq_provider_user"),
+    )

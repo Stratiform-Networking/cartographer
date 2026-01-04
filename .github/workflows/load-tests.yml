@@ -98,7 +98,7 @@ on:
 jobs:
   load-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 45  # Increased for longer load tests
+    timeout-minutes: 70  # Capacity discovery max duration (60m) + startup/cleanup buffer (10m)
     permissions:
       contents: write  # Needed to commit badge data
     

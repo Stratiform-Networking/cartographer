@@ -593,7 +593,7 @@ jobs:
       
       # Create badge endpoint (shields.io dynamic badge)
       - name: Create badge data
-        if: github.event_name == 'schedule'
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         working-directory: load-tests
         run: |
           MAX_USERS="${{ steps.extract_results.outputs.max_users }}"
@@ -627,7 +627,7 @@ jobs:
       
       # Commit badge data to repository (on main branch only)
       - name: Update badge data in repository
-        if: github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         run: |
           # Configure git
           git config user.name "github-actions[bot]"
@@ -726,11 +726,14 @@ jobs:
           echo "- Per-endpoint breakdown" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Add badge info for scheduled runs
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          # Add badge info for runs that update the badge
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "### 📛 Badge Updated" >> $GITHUB_STEP_SUMMARY
             echo "The nightly load test badge in README.md has been updated with these results." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "💡 **Tip**: If load tests fail consistently, consider:" >> $GITHUB_STEP_SUMMARY
             echo "- Reviewing service logs" >> $GITHUB_STEP_SUMMARY
             echo "- Checking for recent code changes" >> $GITHUB_STEP_SUMMARY

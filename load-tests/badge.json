@@ -1,7 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "nightly load test",
-  "message": "pending",
-  "color": "lightgrey"
+  "message": "1200+ users",
+  "color": "brightgreen"
 }
-

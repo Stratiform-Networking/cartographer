@@ -49,10 +49,10 @@
       <template v-else-if="mapData">
         <NetworkMapEmbed
           ref="networkMapRef"
-          :root="mapData"
+          :data="mapData"
           :sensitiveMode="sensitiveMode"
           :isDark="isDark"
-          :cachedMetrics="cachedMetrics"
+          :healthMetrics="cachedMetrics"
         />
 
         <!-- Branding Label (top-left overlay) -->

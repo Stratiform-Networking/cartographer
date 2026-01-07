@@ -279,8 +279,11 @@ async def register_embed_health_devices(embed_id: str, request: EmbedHealthRegis
     if not real_ips:
         return JSONResponse({"message": "No valid devices to register", "count": 0})
 
+    # Get network_id from embed config for health service registration
+    network_id = embed_config.get("networkId") or f"embed-{embed_id}"
+
     try:
-        response = await health_proxy_service.register_devices(real_ips)
+        response = await health_proxy_service.register_devices(real_ips, network_id=network_id)
         response.raise_for_status()
 
         return JSONResponse(

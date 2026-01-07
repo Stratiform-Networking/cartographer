@@ -45,18 +45,22 @@ async def health_service_request(
         return response
 
 
-async def register_devices(ips: list[str], timeout: float = 10.0) -> httpx.Response:
+async def register_devices(
+    ips: list[str], network_id: str | None = None, timeout: float = 10.0
+) -> httpx.Response:
     """Register devices with the health service for monitoring.
 
     Args:
         ips: List of IP addresses to register
+        network_id: Network ID (UUID string) these devices belong to
         timeout: Request timeout in seconds
 
     Returns:
         Response from health service
     """
+    body = {"ips": ips, "network_id": network_id or "embed"}
     return await health_service_request(
-        "POST", "/monitoring/devices", json_body={"ips": ips}, timeout=timeout
+        "POST", "/monitoring/devices", json_body=body, timeout=timeout
     )
 
 

@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage.vue';
 import NetworkPage from './pages/NetworkPage.vue';
 import EmbedPage from './pages/EmbedPage.vue';
 import AcceptInvitePage from './pages/AcceptInvitePage.vue';
+import OAuthCallbackPage from './pages/OAuthCallbackPage.vue';
 
 const routes = [
   {
@@ -26,6 +27,11 @@ const routes = [
     path: '/accept-invite',
     name: 'accept-invite',
     component: AcceptInvitePage,
+  },
+  {
+    path: '/oauth-callback',
+    name: 'oauth-callback',
+    component: OAuthCallbackPage,
   },
 ];
 

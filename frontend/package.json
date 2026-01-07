@@ -20,6 +20,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,vue,css}\""
   },
   "dependencies": {
+    "@clerk/clerk-js": "^5.55.2",
     "axios": "^1.7.7",
     "d3": "^7.9.0",
     "marked": "^17.0.1",

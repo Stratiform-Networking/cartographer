@@ -13,6 +13,7 @@ from ..database import get_db
 from ..db_models import Invite, User, UserRole
 from ..models import (
     AcceptInviteRequest,
+    AuthConfig,
     ChangePasswordRequest,
     InviteCreate,
     InviteResponse,
@@ -28,6 +29,9 @@ from ..models import (
     UserResponse,
     UserUpdate,
 )
+from ..config import settings
+from ..identity.factory import get_provider
+from ..identity.sync import sync_provider_user
 from ..services.auth_service import auth_service
 
 logger = logging.getLogger(__name__)
@@ -100,6 +104,27 @@ async def setup_owner(request: OwnerSetupRequest, db: AsyncSession = Depends(get
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ==================== Auth Configuration Endpoint ====================
+
+
+@router.get("/config", response_model=AuthConfig)
+async def get_auth_config():
+    """
+    Get auth provider configuration for frontend.
+
+    Returns the auth provider type and any necessary public keys.
+    This endpoint is public (no auth required) so the frontend can
+    determine which auth flow to use before the user logs in.
+    """
+    return AuthConfig(
+        provider=settings.auth_provider.lower(),
+        clerk_publishable_key=settings.clerk_publishable_key
+        if settings.auth_provider.lower() == "cloud"
+        else None,
+        allow_registration=settings.allow_open_registration,
+    )
+
+
 # ==================== Internal Endpoints (service-to-service) ====================
 
 
@@ -142,6 +167,67 @@ async def get_user_internal(user_id: str, db: AsyncSession = Depends(get_db)):
         "first_name": user.first_name,
         "last_name": user.last_name,
     }
+
+
+# ==================== Clerk OAuth Endpoint (Cloud) ====================
+
+
+@router.post("/clerk/exchange", response_model=LoginResponse)
+async def exchange_clerk_token(
+    db: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+):
+    """
+    Exchange a Clerk session token for a local JWT.
+
+    This endpoint is used when AUTH_PROVIDER=cloud. The frontend uses Clerk's
+    JavaScript SDK to authenticate (including social logins), then exchanges
+    the resulting Clerk session token for a local JWT.
+
+    The user is synced to the local database if they don't exist.
+    """
+    if settings.auth_provider.lower() != "cloud":
+        raise HTTPException(
+            status_code=400, detail="Clerk authentication is only available in cloud mode"
+        )
+
+    if not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Clerk session token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    provider = get_provider()
+    claims = await provider.validate_token(credentials.credentials)
+
+    if not claims:
+        raise HTTPException(status_code=401, detail="Invalid Clerk session token")
+
+    # Sync user to local database
+    local_user_id, created, updated = await sync_provider_user(
+        db, claims, create_if_missing=True
+    )
+
+    if not local_user_id:
+        raise HTTPException(status_code=500, detail="Failed to sync user to local database")
+
+    # Get the local user
+    user = await auth_service.get_user(db, str(local_user_id))
+    if not user:
+        raise HTTPException(status_code=500, detail="Failed to retrieve synced user")
+
+    # Create local JWT
+    token, expires_in = auth_service.create_access_token(user)
+
+    logger.info(f"Clerk token exchanged for user: {user.username} (created={created})")
+
+    return LoginResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=auth_service._to_response(user),
+    )
 
 
 # ==================== Registration Endpoint (Cloud) ====================

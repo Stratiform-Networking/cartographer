@@ -66,7 +66,7 @@
   <SetupWizard v-else-if="needsSetup" @complete="onSetupComplete" />
 
   <!-- Login Screen -->
-  <LoginScreen v-else-if="!isAuthenticated" @success="onLoginSuccess" />
+  <LoginScreen v-else-if="!isAuthenticated" :authConfig="authConfig" @success="onLoginSuccess" />
 
   <!-- Main Dashboard -->
   <div v-else class="min-h-screen bg-white dark:bg-slate-950">
@@ -720,7 +720,7 @@ import NotificationSettingsPanel from '../components/NotificationSettingsPanel.v
 import UserManagement from '../components/UserManagement.vue';
 import UpdateSettings from '../components/UpdateSettings.vue';
 
-const { isAuthenticated, user, initAuthState } = useAuth();
+const { isAuthenticated, user, initAuthState, authConfig } = useAuth();
 const {
   networks,
   loading: networksLoading,

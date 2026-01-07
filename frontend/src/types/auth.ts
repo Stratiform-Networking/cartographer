@@ -83,6 +83,14 @@ export interface AuthState {
   expiresAt: number;
 }
 
+export type AuthProvider = 'local' | 'cloud';
+
+export interface AuthConfig {
+  provider: AuthProvider;
+  clerk_publishable_key: string | null;
+  allow_registration: boolean;
+}
+
 // ==================== Invitation Types ====================
 
 export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';

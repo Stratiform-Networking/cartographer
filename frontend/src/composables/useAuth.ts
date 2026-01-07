@@ -2,6 +2,7 @@
  * Auth composable
  *
  * Manages authentication state and orchestrates auth API calls.
+ * Supports both local (self-hosted) and cloud (Clerk) authentication modes.
  */
 
 import { ref, computed, readonly } from 'vue';
@@ -20,6 +21,8 @@ import type {
   InviteCreateRequest,
   InviteTokenInfo,
   AcceptInviteRequest,
+  AuthConfig,
+  AuthProvider,
 } from '../types/auth';
 
 const AUTH_STORAGE_KEY = 'cartographer_auth';
@@ -31,12 +34,15 @@ const permissions = ref<string[]>([]);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
 const setupStatus = ref<SetupStatus | null>(null);
+const authConfig = ref<AuthConfig | null>(null);
 
 // Computed properties
 const isAuthenticated = computed(() => !!token.value && !!user.value);
 const isOwner = computed(() => user.value?.role === 'owner');
 const canWrite = computed(() => user.value?.role === 'owner' || user.value?.role === 'admin');
 const isReadOnly = computed(() => user.value?.role === 'member');
+const isCloudAuth = computed(() => authConfig.value?.provider === 'cloud');
+const authProvider = computed(() => authConfig.value?.provider ?? 'local');
 
 // Clear auth state
 function clearAuth(): void {
@@ -100,6 +106,25 @@ async function checkSetupStatus(): Promise<SetupStatus> {
   }
 }
 
+async function fetchAuthConfig(): Promise<AuthConfig> {
+  try {
+    const config = await authApi.getAuthConfig();
+    authConfig.value = config;
+    console.log('[Auth] Auth config loaded:', config.provider);
+    return config;
+  } catch (e) {
+    console.error('[Auth] Failed to fetch auth config:', e);
+    // Default to local auth if config fetch fails
+    const defaultConfig: AuthConfig = {
+      provider: 'local',
+      clerk_publishable_key: null,
+      allow_registration: false,
+    };
+    authConfig.value = defaultConfig;
+    return defaultConfig;
+  }
+}
+
 async function setupOwner(request: OwnerSetupRequest): Promise<User> {
   isLoading.value = true;
   error.value = null;
@@ -133,6 +158,32 @@ async function login(request: LoginRequest): Promise<User> {
     saveToStorage(access_token, authUser, expires_in);
 
     console.log('[Auth] Login successful:', authUser.username);
+    return authUser;
+  } catch (e) {
+    const message = extractErrorMessage(e);
+    error.value = message;
+    throw new Error(message);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function loginWithClerkToken(clerkToken: string): Promise<User> {
+  isLoading.value = true;
+  error.value = null;
+
+  try {
+    const response = await authApi.exchangeClerkToken(clerkToken);
+    const { access_token, expires_in, user: authUser } = response;
+
+    // Update state
+    token.value = access_token;
+    user.value = authUser;
+
+    // Save to storage
+    saveToStorage(access_token, authUser, expires_in);
+
+    console.log('[Auth] Clerk login successful:', authUser.username);
     return authUser;
   } catch (e) {
     const message = extractErrorMessage(e);
@@ -303,11 +354,14 @@ async function acceptInvite(request: AcceptInviteRequest): Promise<User> {
 
 /**
  * Helper for common auth initialization pattern.
- * Checks setup status and verifies session if setup is complete.
+ * Fetches auth config, checks setup status, and verifies session if setup is complete.
  * Used by pages that need to check setup and verify session.
  */
-export async function initAuthState(): Promise<{ needsSetup: boolean }> {
+export async function initAuthState(): Promise<{ needsSetup: boolean; config: AuthConfig }> {
   try {
+    // Fetch auth config first
+    const config = await fetchAuthConfig();
+
     const status = await checkSetupStatus();
     const requiresSetup = !status.is_setup_complete;
 
@@ -315,10 +369,15 @@ export async function initAuthState(): Promise<{ needsSetup: boolean }> {
       await verifySession();
     }
 
-    return { needsSetup: requiresSetup };
+    return { needsSetup: requiresSetup, config };
   } catch (e) {
-    console.error('[Auth] Failed to check setup status:', e);
-    return { needsSetup: false };
+    console.error('[Auth] Failed to initialize auth state:', e);
+    const defaultConfig: AuthConfig = {
+      provider: 'local',
+      clerk_publishable_key: null,
+      allow_registration: false,
+    };
+    return { needsSetup: false, config: defaultConfig };
   }
 }
 
@@ -337,17 +396,22 @@ export function useAuth() {
     isLoading: readonly(isLoading),
     error: readonly(error),
     setupStatus: readonly(setupStatus),
+    authConfig: readonly(authConfig),
 
     // Computed
     isAuthenticated,
     isOwner,
     canWrite,
     isReadOnly,
+    isCloudAuth,
+    authProvider,
 
     // Actions
     checkSetupStatus,
+    fetchAuthConfig,
     setupOwner,
     login,
+    loginWithClerkToken,
     logout,
     verifySession,
     refreshSession,

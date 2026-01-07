@@ -66,7 +66,7 @@
   <SetupWizard v-else-if="!isNetworkMode && needsSetup" @complete="onSetupComplete" />
 
   <!-- Login Screen (only when not in network mode) -->
-  <LoginScreen v-else-if="!isNetworkMode && !isAuthenticated" @success="onLoginSuccess" />
+  <LoginScreen v-else-if="!isNetworkMode && !isAuthenticated" :authConfig="authConfig" @success="onLoginSuccess" />
 
   <!-- Main Application -->
   <div v-else class="h-screen flex flex-col bg-white dark:bg-slate-950 relative">
@@ -869,7 +869,7 @@ const props = defineProps<{
 }>();
 
 // Auth state
-const { isAuthenticated, canWrite, initAuthState } = useAuth();
+const { isAuthenticated, canWrite, initAuthState, authConfig } = useAuth();
 const authLoading = ref(true);
 const needsSetup = ref(false);
 const showUserManagement = ref(false);

@@ -19,12 +19,18 @@ import type {
   InviteCreateRequest,
   InviteTokenInfo,
   AcceptInviteRequest,
+  AuthConfig,
 } from '../types/auth';
 
 // ==================== Setup & Session ====================
 
 export async function checkSetupStatus(): Promise<SetupStatus> {
   const response = await client.get<SetupStatus>('/api/auth/setup/status');
+  return response.data;
+}
+
+export async function getAuthConfig(): Promise<AuthConfig> {
+  const response = await client.get<AuthConfig>('/api/auth/config');
   return response.data;
 }
 
@@ -44,6 +50,15 @@ export async function logout(): Promise<void> {
 
 export async function verifySession(): Promise<{ valid: boolean }> {
   const response = await client.post<{ valid: boolean }>('/api/auth/verify');
+  return response.data;
+}
+
+export async function exchangeClerkToken(clerkToken: string): Promise<LoginResponse> {
+  const response = await client.post<LoginResponse>('/api/auth/clerk/exchange', null, {
+    headers: {
+      Authorization: `Bearer ${clerkToken}`,
+    },
+  });
   return response.data;
 }
 

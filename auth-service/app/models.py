@@ -128,6 +128,14 @@ class SetupStatus(BaseModel):
     total_users: int
 
 
+class AuthConfig(BaseModel):
+    """Auth provider configuration exposed to frontend."""
+
+    provider: str  # "local" or "cloud"
+    clerk_publishable_key: str | None = None
+    allow_registration: bool = False
+
+
 class ChangePasswordRequest(BaseModel):
     """Request to change password."""
 

@@ -5,6 +5,8 @@ Handles user authentication via Clerk's session tokens and webhooks.
 Provides social login, MFA, and organization features.
 """
 
+import base64
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -16,6 +18,23 @@ from ..claims import AuthMethod, AuthProvider, IdentityClaims, ProviderConfig
 from .base import AuthProviderInterface
 
 logger = logging.getLogger(__name__)
+
+
+def decode_jwt_payload(token: str) -> dict | None:
+    """Decode JWT payload without verification (verification done by Clerk API)."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        # Add padding if needed
+        payload = parts[1]
+        padding = 4 - len(payload) % 4
+        if padding != 4:
+            payload += "=" * padding
+        decoded = base64.urlsafe_b64decode(payload)
+        return json.loads(decoded)
+    except Exception:
+        return None
 
 
 class ClerkAuthProvider(AuthProviderInterface):
@@ -53,11 +72,22 @@ class ClerkAuthProvider(AuthProviderInterface):
             logger.error("Clerk secret key not configured")
             return None
 
+        # Decode JWT to get session_id (sid claim)
+        jwt_payload = decode_jwt_payload(token)
+        if not jwt_payload:
+            logger.warning("Failed to decode Clerk session token")
+            return None
+
+        session_id = jwt_payload.get("sid")
+        if not session_id:
+            logger.warning("No session_id (sid) in Clerk token")
+            return None
+
         async with httpx.AsyncClient() as client:
             try:
-                # Verify session with Clerk API
+                # Verify session with Clerk API using the correct endpoint
                 response = await client.post(
-                    f"{self.CLERK_API_BASE}/sessions/verify",
+                    f"{self.CLERK_API_BASE}/sessions/{session_id}/verify",
                     headers={
                         "Authorization": f"Bearer {self.secret_key}",
                         "Content-Type": "application/json",
@@ -66,7 +96,7 @@ class ClerkAuthProvider(AuthProviderInterface):
                 )
 
                 if response.status_code != 200:
-                    logger.debug(f"Clerk session verification failed: {response.status_code}")
+                    logger.debug(f"Clerk session verification failed: {response.status_code} - {response.text}")
                     return None
 
                 session_data = response.json()

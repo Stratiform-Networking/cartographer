@@ -1467,34 +1467,6 @@ class TestClerkAuthProvider:
 
             assert result is None
 
-    async def test_handle_webhook_no_svix(self):
-        """Should return error when svix not installed"""
-        import builtins
-
-        from app.identity.providers.clerk import ClerkAuthProvider
-
-        config = ProviderConfig(
-            provider=AuthProvider.CLERK,
-            enabled=True,
-            clerk_secret_key="sk_test_123",
-        )
-        provider = ClerkAuthProvider(config)
-
-        mock_request = MagicMock()
-
-        original_import = builtins.__import__
-
-        def mock_import(name, *args, **kwargs):
-            if name == "svix":
-                raise ImportError("No module named 'svix'")
-            return original_import(name, *args, **kwargs)
-
-        with patch.object(builtins, "__import__", side_effect=mock_import):
-            result = await provider.handle_webhook(mock_request)
-
-            assert "error" in result
-            assert "not available" in result["error"]
-
     async def test_handle_webhook_no_secret(self):
         """Should return error when webhook secret not configured"""
         import sys
@@ -1555,8 +1527,6 @@ class TestClerkAuthProvider:
 
     async def test_handle_webhook_success(self):
         """Should return payload on successful verification"""
-        import sys
-
         from app.identity.providers.clerk import ClerkAuthProvider
 
         config = ProviderConfig(
@@ -1577,11 +1547,7 @@ class TestClerkAuthProvider:
             "data": {"id": "user_123"},
         }
 
-        mock_svix = MagicMock()
-        mock_svix.Webhook.return_value = mock_webhook
-        mock_svix.WebhookVerificationError = Exception
-
-        with patch.dict(sys.modules, {"svix": mock_svix}):
+        with patch("app.identity.providers.clerk.svix.Webhook", return_value=mock_webhook):
             result = await provider.handle_webhook(mock_request)
 
             assert result["received"] is True

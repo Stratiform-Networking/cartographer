@@ -967,6 +967,9 @@ class TestClerkAuthProvider:
 
     async def test_validate_token_api_error(self):
         """Should return None on API error"""
+        import base64
+        import json
+
         from app.identity.providers.clerk import ClerkAuthProvider
 
         config = ProviderConfig(
@@ -976,14 +979,23 @@ class TestClerkAuthProvider:
         )
         provider = ClerkAuthProvider(config)
 
+        # Create a mock JWT token with session ID (sid) claim
+        header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).rstrip(b"=")
+        payload = base64.urlsafe_b64encode(
+            json.dumps({"sid": "sess_123", "sub": "user_456"}).encode()
+        ).rstrip(b"=")
+        signature = base64.urlsafe_b64encode(b"fake-signature").rstrip(b"=")
+        mock_jwt = f"{header.decode()}.{payload.decode()}.{signature.decode()}"
+
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
             mock_response = MagicMock()
             mock_response.status_code = 401
+            mock_response.text = "Unauthorized"
             mock_client.post.return_value = mock_response
 
-            result = await provider.validate_token("invalid-token")
+            result = await provider.validate_token(mock_jwt)
 
             assert result is None
 
@@ -1039,7 +1051,18 @@ class TestClerkAuthProvider:
             mock_client.post.return_value = mock_session_response
             mock_client.get.return_value = mock_user_response
 
-            result = await provider.validate_token("valid-token")
+            # Create a mock JWT token with session ID (sid) claim
+            import base64
+            import json
+
+            header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).rstrip(b"=")
+            payload = base64.urlsafe_b64encode(
+                json.dumps({"sid": "sess_123", "sub": "user_456"}).encode()
+            ).rstrip(b"=")
+            signature = base64.urlsafe_b64encode(b"fake-signature").rstrip(b"=")
+            mock_jwt = f"{header.decode()}.{payload.decode()}.{signature.decode()}"
+
+            result = await provider.validate_token(mock_jwt)
 
             assert result is not None
             assert result.provider == AuthProvider.CLERK

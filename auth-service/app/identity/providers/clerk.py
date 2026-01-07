@@ -96,7 +96,9 @@ class ClerkAuthProvider(AuthProviderInterface):
                 )
 
                 if response.status_code != 200:
-                    logger.debug(f"Clerk session verification failed: {response.status_code} - {response.text}")
+                    logger.debug(
+                        f"Clerk session verification failed: {response.status_code} - {response.text}"
+                    )
                     return None
 
                 session_data = response.json()

@@ -328,17 +328,21 @@ class TestProviderFactory:
             assert isinstance(provider, LocalAuthProvider)
             assert provider.config.provider == AuthProvider.LOCAL
 
-    def test_get_auth_provider_cloud_not_implemented(self):
-        """Should raise NotImplementedError for cloud mode"""
+    def test_get_auth_provider_cloud(self):
+        """Should return ClerkAuthProvider for cloud mode"""
         from app.identity.factory import get_auth_provider
+        from app.identity.providers.clerk import ClerkAuthProvider
 
         with patch("app.identity.factory.settings") as mock_settings:
             mock_settings.auth_provider = "cloud"
+            mock_settings.clerk_publishable_key = "pk_test_123"
+            mock_settings.clerk_secret_key = "sk_test_456"
+            mock_settings.clerk_webhook_secret = "whsec_789"
 
-            with pytest.raises(NotImplementedError) as exc_info:
-                get_auth_provider()
+            provider = get_auth_provider()
 
-            assert "Cloud auth provider" in str(exc_info.value)
+            assert isinstance(provider, ClerkAuthProvider)
+            assert provider.config.provider == AuthProvider.CLERK
 
     def test_get_auth_provider_invalid(self):
         """Should raise ValueError for invalid provider"""
@@ -925,6 +929,369 @@ class TestUserSync:
         assert result is False
 
 
+class TestClerkAuthProvider:
+    """Tests for ClerkAuthProvider"""
+
+    def test_init(self):
+        """Should initialize with config"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_publishable_key="pk_test_123",
+            clerk_secret_key="sk_test_456",
+            clerk_webhook_secret="whsec_789",
+        )
+
+        provider = ClerkAuthProvider(config)
+
+        assert provider.config == config
+        assert provider.secret_key == "sk_test_456"
+        assert provider.publishable_key == "pk_test_123"
+
+    async def test_validate_token_no_secret_key(self):
+        """Should return None when secret key not configured"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key=None,
+        )
+        provider = ClerkAuthProvider(config)
+
+        result = await provider.validate_token("some-token")
+
+        assert result is None
+
+    async def test_validate_token_api_error(self):
+        """Should return None on API error"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.status_code = 401
+            mock_client.post.return_value = mock_response
+
+            result = await provider.validate_token("invalid-token")
+
+            assert result is None
+
+    async def test_validate_token_success(self):
+        """Should return IdentityClaims on successful validation"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        session_data = {
+            "id": "sess_123",
+            "user_id": "user_456",
+            "created_at": 1700000000000,
+            "expire_at": 1700100000000,
+            "authentication_strategy": "password",
+        }
+        user_data = {
+            "id": "user_456",
+            "email_addresses": [
+                {
+                    "id": "email_1",
+                    "email_address": "test@example.com",
+                    "verification": {"status": "verified"},
+                }
+            ],
+            "primary_email_address_id": "email_1",
+            "username": "testuser",
+            "first_name": "Test",
+            "last_name": "User",
+            "image_url": "https://example.com/avatar.jpg",
+            "public_metadata": {"role": "admin"},
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            # Mock session verify response
+            mock_session_response = MagicMock()
+            mock_session_response.status_code = 200
+            mock_session_response.json.return_value = session_data
+
+            # Mock user fetch response
+            mock_user_response = MagicMock()
+            mock_user_response.status_code = 200
+            mock_user_response.json.return_value = user_data
+
+            mock_client.post.return_value = mock_session_response
+            mock_client.get.return_value = mock_user_response
+
+            result = await provider.validate_token("valid-token")
+
+            assert result is not None
+            assert result.provider == AuthProvider.CLERK
+            assert result.provider_user_id == "user_456"
+            assert result.email == "test@example.com"
+            assert result.email_verified is True
+            assert result.username == "testuser"
+            assert result.first_name == "Test"
+            assert result.last_name == "User"
+            assert result.auth_method == AuthMethod.PASSWORD
+
+    async def test_validate_session_from_cookie(self):
+        """Should validate session from cookie"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        mock_request = MagicMock()
+        mock_request.cookies.get.return_value = "session-token"
+        mock_request.headers.get.return_value = ""
+
+        with patch.object(provider, "validate_token", new_callable=AsyncMock) as mock_validate:
+            mock_validate.return_value = None
+
+            await provider.validate_session(mock_request)
+
+            mock_validate.assert_called_once_with("session-token")
+
+    async def test_validate_session_from_header(self):
+        """Should validate session from Authorization header"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        mock_request = MagicMock()
+        mock_request.cookies.get.return_value = None
+        mock_request.headers.get.return_value = "Bearer header-token"
+
+        with patch.object(provider, "validate_token", new_callable=AsyncMock) as mock_validate:
+            mock_validate.return_value = None
+
+            await provider.validate_session(mock_request)
+
+            mock_validate.assert_called_once_with("header-token")
+
+    async def test_validate_session_no_credentials(self):
+        """Should return None when no credentials present"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        mock_request = MagicMock()
+        mock_request.cookies.get.return_value = None
+        mock_request.headers.get.return_value = ""
+
+        result = await provider.validate_session(mock_request)
+
+        assert result is None
+
+    def test_get_auth_method_password(self):
+        """Should return PASSWORD for password strategy"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        result = provider._get_auth_method({"authentication_strategy": "password"})
+
+        assert result == AuthMethod.PASSWORD
+
+    def test_get_auth_method_oauth(self):
+        """Should return SOCIAL_OAUTH for oauth strategy"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        result = provider._get_auth_method({"authentication_strategy": "oauth_google"})
+
+        assert result == AuthMethod.SOCIAL_OAUTH
+
+    def test_get_auth_method_passkey(self):
+        """Should return PASSKEY for passkey strategy"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        result = provider._get_auth_method({"authentication_strategy": "passkey"})
+
+        assert result == AuthMethod.PASSKEY
+
+    def test_get_auth_method_magic_link(self):
+        """Should return MAGIC_LINK for email_link strategy"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        result = provider._get_auth_method({"authentication_strategy": "email_link"})
+
+        assert result == AuthMethod.MAGIC_LINK
+
+    def test_data_to_claims(self):
+        """Should convert Clerk webhook data to IdentityClaims"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        data = {
+            "id": "user_123",
+            "email_addresses": [
+                {
+                    "id": "email_1",
+                    "email_address": "test@example.com",
+                    "verification": {"status": "verified"},
+                }
+            ],
+            "primary_email_address_id": "email_1",
+            "username": "testuser",
+            "first_name": "Test",
+            "last_name": "User",
+            "image_url": "https://example.com/avatar.jpg",
+            "public_metadata": {"role": "admin"},
+        }
+
+        result = provider.data_to_claims(data)
+
+        assert result.provider == AuthProvider.CLERK
+        assert result.provider_user_id == "user_123"
+        assert result.email == "test@example.com"
+        assert result.email_verified is True
+        assert result.username == "testuser"
+        assert result.first_name == "Test"
+        assert result.last_name == "User"
+
+    async def test_get_login_url(self):
+        """Should return login URL with redirect"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        url = await provider.get_login_url("/dashboard")
+
+        assert url == "/sign-in?redirect_url=/dashboard"
+
+    async def test_get_logout_url(self):
+        """Should return logout URL with redirect"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(provider=AuthProvider.CLERK, enabled=True)
+        provider = ClerkAuthProvider(config)
+
+        url = await provider.get_logout_url("/")
+
+        assert url == "/sign-out?redirect_url=/"
+
+    async def test_revoke_session_no_secret_key(self):
+        """Should return False when secret key not configured"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key=None,
+        )
+        provider = ClerkAuthProvider(config)
+
+        result = await provider.revoke_session("session-123")
+
+        assert result is False
+
+    async def test_revoke_session_success(self):
+        """Should return True on successful revocation"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_client.post.return_value = mock_response
+
+            result = await provider.revoke_session("session-123")
+
+            assert result is True
+
+    async def test_get_user_by_id_no_secret_key(self):
+        """Should return None when secret key not configured"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key=None,
+        )
+        provider = ClerkAuthProvider(config)
+
+        result = await provider.get_user_by_id("user-123")
+
+        assert result is None
+
+    async def test_get_user_by_id_success(self):
+        """Should return user data on success"""
+        from app.identity.providers.clerk import ClerkAuthProvider
+
+        config = ProviderConfig(
+            provider=AuthProvider.CLERK,
+            enabled=True,
+            clerk_secret_key="sk_test_123",
+        )
+        provider = ClerkAuthProvider(config)
+
+        user_data = {"id": "user_123", "email": "test@example.com"}
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = user_data
+            mock_client.get.return_value = mock_response
+
+            result = await provider.get_user_by_id("user-123")
+
+            assert result == user_data
+
+
 class TestModuleExports:
     """Tests for module __init__.py exports"""
 
@@ -951,6 +1318,7 @@ class TestModuleExports:
 
         # Provider classes
         assert hasattr(identity, "AuthProviderInterface")
+        assert hasattr(identity, "ClerkAuthProvider")
         assert hasattr(identity, "LocalAuthProvider")
 
         # Sync functions

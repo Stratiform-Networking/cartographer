@@ -5,15 +5,14 @@ Creates the appropriate auth provider based on configuration.
 Supports lazy initialization and singleton pattern.
 """
 
-from typing import TYPE_CHECKING
+import logging
 
 from ..config import settings
 from .claims import AuthProvider, ProviderConfig
 from .providers.base import AuthProviderInterface
 from .providers.local import LocalAuthProvider
 
-if TYPE_CHECKING:
-    pass
+logger = logging.getLogger(__name__)
 
 
 def get_auth_provider() -> AuthProviderInterface:
@@ -40,11 +39,18 @@ def get_auth_provider() -> AuthProviderInterface:
 
     elif auth_mode == "cloud":
         # Cloud mode uses Clerk as primary with WorkOS for enterprise
-        # Import here to avoid loading Clerk SDK when not in cloud mode
-        # Note: ClerkAuthProvider will be implemented in Phase 2
-        raise NotImplementedError(
-            "Cloud auth provider (Clerk) is not yet implemented. "
-            "This will be added in Phase 2 of the auth providers implementation."
+        # Import here to avoid loading httpx when not in cloud mode
+        from .providers.clerk import ClerkAuthProvider
+
+        logger.info("Initializing Clerk auth provider for cloud mode")
+        return ClerkAuthProvider(
+            ProviderConfig(
+                provider=AuthProvider.CLERK,
+                enabled=True,
+                clerk_publishable_key=settings.clerk_publishable_key,
+                clerk_secret_key=settings.clerk_secret_key,
+                clerk_webhook_secret=settings.clerk_webhook_secret,
+            )
         )
 
     else:

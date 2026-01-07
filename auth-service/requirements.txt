@@ -10,6 +10,9 @@ PyJWT==2.9.0
 bcrypt==4.2.0
 resend==2.19.0
 
+# External Auth Providers (cloud mode)
+svix==1.37.0  # Clerk webhook verification
+
 # Database
 sqlalchemy[asyncio]==2.0.36
 asyncpg>=0.30.0

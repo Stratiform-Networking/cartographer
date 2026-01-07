@@ -26,7 +26,7 @@ from .models import (
     UserSyncRequest,
     UserSyncResponse,
 )
-from .providers import AuthProviderInterface, LocalAuthProvider
+from .providers import AuthProviderInterface, ClerkAuthProvider, LocalAuthProvider
 from .sync import (
     deactivate_provider_user,
     get_provider_links,
@@ -52,6 +52,7 @@ __all__ = [
     "UserSyncResponse",
     # Provider classes
     "AuthProviderInterface",
+    "ClerkAuthProvider",
     "LocalAuthProvider",
     # Sync functions
     "deactivate_provider_user",

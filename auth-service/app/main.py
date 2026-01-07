@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers.auth import router as auth_router
 from .routers.health import router as health_router
+from .routers.webhooks import router as webhooks_router
 from .services.usage_middleware import UsageTrackingMiddleware
 
 # Configure logging
@@ -185,6 +186,7 @@ def create_app() -> FastAPI:
 
     # Include routers
     app.include_router(auth_router, prefix="/api/auth")
+    app.include_router(webhooks_router, prefix="/api/auth")
     app.include_router(health_router)
 
     @app.get("/")

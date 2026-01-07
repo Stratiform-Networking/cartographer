@@ -157,12 +157,31 @@ check_dependencies() {
         local py_version=$("$python_cmd" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
         local py_major="${py_version%.*}"
         local py_minor="${py_version#*.}"
+        local py_platform=$("$python_cmd" -c 'import sys; print(sys.platform)')
         
         log "Python: $py_version ($python_cmd)"
         
         if [[ "$py_major" -lt 3 ]] || { [[ "$py_major" -eq 3 ]] && [[ "$py_minor" -lt 10 ]]; }; then
             error "Python 3.10+ required, found $py_version"
             exit 1
+        fi
+        
+        # Detect MSYS2 Python on Windows - incompatible with native extensions
+        if [[ "$PLATFORM" == "windows" ]] && command -v "$python_cmd" &>/dev/null; then
+            local py_path=$(command -v "$python_cmd")
+            if [[ "$py_path" == *"/msys64/"* ]] || [[ "$py_path" == *"/ucrt64/"* ]] || [[ "$py_path" == *"/mingw64/"* ]]; then
+                error "MSYS2 Python detected - incompatible with native extensions (asyncpg, pydantic-core)!"
+                echo ""
+                echo "Please install official Windows Python from https://www.python.org/downloads/"
+                echo "Recommended: Python 3.11 or 3.12"
+                echo ""
+                echo "After installing, either:"
+                echo "  1. Add Windows Python to PATH before MSYS2"
+                echo "  2. Use: export PYTHON_CMD=/c/Users/YourName/AppData/Local/Programs/Python/Python312/python.exe"
+                echo "  3. Use WSL2 for a better development experience: wsl --install"
+                echo ""
+                exit 1
+            fi
         fi
         
         # Warn about Python 3.13 compatibility issues
@@ -250,9 +269,13 @@ ensure_venv() {
         "$python_cmd" -m venv "$venv_dir"
     fi
     
-    # Activate venv
+    # Activate venv - handle Windows vs Unix paths
     # shellcheck disable=SC1091
-    source "$venv_dir/bin/activate"
+    if [[ "$PLATFORM" == "windows" && -f "$venv_dir/Scripts/activate" ]]; then
+        source "$venv_dir/Scripts/activate"
+    else
+        source "$venv_dir/bin/activate"
+    fi
     
     # Check if requirements are installed
     local req_file="$SCRIPT_DIR/$service_dir/requirements.txt"
@@ -260,8 +283,9 @@ ensure_venv() {
     
     if [[ ! -f "$marker_file" ]] || [[ "$req_file" -nt "$marker_file" ]]; then
         log_service "$service" "Installing dependencies..."
-        pip install -q --upgrade pip
-        pip install -q -r "$req_file"
+        # Use python -m pip instead of pip directly to avoid Windows file locking issues
+        python -m pip install -q --upgrade pip 2>/dev/null || true
+        python -m pip install -q -r "$req_file"
         touch "$marker_file"
     fi
 }
@@ -292,7 +316,12 @@ is_port_in_use() {
     elif command -v ss &>/dev/null; then
         ss -tuln | grep -q ":$port "
     elif command -v netstat &>/dev/null; then
-        netstat -tuln | grep -q ":$port "
+        # Windows uses different netstat syntax
+        if [[ "$PLATFORM" == "windows" ]]; then
+            netstat -ano | grep -q ":$port "
+        else
+            netstat -tuln | grep -q ":$port "
+        fi
     else
         return 1
     fi

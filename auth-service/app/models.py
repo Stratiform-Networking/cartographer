@@ -133,6 +133,7 @@ class AuthConfig(BaseModel):
 
     provider: str  # "local" or "cloud"
     clerk_publishable_key: str | None = None
+    clerk_proxy_url: str | None = None  # Custom Clerk domain
     allow_registration: bool = False
 
 

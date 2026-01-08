@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     clerk_publishable_key: str | None = None
     clerk_secret_key: str | None = None
     clerk_webhook_secret: str | None = None
+    clerk_proxy_url: str | None = None  # Custom domain e.g. https://clerk.yourdomain.com
 
     # === WorkOS Configuration (enterprise SSO) ===
     workos_api_key: str | None = None

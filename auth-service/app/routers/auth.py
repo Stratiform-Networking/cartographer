@@ -116,11 +116,11 @@ async def get_auth_config():
     This endpoint is public (no auth required) so the frontend can
     determine which auth flow to use before the user logs in.
     """
+    is_cloud = settings.auth_provider.lower() == "cloud"
     return AuthConfig(
         provider=settings.auth_provider.lower(),
-        clerk_publishable_key=(
-            settings.clerk_publishable_key if settings.auth_provider.lower() == "cloud" else None
-        ),
+        clerk_publishable_key=settings.clerk_publishable_key if is_cloud else None,
+        clerk_proxy_url=settings.clerk_proxy_url if is_cloud else None,
         allow_registration=settings.allow_open_registration,
     )
 

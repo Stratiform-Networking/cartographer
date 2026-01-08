@@ -88,6 +88,7 @@ export type AuthProvider = 'local' | 'cloud';
 export interface AuthConfig {
   provider: AuthProvider;
   clerk_publishable_key: string | null;
+  clerk_proxy_url: string | null;
   allow_registration: boolean;
 }
 

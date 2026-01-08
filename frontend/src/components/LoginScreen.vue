@@ -303,6 +303,7 @@ const clerkReady = ref(false);
 // Check if we're in cloud mode with Clerk
 const isCloudMode = computed(() => props.authConfig?.provider === 'cloud');
 const clerkPublishableKey = computed(() => props.authConfig?.clerk_publishable_key);
+const clerkProxyUrl = computed(() => props.authConfig?.clerk_proxy_url);
 
 const isValid = computed(() => {
   return form.value.username.length > 0 && form.value.password.length > 0;
@@ -319,10 +320,12 @@ async function initClerk() {
   try {
     // Dynamically import Clerk
     const { Clerk } = await import('@clerk/clerk-js');
-    clerkInstance = new Clerk(clerkPublishableKey.value);
+    // Pass proxy URL if configured (for custom Clerk domains)
+    const clerkOptions = clerkProxyUrl.value ? { proxyUrl: clerkProxyUrl.value } : undefined;
+    clerkInstance = new Clerk(clerkPublishableKey.value, clerkOptions);
     await clerkInstance.load();
     clerkReady.value = true;
-    console.log('[Auth] Clerk initialized for OAuth');
+    console.log('[Auth] Clerk initialized for OAuth', clerkProxyUrl.value ? `with proxy: ${clerkProxyUrl.value}` : '');
   } catch (e) {
     console.warn('[Auth] Failed to initialize Clerk:', e);
   }

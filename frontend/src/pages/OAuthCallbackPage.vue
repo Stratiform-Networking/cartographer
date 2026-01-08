@@ -109,7 +109,10 @@ onMounted(async () => {
     const clerk = new Clerk(config.clerk_publishable_key, clerkOptions);
     await clerk.load();
 
-    console.log('[OAuth] Clerk initialized', config.clerk_proxy_url ? `with proxy: ${config.clerk_proxy_url}` : '');
+    console.log(
+      '[OAuth] Clerk initialized',
+      config.clerk_proxy_url ? `with proxy: ${config.clerk_proxy_url}` : ''
+    );
 
     // Handle the OAuth callback - Clerk processes the URL params
     await clerk.handleRedirectCallback();

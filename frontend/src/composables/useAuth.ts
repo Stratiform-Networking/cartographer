@@ -208,7 +208,7 @@ async function logout(): Promise<void> {
           : undefined;
         const clerk: Clerk = new ClerkModule.Clerk(
           authConfig.value.clerk_publishable_key,
-          clerkOptions,
+          clerkOptions
         );
         await clerk.load();
         await clerk.signOut();

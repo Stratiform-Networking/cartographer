@@ -130,9 +130,19 @@ services:
     environment:
       - CORS_ORIGINS=*
       - AUTH_DATA_DIR=/app/data
+      # Database connection
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
       # IMPORTANT: Change this in production!
       - JWT_SECRET=${JWT_SECRET:-cartographer-dev-secret-change-in-production}
       - JWT_EXPIRATION_HOURS=24
+      # Auth provider: "local" (default) or "cloud" (Clerk)
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
+      - ALLOW_OPEN_REGISTRATION=${ALLOW_OPEN_REGISTRATION:-false}
+      # Clerk settings (only used when AUTH_PROVIDER=cloud)
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
+      - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET:-}
+      - CLERK_PROXY_URL=${CLERK_PROXY_URL:-}
       # Email invitations via Resend (optional - invites work without email)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <noreply@cartographer.app>}

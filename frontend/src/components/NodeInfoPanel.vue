@@ -519,7 +519,10 @@
             <!-- Port Grid Display -->
             <div v-else class="space-y-3">
               <!-- Port Grid Resize Form (when resizing existing grid) -->
-              <div v-if="hasWritePermission && showPortGridSetup" class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4 space-y-3">
+              <div
+                v-if="hasWritePermission && showPortGridSetup"
+                class="bg-slate-50 dark:bg-slate-800/40 rounded-lg p-4 space-y-3"
+              >
                 <p class="text-xs text-slate-600 dark:text-slate-400 font-medium">
                   Resize Port Grid Layout
                 </p>

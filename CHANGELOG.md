@@ -5,6 +5,13 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.20.16](https://github.com/devartech/cartographer/compare/v0.20.15...v0.20.16) (2026-01-12)
+
+
+### 🐛 Bug Fixes
+
+* **auth:** update python-jose to 3.4.0 to fix ECDSA key vulnerability ([cf64987](https://github.com/devartech/cartographer/commit/cf649872d751580692721d77d23dd0c410490d6b)), closes [#2](https://github.com/devartech/cartographer/issues/2)
+
 ### [0.20.15](https://github.com/devartech/cartographer/compare/v0.20.14...v0.20.15) (2026-01-12)
 
 

@@ -10,5 +10,9 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Re-add formatted files to the commit
+echo "Re-staging formatted files..."
+git add -u
+
 echo "✓ Pre-commit checks passed"
 

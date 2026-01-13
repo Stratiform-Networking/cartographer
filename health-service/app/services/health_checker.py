@@ -403,7 +403,9 @@ class HealthChecker:
         # Determine health status
         # Only apply degraded thresholds if we have baseline data to compare against
         # This prevents false "degraded" status on first checks after reboot
-        has_baseline = uptime_24h is not None or (cached is not None and cached.uptime_percent_24h is not None)
+        has_baseline = uptime_24h is not None or (
+            cached is not None and cached.uptime_percent_24h is not None
+        )
 
         if not ping_result.success:
             status = HealthStatus.UNHEALTHY
@@ -649,7 +651,9 @@ class HealthChecker:
         # Determine health status
         # Only apply degraded thresholds if we have baseline data to compare against
         # This prevents false "degraded" status on first checks after reboot
-        has_baseline = uptime_24h is not None or (cached is not None and cached.uptime_percent_24h is not None)
+        has_baseline = uptime_24h is not None or (
+            cached is not None and cached.uptime_percent_24h is not None
+        )
 
         if not ping_result.success:
             status = HealthStatus.UNHEALTHY

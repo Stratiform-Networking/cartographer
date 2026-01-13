@@ -42,6 +42,9 @@ class NetworkAnomalyDetector:
 
     MODEL_VERSION = "1.0.0"
 
+    # Grace period after startup before sending offline notifications
+    STARTUP_GRACE_PERIOD_SECONDS = 60
+
     def __init__(self, network_id: str, load_state: bool = True):
         self.network_id = network_id
         # Key device stats by device_ip (scoped to this network)
@@ -54,6 +57,8 @@ class NetworkAnomalyDetector:
         self._current_devices: set = set()  # device_ips
         # Lock to prevent race conditions when processing concurrent health checks
         self._lock = asyncio.Lock()
+        # Track startup time for grace period
+        self._startup_time: datetime = datetime.utcnow()
 
         # Load persisted state if requested
         if load_state:
@@ -112,6 +117,13 @@ class NetworkAnomalyDetector:
             self._device_stats = {
                 ip: DeviceStats.from_dict(data) for ip, data in state.get("devices", {}).items()
             }
+
+            # Reset runtime counters - they're stale after restart and cause
+            # incorrect state inference on first checks after reboot
+            for stats in self._device_stats.values():
+                stats.consecutive_successes = 0
+                stats.consecutive_failures = 0
+
             self._anomalies_detected = state.get("anomalies_detected", 0)
             self._false_positives = state.get("false_positives", 0)
             self._last_training = (
@@ -147,6 +159,15 @@ class NetworkAnomalyDetector:
         """Public method to save state - call on shutdown"""
         self._save_state()
         logger.info(f"Saved anomaly detector for network {self.network_id}")
+
+    def _is_in_startup_grace_period(self) -> bool:
+        """Check if we're still in the startup grace period.
+
+        During this period, we suppress offline notifications to allow
+        the baseline to re-establish after service restart.
+        """
+        elapsed = (datetime.utcnow() - self._startup_time).total_seconds()
+        return elapsed < self.STARTUP_GRACE_PERIOD_SECONDS
 
     def train(
         self,
@@ -396,6 +417,21 @@ class NetworkAnomalyDetector:
 
             if not success:
                 # Device is offline
+
+                # During startup grace period, suppress offline notifications but track state
+                # This prevents false "device down" alerts while baseline re-establishes
+                if self._is_in_startup_grace_period():
+                    # Require more consecutive failures during startup to reduce false positives
+                    min_failures = 3
+                    if stats and stats.consecutive_failures < min_failures:
+                        logger.debug(
+                            f"[Network {self.network_id}] Skipping offline notification for {device_ip} "
+                            f"(startup grace period, {stats.consecutive_failures}/{min_failures} failures)"
+                        )
+                        # Still track as notified so we send recovery notification later
+                        self._notified_offline.add(device_ip)
+                        return None
+
                 if device_ip in self._notified_offline:
                     # Already sent an offline notification for this device - don't send another
                     logger.debug(

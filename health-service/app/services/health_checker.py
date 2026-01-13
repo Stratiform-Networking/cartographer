@@ -401,13 +401,17 @@ class HealthChecker:
         uptime_24h, avg_lat_24h, passed_24h, failed_24h = self._calculate_historical_stats(ip)
 
         # Determine health status
+        # Only apply degraded thresholds if we have baseline data to compare against
+        # This prevents false "degraded" status on first checks after reboot
+        has_baseline = uptime_24h is not None or (cached is not None and cached.uptime_percent_24h is not None)
+
         if not ping_result.success:
             status = HealthStatus.UNHEALTHY
             consecutive_failures = (cached.consecutive_failures + 1) if cached else 1
-        elif ping_result.packet_loss_percent > 50:
+        elif has_baseline and ping_result.packet_loss_percent > 50:
             status = HealthStatus.DEGRADED
             consecutive_failures = 0
-        elif ping_result.avg_latency_ms and ping_result.avg_latency_ms > 200:
+        elif has_baseline and ping_result.avg_latency_ms and ping_result.avg_latency_ms > 200:
             status = HealthStatus.DEGRADED
             consecutive_failures = 0
         else:
@@ -643,13 +647,17 @@ class HealthChecker:
         )
 
         # Determine health status
+        # Only apply degraded thresholds if we have baseline data to compare against
+        # This prevents false "degraded" status on first checks after reboot
+        has_baseline = uptime_24h is not None or (cached is not None and cached.uptime_percent_24h is not None)
+
         if not ping_result.success:
             status = HealthStatus.UNHEALTHY
             consecutive_failures = (cached.consecutive_failures + 1) if cached else 1
-        elif ping_result.packet_loss_percent > 50:
+        elif has_baseline and ping_result.packet_loss_percent > 50:
             status = HealthStatus.DEGRADED
             consecutive_failures = 0
-        elif ping_result.avg_latency_ms and ping_result.avg_latency_ms > 200:
+        elif has_baseline and ping_result.avg_latency_ms and ping_result.avg_latency_ms > 200:
             status = HealthStatus.DEGRADED
             consecutive_failures = 0
         else:

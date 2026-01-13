@@ -170,7 +170,7 @@ class TestDiscordServiceHelpers:
 
             result = get_bot_invite_url()
 
-            assert result is None or "discord.com" in str(result)
+            assert result is None or str(result).startswith("https://discord.com/")
 
 
 class TestEmailServiceHelpers:

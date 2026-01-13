@@ -5,6 +5,45 @@
 <script lang="ts" setup>
 import { onMounted } from 'vue';
 
+const OAUTH_STORAGE_KEY = 'discord_oauth_callback';
+const OAUTH_CRYPTO_PASSPHRASE = 'discord-oauth-localstorage-key';
+
+async function getCryptoKey(): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const passphraseData = encoder.encode(OAUTH_CRYPTO_PASSPHRASE);
+  const hash = await crypto.subtle.digest('SHA-256', passphraseData);
+  return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM', length: 256 }, false, [
+    'encrypt',
+    'decrypt',
+  ]);
+}
+
+async function encryptData(plainText: string): Promise<string> {
+  const key = await getCryptoKey();
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plainText);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, data);
+  const buffer = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+  buffer.set(iv, 0);
+  buffer.set(new Uint8Array(ciphertext), iv.byteLength);
+  return btoa(String.fromCharCode(...buffer));
+}
+
+async function decryptData(cipherTextB64: string): Promise<string> {
+  const key = await getCryptoKey();
+  const binary = atob(cipherTextB64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const iv = bytes.slice(0, 12);
+  const ciphertext = bytes.slice(12);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+}
+
 onMounted(() => {
   // Handle Discord OAuth callback in popup window
   const urlParams = new URLSearchParams(window.location.search);
@@ -27,7 +66,6 @@ onMounted(() => {
       timestamp: Date.now(),
     };
 
-    // Try postMessage first (works if window.opener survived cross-origin navigation)
     if (window.opener) {
       try {
         window.opener.postMessage(callbackData, window.location.origin);
@@ -36,9 +74,23 @@ onMounted(() => {
       }
     }
 
-    // Always use localStorage as reliable cross-origin communication
-    // The parent window listens for storage events
-    localStorage.setItem('discord_oauth_callback', JSON.stringify(callbackData));
+    const storageData = {
+      type: 'discord_oauth_callback',
+      status: status,
+      username: username,
+      message: message,
+      context_type: contextType,
+      timestamp: Date.now(),
+    };
+
+    // Encrypt data before storing in localStorage to avoid cleartext storage of sensitive info
+    encryptData(JSON.stringify(storageData))
+      .then((encrypted) => {
+        localStorage.setItem(OAUTH_STORAGE_KEY, encrypted);
+      })
+      .catch(() => {
+        // If encryption fails, avoid storing sensitive data in cleartext
+      });
 
     // Close the popup window
     window.close();
@@ -76,22 +128,29 @@ if (typeof window !== 'undefined') {
 
   // localStorage listener (reliable fallback for cross-origin popup flows)
   window.addEventListener('storage', (event) => {
-    if (event.key === 'discord_oauth_callback' && event.newValue) {
-      try {
-        const data = JSON.parse(event.newValue);
-        if (data.type === 'discord_oauth_callback') {
-          // Trigger the same custom event
-          window.dispatchEvent(
-            new CustomEvent('discord-oauth-complete', {
-              detail: data,
-            })
-          );
-          // Clear the localStorage item
-          localStorage.removeItem('discord_oauth_callback');
-        }
-      } catch (e) {
-        // Invalid JSON, ignore
-      }
+    if (event.key === OAUTH_STORAGE_KEY && event.newValue) {
+      // Decrypt the stored data before parsing
+      decryptData(event.newValue)
+        .then((plain) => {
+          try {
+            const data = JSON.parse(plain);
+            if (data.type === 'discord_oauth_callback') {
+              // Trigger the same custom event
+              window.dispatchEvent(
+                new CustomEvent('discord-oauth-complete', {
+                  detail: data,
+                })
+              );
+              // Clear the localStorage item
+              localStorage.removeItem(OAUTH_STORAGE_KEY);
+            }
+          } catch (e) {
+            // Invalid JSON, ignore
+          }
+        })
+        .catch(() => {
+          // Decryption failed, ignore
+        });
     }
   });
 }

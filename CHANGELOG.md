@@ -5,6 +5,19 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0](https://github.com/devartech/cartographer/compare/v0.20.20...v0.21.0) (2026-01-13)
+
+
+### 🐛 Bug Fixes
+
+* **frontend:** omit network_id from localStorage in discord oauth callback ([#13](https://github.com/devartech/cartographer/issues/13)) ([f6e43a8](https://github.com/devartech/cartographer/commit/f6e43a81bd75d0d2af16c8d7f2f1ed77148e56ce))
+* **notification-service:** mask sensitive IDs in discord oauth logs ([#12](https://github.com/devartech/cartographer/issues/12)) ([59c47af](https://github.com/devartech/cartographer/commit/59c47afd290496e99b62f2cee0ecdd89b3603270)), closes [#13](https://github.com/devartech/cartographer/issues/13)
+
+
+### ✨ Features
+
+* add mass outage detection ([4f8d572](https://github.com/devartech/cartographer/commit/4f8d5720ac02cfde4ca890732220bbf826f92725))
+
 ### [0.20.20](https://github.com/devartech/cartographer/compare/v0.20.19...v0.20.20) (2026-01-13)
 
 

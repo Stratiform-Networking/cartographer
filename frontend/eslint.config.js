@@ -97,6 +97,7 @@ export default [
       'dist/**',
       'node_modules/**',
       'coverage/**',
+      'storybook-static/**',
       '*.config.js',
       '*.config.ts',
       'vite-env.d.ts',

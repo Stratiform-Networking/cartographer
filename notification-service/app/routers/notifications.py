@@ -286,6 +286,40 @@ async def sync_current_devices(
 # ==================== Health Check Processing ====================
 
 
+async def _dispatch_event_to_network(
+    db: AsyncSession,
+    network_id: str,
+    event: NetworkEvent,
+) -> int:
+    """
+    Helper to dispatch an event to all users in a network.
+
+    Returns the number of users successfully notified.
+    """
+    from ..services.notification_dispatch import notification_dispatch_service
+    from ..services.user_preferences import user_preferences_service
+
+    user_ids = await user_preferences_service.get_network_member_user_ids(db, network_id)
+
+    if not user_ids:
+        logger.warning(f"No users found for network {network_id}")
+        return 0
+
+    results = await notification_dispatch_service.send_to_network_users(
+        db=db,
+        network_id=network_id,
+        user_ids=user_ids,
+        event=event,
+        scheduled_at=None,
+    )
+
+    successful = sum(1 for r in results.values() if any(rec.success for rec in r))
+    logger.info(
+        f"Dispatched notification to {successful}/{len(user_ids)} users in network {network_id}"
+    )
+    return successful
+
+
 @router.post("/process-health-check")
 async def process_health_check(
     device_ip: str,
@@ -303,6 +337,10 @@ async def process_health_check(
     This endpoint should be called by the health service after each check.
     It will train the ML model and potentially send notifications.
 
+    Mass outage detection: When 3+ devices go offline within 60 seconds,
+    notifications are aggregated into a single "mass outage" notification
+    instead of individual alerts for each device.
+
     Args:
         device_ip: IP address of the device
         success: Whether the health check succeeded
@@ -312,7 +350,7 @@ async def process_health_check(
         device_name: Optional device name
         previous_state: Optional previous state (online/offline)
     """
-    # Use per-network anomaly detector
+    from ..services.mass_outage_detector import mass_outage_detector
     from ..services.network_anomaly_detector import network_anomaly_detector_manager
 
     # Process health check with per-network detector
@@ -326,42 +364,66 @@ async def process_health_check(
         previous_state=previous_state,
     )
 
-    # If event created, dispatch to network users
+    events_dispatched = 0
+
+    # Handle device coming back online - remove from mass outage buffer if pending
+    if success:
+        mass_outage_detector.remove_device(network_id, device_ip)
+
+    # If event created, handle based on type
     if event:
         event.network_id = network_id
         logger.info(
             f"Network event created for network {network_id}: {event.event_type.value} - {event.title}"
         )
 
-        # Get network member user IDs from database and dispatch
         try:
-            from ..services.notification_dispatch import notification_dispatch_service
-            from ..services.user_preferences import user_preferences_service
-
-            user_ids = await user_preferences_service.get_network_member_user_ids(db, network_id)
-
-            if user_ids:
-                # Dispatch to all network users
-                results = await notification_dispatch_service.send_to_network_users(
-                    db=db,
+            if event.event_type == NotificationType.DEVICE_OFFLINE:
+                # Record offline event for potential mass outage aggregation
+                mass_outage_detector.record_offline_event(
                     network_id=network_id,
-                    user_ids=user_ids,
+                    device_ip=device_ip,
+                    device_name=device_name,
                     event=event,
-                    scheduled_at=None,
                 )
 
-                successful = sum(1 for r in results.values() if any(rec.success for rec in r))
-                logger.info(
-                    f"Dispatched notification to {successful}/{len(user_ids)} users in network {network_id}"
-                )
+                # Check if we've reached mass outage threshold
+                if mass_outage_detector.should_aggregate(network_id):
+                    # Create aggregated mass outage event
+                    mass_event = mass_outage_detector.flush_and_create_mass_outage_event(network_id)
+                    if mass_event:
+                        logger.info(
+                            f"Mass outage detected for network {network_id}: "
+                            f"{mass_event.details.get('total_affected', 0)} devices affected"
+                        )
+                        await _dispatch_event_to_network(db, network_id, mass_event)
+                        events_dispatched = 1
+                else:
+                    # Not a mass outage yet - check for expired individual events
+                    expired_events = mass_outage_detector.get_expired_events(network_id)
+                    for expired_event in expired_events:
+                        logger.info(
+                            f"Dispatching expired individual offline notification for "
+                            f"{expired_event.device_ip} in network {network_id}"
+                        )
+                        await _dispatch_event_to_network(db, network_id, expired_event)
+                        events_dispatched += 1
+
             else:
-                logger.warning(f"No users found for network {network_id}")
+                # Non-offline events (DEVICE_ONLINE, HIGH_LATENCY, etc.) dispatch immediately
+                await _dispatch_event_to_network(db, network_id, event)
+                events_dispatched = 1
+
         except Exception as e:
             logger.error(
                 f"Failed to dispatch notification for network {network_id}: {e}", exc_info=True
             )
 
-    return {"success": True, "event_created": event is not None}
+    return {
+        "success": True,
+        "event_created": event is not None,
+        "events_dispatched": events_dispatched,
+    }
 
 
 @router.post("/networks/{network_id}/send-notification")

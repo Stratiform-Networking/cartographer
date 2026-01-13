@@ -106,9 +106,8 @@ async def discord_oauth_callback(
                 )
                 .values(discord_user_id=discord_id, discord_enabled=True)
             )
-            logger.info(
-                f"Linked Discord account {discord_id} for user {user_id} on network {context_id}"
-            )
+            logger.info("Linked Discord account for network context")
+
         else:
             # Update global preferences only
             global_prefs = await user_preferences_service.get_global_preferences(db, user_id)
@@ -124,7 +123,7 @@ async def discord_oauth_callback(
                     minimum_priority="medium",
                 )
                 db.add(new_prefs)
-            logger.info(f"Linked Discord account {discord_id} for user {user_id} (global)")
+            logger.info("Linked Discord account for global context")
 
         await db.commit()
 
@@ -172,7 +171,7 @@ async def unlink_discord(
                 )
                 .values(discord_user_id=None, discord_enabled=False)
             )
-            logger.info(f"Unlinked Discord for user {user_id} from network {context_id}")
+            logger.info("Unlinked Discord account for network context")
         else:
             # Only update global preferences
             await db.execute(
@@ -180,7 +179,7 @@ async def unlink_discord(
                 .where(UserGlobalNotificationPrefs.user_id == user_id)
                 .values(discord_user_id=None, discord_enabled=False)
             )
-            logger.info(f"Unlinked Discord for user {user_id} (global)")
+            logger.info("Unlinked Discord account for global context")
 
         await db.commit()
 

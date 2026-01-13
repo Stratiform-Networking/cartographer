@@ -27,7 +27,6 @@ onMounted(() => {
       timestamp: Date.now(),
     };
 
-    // Try postMessage first (works if window.opener survived cross-origin navigation)
     if (window.opener) {
       try {
         window.opener.postMessage(callbackData, window.location.origin);
@@ -36,9 +35,15 @@ onMounted(() => {
       }
     }
 
-    // Always use localStorage as reliable cross-origin communication
-    // The parent window listens for storage events
-    localStorage.setItem('discord_oauth_callback', JSON.stringify(callbackData));
+    const storageData = {
+      type: 'discord_oauth_callback',
+      status: status,
+      username: username,
+      message: message,
+      context_type: contextType,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem('discord_oauth_callback', JSON.stringify(storageData));
 
     // Close the popup window
     window.close();

@@ -54,7 +54,7 @@ class TestDiscordConfiguration:
 
         assert url is not None
         assert "123456789" in url
-        assert "discord.com" in url
+        assert url.startswith("https://discord.com/")
 
 
 class TestDiscordHelpers:

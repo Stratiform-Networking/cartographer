@@ -65,7 +65,7 @@ class TestDiscordConfiguration:
 
             assert url is not None
             assert "123456789" in url
-            assert "authorize" in url
+            assert url.startswith("https://discord.com/")
 
     def test_get_bot_invite_url_without_client_id(self):
         """Test getting invite URL without client ID."""

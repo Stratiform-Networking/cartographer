@@ -35,7 +35,7 @@ class TestDiscordOAuthService:
             service = DiscordOAuthService()
             url = service.get_authorization_url("user-123", "network", "net-uuid")
 
-            assert "discord.com" in url
+            assert url.startswith("https://discord.com/")
             assert "client_id=test-client-id-12345" in url
             assert "state=" in url
 
@@ -47,7 +47,7 @@ class TestDiscordOAuthService:
             service = DiscordOAuthService()
             url = service.get_authorization_url("user-123", "global", None)
 
-            assert "discord.com" in url
+            assert url.startswith("https://discord.com/")
 
     def test_validate_state_invalid(self):
         """Should return None for invalid state"""

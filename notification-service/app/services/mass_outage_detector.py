@@ -198,16 +198,11 @@ class MassOutageDetector:
         # Sort by timestamp
         pending_list.sort(key=lambda p: p.timestamp)
 
-        # Build affected devices list
+        # Build affected devices list as "Name | IP" strings
         affected_devices = []
         for pending in pending_list:
-            affected_devices.append(
-                {
-                    "ip": pending.device_ip,
-                    "name": pending.device_name or pending.device_ip,
-                    "timestamp": pending.timestamp.isoformat(),
-                }
-            )
+            name = pending.device_name or pending.device_ip
+            affected_devices.append(f"{name} | {pending.device_ip}")
 
         # Get time range
         first_detected = pending_list[0].timestamp
@@ -388,16 +383,11 @@ class MassOutageDetector:
         # Sort by timestamp
         pending_list.sort(key=lambda p: p.timestamp)
 
-        # Build recovered devices list
+        # Build recovered devices list as "Name | IP" strings
         recovered_devices = []
         for pending in pending_list:
-            recovered_devices.append(
-                {
-                    "ip": pending.device_ip,
-                    "name": pending.device_name or pending.device_ip,
-                    "timestamp": pending.timestamp.isoformat(),
-                }
-            )
+            name = pending.device_name or pending.device_ip
+            recovered_devices.append(f"{name} | {pending.device_ip}")
 
         # Get time range
         first_detected = pending_list[0].timestamp

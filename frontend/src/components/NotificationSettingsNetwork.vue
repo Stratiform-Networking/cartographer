@@ -487,14 +487,14 @@ const networkNotificationTypes = [
     value: 'mass_outage',
     label: 'Mass Outage',
     icon: '💥',
-    description: 'When multiple devices go offline together',
+    description: 'Multiple devices offline',
     defaultPriority: 'critical',
   },
   {
     value: 'mass_recovery',
     label: 'Mass Recovery',
     icon: '🔄',
-    description: 'When multiple devices come back online together',
+    description: 'Multiple devices back online',
     defaultPriority: 'medium',
   },
 ];

@@ -262,7 +262,7 @@ class TestMassOutageDetector:
         assert "Device10" not in mass_event.message
 
     def test_affected_devices_details(self):
-        """Should include all device details in the event."""
+        """Should include all device details in the event as 'Name | IP' strings."""
         detector = MassOutageDetector()
         network_id = "network-1"
 
@@ -280,11 +280,10 @@ class TestMassOutageDetector:
         affected = mass_event.details["affected_devices"]
 
         assert len(affected) == 3
-        # Check structure
-        for device in affected:
-            assert "ip" in device
-            assert "name" in device
-            assert "timestamp" in device
+        # Check format is "Name | IP" strings
+        assert "Router | 192.168.1.1" in affected
+        assert "Switch | 192.168.1.2" in affected
+        assert "192.168.1.3 | 192.168.1.3" in affected  # Falls back to IP when no name
 
 
 class TestPendingDeviceEvent:

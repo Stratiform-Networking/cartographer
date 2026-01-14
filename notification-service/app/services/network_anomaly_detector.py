@@ -131,7 +131,7 @@ class NetworkAnomalyDetector:
                 if state.get("last_training")
                 else None
             )
-            self._notified_offline = set(state.get("notified_offline", []))
+            self._notified_offline = set()
             self._current_devices = set(state.get("current_devices", []))
 
             # Load anomaly timestamps (filter to keep only last 24h on load)

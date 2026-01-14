@@ -398,19 +398,32 @@ async def process_health_check(
                         )
                         await _dispatch_event_to_network(db, network_id, mass_event)
                         events_dispatched = 1
-                else:
-                    # Not a mass outage yet - check for expired individual events
-                    expired_events = mass_outage_detector.get_expired_events(network_id)
-                    for expired_event in expired_events:
+
+            elif event.event_type == NotificationType.DEVICE_ONLINE:
+                # Record online event for potential mass recovery aggregation
+                mass_outage_detector.record_online_event(
+                    network_id=network_id,
+                    device_ip=device_ip,
+                    device_name=device_name,
+                    event=event,
+                )
+
+                # Check if we've reached mass recovery threshold
+                if mass_outage_detector.should_aggregate_online(network_id):
+                    # Create aggregated mass recovery event
+                    mass_event = mass_outage_detector.flush_and_create_mass_recovery_event(
+                        network_id
+                    )
+                    if mass_event:
                         logger.info(
-                            f"Dispatching expired individual offline notification for "
-                            f"{expired_event.device_ip} in network {network_id}"
+                            f"Mass recovery detected for network {network_id}: "
+                            f"{mass_event.details.get('total_recovered', 0)} devices recovered"
                         )
-                        await _dispatch_event_to_network(db, network_id, expired_event)
-                        events_dispatched += 1
+                        await _dispatch_event_to_network(db, network_id, mass_event)
+                        events_dispatched = 1
 
             else:
-                # Non-offline events (DEVICE_ONLINE, HIGH_LATENCY, etc.) dispatch immediately
+                # Other events (HIGH_LATENCY, PACKET_LOSS, etc.) dispatch immediately
                 await _dispatch_event_to_network(db, network_id, event)
                 events_dispatched = 1
 
@@ -418,6 +431,34 @@ async def process_health_check(
             logger.error(
                 f"Failed to dispatch notification for network {network_id}: {e}", exc_info=True
             )
+
+    # Always check for expired events on every health check
+    # This ensures buffered events are dispatched even when no new events are created
+    try:
+        # Check expired offline events
+        expired_offline = mass_outage_detector.get_expired_events(network_id)
+        for expired_event in expired_offline:
+            logger.info(
+                f"Dispatching expired individual offline notification for "
+                f"{expired_event.device_ip} in network {network_id}"
+            )
+            await _dispatch_event_to_network(db, network_id, expired_event)
+            events_dispatched += 1
+
+        # Check expired online events
+        expired_online = mass_outage_detector.get_expired_online_events(network_id)
+        for expired_event in expired_online:
+            logger.info(
+                f"Dispatching expired individual online notification for "
+                f"{expired_event.device_ip} in network {network_id}"
+            )
+            await _dispatch_event_to_network(db, network_id, expired_event)
+            events_dispatched += 1
+
+    except Exception as e:
+        logger.error(
+            f"Failed to dispatch expired events for network {network_id}: {e}", exc_info=True
+        )
 
     return {
         "success": True,

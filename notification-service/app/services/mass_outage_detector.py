@@ -1,8 +1,8 @@
 """
-Mass outage detection service.
+Mass outage and recovery detection service.
 
-Detects when multiple devices go offline within a short time window and
-aggregates notifications to prevent spam during network-wide outages.
+Detects when multiple devices go offline or come back online within a short time
+window and aggregates notifications to prevent spam during network-wide events.
 """
 
 import logging
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class PendingOfflineEvent:
-    """A pending offline event waiting to be dispatched or aggregated."""
+class PendingDeviceEvent:
+    """A pending device event waiting to be dispatched or aggregated."""
 
     device_ip: str
     device_name: str | None
@@ -26,66 +26,73 @@ class PendingOfflineEvent:
 
 
 @dataclass
-class NetworkOutageBuffer:
-    """Buffer for pending offline events in a network."""
+class NetworkEventBuffer:
+    """Buffer for pending device events in a network."""
 
-    pending_events: dict[str, PendingOfflineEvent] = field(default_factory=dict)
-    last_cleanup: datetime = field(default_factory=datetime.utcnow)
+    pending_events: dict[str, PendingDeviceEvent] = field(default_factory=dict)
 
 
 class MassOutageDetector:
     """
-    Detects mass device outages and aggregates notifications.
+    Detects mass device outages/recoveries and aggregates notifications.
 
-    When multiple devices go offline within a short time window, this service
-    aggregates them into a single "mass outage" notification instead of sending
+    When multiple devices go offline or come back online within a short time window,
+    this service aggregates them into a single notification instead of sending
     individual notifications for each device.
     """
 
     # Configuration
-    AGGREGATION_WINDOW_SECONDS = 60  # Time window to detect mass outage
-    MIN_DEVICES_FOR_MASS_OUTAGE = 3  # Minimum devices to trigger aggregation
-    CLEANUP_INTERVAL_SECONDS = 30  # How often to clean up expired events
+    AGGREGATION_WINDOW_SECONDS = 60  # Time window to detect mass events
+    MIN_DEVICES_FOR_MASS_EVENT = 3  # Minimum devices to trigger aggregation
 
     def __init__(self):
-        # Per-network buffers: network_id -> NetworkOutageBuffer
-        self._buffers: dict[str, NetworkOutageBuffer] = {}
+        # Per-network buffers for offline events: network_id -> NetworkEventBuffer
+        self._offline_buffers: dict[str, NetworkEventBuffer] = {}
+        # Per-network buffers for online events: network_id -> NetworkEventBuffer
+        self._online_buffers: dict[str, NetworkEventBuffer] = {}
 
-    def _get_buffer(self, network_id: str) -> NetworkOutageBuffer:
-        """Get or create buffer for a network."""
-        if network_id not in self._buffers:
-            self._buffers[network_id] = NetworkOutageBuffer()
-        return self._buffers[network_id]
+    def _get_offline_buffer(self, network_id: str) -> NetworkEventBuffer:
+        """Get or create offline buffer for a network."""
+        if network_id not in self._offline_buffers:
+            self._offline_buffers[network_id] = NetworkEventBuffer()
+        return self._offline_buffers[network_id]
 
-    def _cleanup_expired_events(self, network_id: str) -> list[NetworkEvent]:
+    def _get_online_buffer(self, network_id: str) -> NetworkEventBuffer:
+        """Get or create online buffer for a network."""
+        if network_id not in self._online_buffers:
+            self._online_buffers[network_id] = NetworkEventBuffer()
+        return self._online_buffers[network_id]
+
+    def _cleanup_expired_events(
+        self, buffer: NetworkEventBuffer, network_id: str, event_type: str
+    ) -> list[NetworkEvent]:
         """
-        Remove events older than the aggregation window.
+        Remove events older than the aggregation window from a buffer.
 
         Returns list of expired events that should be dispatched individually.
         """
-        buffer = self._get_buffer(network_id)
         now = datetime.utcnow()
 
-        # Only cleanup periodically to avoid performance overhead
-        if (now - buffer.last_cleanup).total_seconds() < self.CLEANUP_INTERVAL_SECONDS:
-            return []
-
-        buffer.last_cleanup = now
+        # Use <= to ensure events at exactly the cutoff time are expired
         cutoff = now - timedelta(seconds=self.AGGREGATION_WINDOW_SECONDS)
 
         expired_events = []
         expired_ips = []
 
         for device_ip, pending in buffer.pending_events.items():
-            if pending.timestamp < cutoff:
+            if pending.timestamp <= cutoff:
                 expired_ips.append(device_ip)
                 expired_events.append(pending.original_event)
 
         for device_ip in expired_ips:
             del buffer.pending_events[device_ip]
-            logger.debug(f"[Network {network_id}] Expired pending offline event for {device_ip}")
+            logger.debug(
+                f"[Network {network_id}] Expired pending {event_type} event for {device_ip}"
+            )
 
         return expired_events
+
+    # ==================== Offline (Outage) Methods ====================
 
     def record_offline_event(
         self,
@@ -103,7 +110,7 @@ class MassOutageDetector:
             device_name: Name of the device (optional)
             event: The original NetworkEvent for this device going offline
         """
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
 
         # Don't duplicate events for the same device
         if device_ip in buffer.pending_events:
@@ -112,7 +119,7 @@ class MassOutageDetector:
             )
             return
 
-        pending = PendingOfflineEvent(
+        pending = PendingDeviceEvent(
             device_ip=device_ip,
             device_name=device_name,
             timestamp=datetime.utcnow(),
@@ -126,13 +133,13 @@ class MassOutageDetector:
             f"({len(buffer.pending_events)} devices now pending)"
         )
 
-    def remove_device(self, network_id: str, device_ip: str) -> NetworkEvent | None:
+    def remove_offline_device(self, network_id: str, device_ip: str) -> NetworkEvent | None:
         """
-        Remove a device from the pending buffer (e.g., when it comes back online).
+        Remove a device from the pending offline buffer.
 
         Returns the original event if it was pending, None otherwise.
         """
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
 
         if device_ip in buffer.pending_events:
             pending = buffer.pending_events.pop(device_ip)
@@ -144,27 +151,32 @@ class MassOutageDetector:
 
         return None
 
+    # Alias for backwards compatibility
+    def remove_device(self, network_id: str, device_ip: str) -> NetworkEvent | None:
+        """Alias for remove_offline_device for backwards compatibility."""
+        return self.remove_offline_device(network_id, device_ip)
+
     def should_aggregate(self, network_id: str) -> bool:
         """
         Check if there are enough pending offline events to trigger mass outage aggregation.
 
-        Returns True if the number of pending events >= MIN_DEVICES_FOR_MASS_OUTAGE
+        Returns True if the number of pending events >= MIN_DEVICES_FOR_MASS_EVENT
         """
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
         count = len(buffer.pending_events)
-        should = count >= self.MIN_DEVICES_FOR_MASS_OUTAGE
+        should = count >= self.MIN_DEVICES_FOR_MASS_EVENT
 
         if should:
             logger.info(
                 f"[Network {network_id}] Mass outage threshold reached: "
-                f"{count} devices offline (threshold: {self.MIN_DEVICES_FOR_MASS_OUTAGE})"
+                f"{count} devices offline (threshold: {self.MIN_DEVICES_FOR_MASS_EVENT})"
             )
 
         return should
 
     def get_pending_count(self, network_id: str) -> int:
         """Get the number of pending offline events for a network."""
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
         return len(buffer.pending_events)
 
     def flush_and_create_mass_outage_event(self, network_id: str) -> NetworkEvent | None:
@@ -174,7 +186,7 @@ class MassOutageDetector:
         Returns a single aggregated NetworkEvent if there are pending events,
         None if the buffer is empty.
         """
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
 
         if not buffer.pending_events:
             return None
@@ -240,35 +252,224 @@ class MassOutageDetector:
 
     def get_expired_events(self, network_id: str) -> list[NetworkEvent]:
         """
-        Get and remove expired events that should be dispatched individually.
+        Get and remove expired offline events that should be dispatched individually.
 
         Call this periodically to dispatch individual notifications for devices
         that went offline but didn't reach the mass outage threshold.
         """
-        return self._cleanup_expired_events(network_id)
+        buffer = self._get_offline_buffer(network_id)
+        return self._cleanup_expired_events(buffer, network_id, "offline")
 
     def get_all_pending_events(self, network_id: str) -> list[NetworkEvent]:
         """
-        Get all pending events without removing them.
+        Get all pending offline events without removing them.
 
         Useful for debugging or status checks.
         """
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
         return [p.original_event for p in buffer.pending_events.values()]
 
     def flush_all_pending_events(self, network_id: str) -> list[NetworkEvent]:
         """
-        Remove and return all pending events for a network.
+        Remove and return all pending offline events for a network.
 
         Useful when you want to dispatch all pending events individually
         (e.g., when the aggregation window expires without reaching threshold).
         """
-        buffer = self._get_buffer(network_id)
+        buffer = self._get_offline_buffer(network_id)
         events = [p.original_event for p in buffer.pending_events.values()]
         buffer.pending_events.clear()
 
         if events:
             logger.info(f"[Network {network_id}] Flushed {len(events)} pending offline events")
+
+        return events
+
+    # ==================== Online (Recovery) Methods ====================
+
+    def record_online_event(
+        self,
+        network_id: str,
+        device_ip: str,
+        device_name: str | None,
+        event: NetworkEvent,
+    ) -> None:
+        """
+        Record a device online event for potential aggregation.
+
+        Args:
+            network_id: The network this device belongs to
+            device_ip: IP address of the device coming online
+            device_name: Name of the device (optional)
+            event: The original NetworkEvent for this device coming online
+        """
+        buffer = self._get_online_buffer(network_id)
+
+        # Don't duplicate events for the same device
+        if device_ip in buffer.pending_events:
+            logger.debug(
+                f"[Network {network_id}] Device {device_ip} already has pending online event"
+            )
+            return
+
+        pending = PendingDeviceEvent(
+            device_ip=device_ip,
+            device_name=device_name,
+            timestamp=datetime.utcnow(),
+            original_event=event,
+        )
+
+        buffer.pending_events[device_ip] = pending
+
+        logger.info(
+            f"[Network {network_id}] Recorded online event for {device_ip} "
+            f"({len(buffer.pending_events)} devices now pending recovery)"
+        )
+
+    def remove_online_device(self, network_id: str, device_ip: str) -> NetworkEvent | None:
+        """
+        Remove a device from the pending online buffer.
+
+        Returns the original event if it was pending, None otherwise.
+        """
+        buffer = self._get_online_buffer(network_id)
+
+        if device_ip in buffer.pending_events:
+            pending = buffer.pending_events.pop(device_ip)
+            logger.info(
+                f"[Network {network_id}] Removed {device_ip} from pending online events "
+                f"({len(buffer.pending_events)} remaining)"
+            )
+            return pending.original_event
+
+        return None
+
+    def should_aggregate_online(self, network_id: str) -> bool:
+        """
+        Check if there are enough pending online events to trigger mass recovery aggregation.
+
+        Returns True if the number of pending events >= MIN_DEVICES_FOR_MASS_EVENT
+        """
+        buffer = self._get_online_buffer(network_id)
+        count = len(buffer.pending_events)
+        should = count >= self.MIN_DEVICES_FOR_MASS_EVENT
+
+        if should:
+            logger.info(
+                f"[Network {network_id}] Mass recovery threshold reached: "
+                f"{count} devices online (threshold: {self.MIN_DEVICES_FOR_MASS_EVENT})"
+            )
+
+        return should
+
+    def get_pending_online_count(self, network_id: str) -> int:
+        """Get the number of pending online events for a network."""
+        buffer = self._get_online_buffer(network_id)
+        return len(buffer.pending_events)
+
+    def flush_and_create_mass_recovery_event(self, network_id: str) -> NetworkEvent | None:
+        """
+        Create a mass recovery event from all pending online events and clear the buffer.
+
+        Returns a single aggregated NetworkEvent if there are pending events,
+        None if the buffer is empty.
+        """
+        buffer = self._get_online_buffer(network_id)
+
+        if not buffer.pending_events:
+            return None
+
+        # Collect all pending events
+        pending_list = list(buffer.pending_events.values())
+
+        # Sort by timestamp
+        pending_list.sort(key=lambda p: p.timestamp)
+
+        # Build recovered devices list
+        recovered_devices = []
+        for pending in pending_list:
+            recovered_devices.append(
+                {
+                    "ip": pending.device_ip,
+                    "name": pending.device_name or pending.device_ip,
+                    "timestamp": pending.timestamp.isoformat(),
+                }
+            )
+
+        # Get time range
+        first_detected = pending_list[0].timestamp
+        last_detected = pending_list[-1].timestamp
+
+        # Build device list for message
+        device_names = [p.device_name or p.device_ip for p in pending_list]
+        if len(device_names) <= 5:
+            device_list_str = ", ".join(device_names)
+        else:
+            device_list_str = f"{', '.join(device_names[:5])}, and {len(device_names) - 5} more"
+
+        # Create aggregated event
+        event = NetworkEvent(
+            event_id=str(uuid.uuid4()),
+            timestamp=datetime.utcnow(),
+            event_type=NotificationType.MASS_RECOVERY,
+            priority=NotificationPriority.LOW,
+            network_id=network_id,
+            title="Mass Device Recovery Detected",
+            message=(
+                f"{len(pending_list)} devices came back online within {self.AGGREGATION_WINDOW_SECONDS} seconds. "
+                f"Network connectivity appears to be restored.\n\n"
+                f"Recovered devices: {device_list_str}"
+            ),
+            details={
+                "recovered_devices": recovered_devices,
+                "total_recovered": len(pending_list),
+                "first_detected": first_detected.isoformat(),
+                "last_detected": last_detected.isoformat(),
+                "detection_window_seconds": self.AGGREGATION_WINDOW_SECONDS,
+            },
+        )
+
+        # Clear the buffer
+        buffer.pending_events.clear()
+
+        logger.info(
+            f"[Network {network_id}] Created mass recovery event for {len(recovered_devices)} devices"
+        )
+
+        return event
+
+    def get_expired_online_events(self, network_id: str) -> list[NetworkEvent]:
+        """
+        Get and remove expired online events that should be dispatched individually.
+
+        Call this periodically to dispatch individual notifications for devices
+        that came online but didn't reach the mass recovery threshold.
+        """
+        buffer = self._get_online_buffer(network_id)
+        return self._cleanup_expired_events(buffer, network_id, "online")
+
+    def get_all_pending_online_events(self, network_id: str) -> list[NetworkEvent]:
+        """
+        Get all pending online events without removing them.
+
+        Useful for debugging or status checks.
+        """
+        buffer = self._get_online_buffer(network_id)
+        return [p.original_event for p in buffer.pending_events.values()]
+
+    def flush_all_pending_online_events(self, network_id: str) -> list[NetworkEvent]:
+        """
+        Remove and return all pending online events for a network.
+
+        Useful when you want to dispatch all pending events individually
+        (e.g., when the aggregation window expires without reaching threshold).
+        """
+        buffer = self._get_online_buffer(network_id)
+        events = [p.original_event for p in buffer.pending_events.values()]
+        buffer.pending_events.clear()
+
+        if events:
+            logger.info(f"[Network {network_id}] Flushed {len(events)} pending online events")
 
         return events
 

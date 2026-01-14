@@ -45,6 +45,7 @@ class NotificationType(str, Enum):
     CARTOGRAPHER_DOWN = "cartographer_down"
     CARTOGRAPHER_UP = "cartographer_up"
     MASS_OUTAGE = "mass_outage"
+    MASS_RECOVERY = "mass_recovery"
 
 
 # ==================== Email Configuration ====================
@@ -110,6 +111,7 @@ DEFAULT_NOTIFICATION_TYPE_PRIORITIES: Dict[NotificationType, NotificationPriorit
     NotificationType.CARTOGRAPHER_DOWN: NotificationPriority.CRITICAL,
     NotificationType.CARTOGRAPHER_UP: NotificationPriority.MEDIUM,
     NotificationType.MASS_OUTAGE: NotificationPriority.HIGH,
+    NotificationType.MASS_RECOVERY: NotificationPriority.LOW,
 }
 
 
@@ -154,6 +156,7 @@ class NotificationPreferences(BaseModel):
             NotificationType.CARTOGRAPHER_DOWN,
             NotificationType.CARTOGRAPHER_UP,
             NotificationType.MASS_OUTAGE,
+            NotificationType.MASS_RECOVERY,
         ]
     )
 

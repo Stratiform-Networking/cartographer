@@ -11,8 +11,8 @@ import pytest
 from app.models import NetworkEvent, NotificationPriority, NotificationType
 from app.services.mass_outage_detector import (
     MassOutageDetector,
-    NetworkOutageBuffer,
-    PendingOfflineEvent,
+    NetworkEventBuffer,
+    PendingDeviceEvent,
 )
 
 
@@ -20,19 +20,38 @@ def create_test_event(
     device_ip: str,
     device_name: str | None = None,
     network_id: str = "test-network-id",
+    event_type: NotificationType = NotificationType.DEVICE_OFFLINE,
 ) -> NetworkEvent:
-    """Create a test NetworkEvent for a device going offline."""
+    """Create a test NetworkEvent for a device state change."""
+    if event_type == NotificationType.DEVICE_OFFLINE:
+        title = f"Device Offline: {device_name or device_ip}"
+        message = f"The device at {device_ip} is no longer responding."
+        priority = NotificationPriority.HIGH
+    else:
+        title = f"Device Online: {device_name or device_ip}"
+        message = f"The device at {device_ip} is now responding."
+        priority = NotificationPriority.LOW
+
     return NetworkEvent(
         event_id=str(uuid.uuid4()),
         timestamp=datetime.utcnow(),
-        event_type=NotificationType.DEVICE_OFFLINE,
-        priority=NotificationPriority.HIGH,
+        event_type=event_type,
+        priority=priority,
         network_id=network_id,
         device_ip=device_ip,
         device_name=device_name,
-        title=f"Device Offline: {device_name or device_ip}",
-        message=f"The device at {device_ip} is no longer responding.",
+        title=title,
+        message=message,
     )
+
+
+def create_online_event(
+    device_ip: str,
+    device_name: str | None = None,
+    network_id: str = "test-network-id",
+) -> NetworkEvent:
+    """Create a test NetworkEvent for a device coming online."""
+    return create_test_event(device_ip, device_name, network_id, NotificationType.DEVICE_ONLINE)
 
 
 class TestMassOutageDetector:
@@ -268,13 +287,13 @@ class TestMassOutageDetector:
             assert "timestamp" in device
 
 
-class TestPendingOfflineEvent:
-    """Tests for PendingOfflineEvent dataclass"""
+class TestPendingDeviceEvent:
+    """Tests for PendingDeviceEvent dataclass"""
 
     def test_creation(self):
         """Should create pending event correctly."""
         event = create_test_event("192.168.1.1", "Router")
-        pending = PendingOfflineEvent(
+        pending = PendingDeviceEvent(
             device_ip="192.168.1.1",
             device_name="Router",
             timestamp=datetime.utcnow(),
@@ -286,15 +305,14 @@ class TestPendingOfflineEvent:
         assert pending.original_event is event
 
 
-class TestNetworkOutageBuffer:
-    """Tests for NetworkOutageBuffer dataclass"""
+class TestNetworkEventBuffer:
+    """Tests for NetworkEventBuffer dataclass"""
 
     def test_default_creation(self):
         """Should create buffer with empty events."""
-        buffer = NetworkOutageBuffer()
+        buffer = NetworkEventBuffer()
 
         assert len(buffer.pending_events) == 0
-        assert buffer.last_cleanup is not None
 
 
 class TestMassOutageDetectorExpiry:
@@ -310,14 +328,10 @@ class TestMassOutageDetectorExpiry:
         event = create_test_event(ip, "Router", network_id)
         detector.record_offline_event(network_id, ip, "Router", event)
 
-        # Manually set the timestamp to be old
-        buffer = detector._get_buffer(network_id)
+        # Manually set the timestamp to be old (past aggregation window)
+        buffer = detector._get_offline_buffer(network_id)
         buffer.pending_events[ip].timestamp = datetime.utcnow() - timedelta(
             seconds=detector.AGGREGATION_WINDOW_SECONDS + 10
-        )
-        # Reset cleanup time to force cleanup
-        buffer.last_cleanup = datetime.utcnow() - timedelta(
-            seconds=detector.CLEANUP_INTERVAL_SECONDS + 10
         )
 
         expired = detector.get_expired_events(network_id)
@@ -335,12 +349,6 @@ class TestMassOutageDetectorExpiry:
         ip = "192.168.1.1"
         event = create_test_event(ip, "Router", network_id)
         detector.record_offline_event(network_id, ip, "Router", event)
-
-        # Force cleanup check
-        buffer = detector._get_buffer(network_id)
-        buffer.last_cleanup = datetime.utcnow() - timedelta(
-            seconds=detector.CLEANUP_INTERVAL_SECONDS + 10
-        )
 
         expired = detector.get_expired_events(network_id)
 
@@ -361,7 +369,7 @@ class TestMassOutageIntegration:
         detector.record_offline_event(network_id, "192.168.1.1", "Device1", event1)
 
         # Manually age the event past the window
-        buffer = detector._get_buffer(network_id)
+        buffer = detector._get_offline_buffer(network_id)
         buffer.pending_events["192.168.1.1"].timestamp = datetime.utcnow() - timedelta(
             seconds=detector.AGGREGATION_WINDOW_SECONDS + 10
         )
@@ -370,11 +378,7 @@ class TestMassOutageIntegration:
         event2 = create_test_event("192.168.1.2", "Device2", network_id)
         detector.record_offline_event(network_id, "192.168.1.2", "Device2", event2)
 
-        # Should not aggregate (only 1 recent + 1 old)
-        # Note: should_aggregate counts all pending, but the old one will be cleaned up
-        buffer.last_cleanup = datetime.utcnow() - timedelta(
-            seconds=detector.CLEANUP_INTERVAL_SECONDS + 10
-        )
+        # Clean up expired events - the old one should be removed
         detector.get_expired_events(network_id)
 
         # After cleanup, only recent device remains
@@ -398,3 +402,153 @@ class TestMassOutageIntegration:
         # Now only 2 devices pending - below threshold
         assert detector.get_pending_count(network_id) == 2
         assert detector.should_aggregate(network_id) is False
+
+
+class TestMassRecoveryDetector:
+    """Tests for mass recovery (online) detection"""
+
+    def test_record_online_event(self):
+        """Should record an online event for a device."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+        device_ip = "192.168.1.1"
+        event = create_online_event(device_ip, "Router", network_id)
+
+        detector.record_online_event(network_id, device_ip, "Router", event)
+
+        assert detector.get_pending_online_count(network_id) == 1
+
+    def test_record_online_event_no_duplicate(self):
+        """Should not duplicate events for the same device."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+        device_ip = "192.168.1.1"
+        event1 = create_online_event(device_ip, "Router", network_id)
+        event2 = create_online_event(device_ip, "Router", network_id)
+
+        detector.record_online_event(network_id, device_ip, "Router", event1)
+        detector.record_online_event(network_id, device_ip, "Router", event2)
+
+        assert detector.get_pending_online_count(network_id) == 1
+
+    def test_should_aggregate_online_below_threshold(self):
+        """Should not aggregate online events when below threshold."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+
+        # Add 2 devices (below threshold of 3)
+        for i in range(2):
+            ip = f"192.168.1.{i+1}"
+            event = create_online_event(ip, f"Device{i+1}", network_id)
+            detector.record_online_event(network_id, ip, f"Device{i+1}", event)
+
+        assert detector.should_aggregate_online(network_id) is False
+
+    def test_should_aggregate_online_at_threshold(self):
+        """Should aggregate online events when at or above threshold."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+
+        # Add 3 devices (at threshold)
+        for i in range(3):
+            ip = f"192.168.1.{i+1}"
+            event = create_online_event(ip, f"Device{i+1}", network_id)
+            detector.record_online_event(network_id, ip, f"Device{i+1}", event)
+
+        assert detector.should_aggregate_online(network_id) is True
+
+    def test_flush_and_create_mass_recovery_event(self):
+        """Should create aggregated mass recovery event."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+
+        # Add 5 devices
+        device_names = ["Router", "Switch", "Server1", "Server2", "NAS"]
+        for i, name in enumerate(device_names):
+            ip = f"192.168.1.{i+1}"
+            event = create_online_event(ip, name, network_id)
+            detector.record_online_event(network_id, ip, name, event)
+
+        # Create mass recovery event
+        mass_event = detector.flush_and_create_mass_recovery_event(network_id)
+
+        assert mass_event is not None
+        assert mass_event.event_type == NotificationType.MASS_RECOVERY
+        assert mass_event.priority == NotificationPriority.LOW
+        assert mass_event.network_id == network_id
+        assert "Mass Device Recovery" in mass_event.title
+        assert "5 devices" in mass_event.message
+        assert mass_event.details["total_recovered"] == 5
+        assert len(mass_event.details["recovered_devices"]) == 5
+
+        # Buffer should be cleared
+        assert detector.get_pending_online_count(network_id) == 0
+
+    def test_flush_empty_online_buffer(self):
+        """Should return None for empty online buffer."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+
+        mass_event = detector.flush_and_create_mass_recovery_event(network_id)
+
+        assert mass_event is None
+
+    def test_remove_online_device(self):
+        """Should remove device from pending online events."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+        device_ip = "192.168.1.1"
+        event = create_online_event(device_ip, "Router", network_id)
+
+        detector.record_online_event(network_id, device_ip, "Router", event)
+        assert detector.get_pending_online_count(network_id) == 1
+
+        removed = detector.remove_online_device(network_id, device_ip)
+
+        assert removed is not None
+        assert removed.device_ip == device_ip
+        assert detector.get_pending_online_count(network_id) == 0
+
+    def test_get_expired_online_events(self):
+        """Should return and remove expired online events."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+
+        # Add an event
+        ip = "192.168.1.1"
+        event = create_online_event(ip, "Router", network_id)
+        detector.record_online_event(network_id, ip, "Router", event)
+
+        # Manually set the timestamp to be old
+        buffer = detector._get_online_buffer(network_id)
+        buffer.pending_events[ip].timestamp = datetime.utcnow() - timedelta(
+            seconds=detector.AGGREGATION_WINDOW_SECONDS + 10
+        )
+
+        expired = detector.get_expired_online_events(network_id)
+
+        assert len(expired) == 1
+        assert expired[0].device_ip == ip
+        assert detector.get_pending_online_count(network_id) == 0
+
+    def test_online_offline_buffers_independent(self):
+        """Online and offline buffers should be independent."""
+        detector = MassOutageDetector()
+        network_id = "network-1"
+
+        # Add offline events
+        for i in range(3):
+            ip = f"192.168.1.{i+1}"
+            event = create_test_event(ip, f"Device{i+1}", network_id)
+            detector.record_offline_event(network_id, ip, f"Device{i+1}", event)
+
+        # Add online events
+        for i in range(2):
+            ip = f"10.0.0.{i+1}"
+            event = create_online_event(ip, f"Server{i+1}", network_id)
+            detector.record_online_event(network_id, ip, f"Server{i+1}", event)
+
+        assert detector.get_pending_count(network_id) == 3
+        assert detector.get_pending_online_count(network_id) == 2
+        assert detector.should_aggregate(network_id) is True
+        assert detector.should_aggregate_online(network_id) is False

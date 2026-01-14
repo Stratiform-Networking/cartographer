@@ -259,8 +259,8 @@ class MassOutageDetector:
             network_id=network_id,
             title="Mass Device Outage Detected",
             message=(
-                f"{len(pending_list)} devices went offline within {self.OFFLINE_COLLECTION_WINDOW_SECONDS} seconds. "
-                f"This may indicate a network-wide issue.\n\n"
+                f"We found {len(pending_list)} devices went offline. "
+                f"Check your network configurations and we will notify you when they have been detected again.\n\n"
                 f"Affected devices: {device_list_str}"
             ),
             details={
@@ -473,7 +473,7 @@ class MassOutageDetector:
             network_id=network_id,
             title="Mass Device Recovery Detected",
             message=(
-                f"{len(pending_list)} devices came back online within {self.ONLINE_COLLECTION_WINDOW_SECONDS} seconds. "
+                f"{len(pending_list)} devices came back online. "
                 f"Network connectivity appears to be restored.\n\n"
                 f"Recovered devices: {device_list_str}"
             ),

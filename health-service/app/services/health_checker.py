@@ -541,12 +541,13 @@ class HealthChecker:
         """Get all cached metrics"""
         return self._metrics_cache.copy()
 
-    def update_from_agent_health(
+    async def update_from_agent_health(
         self,
         ip: str,
         reachable: bool,
         response_time_ms: float | None,
         network_id: str | None = None,
+        include_dns: bool = True,
     ) -> bool:
         """
         Update the cache with health data from an external agent.
@@ -554,6 +555,13 @@ class HealthChecker:
         This is used when the Cartographer Agent reports health check results
         through the cloud backend. We update the local cache so the frontend
         can see up-to-date device status.
+
+        Args:
+            ip: Device IP address
+            reachable: Whether the device responded to the agent's health check
+            response_time_ms: Response time from the agent's ping
+            network_id: Network this device belongs to (for passive monitoring)
+            include_dns: Whether to perform DNS lookup (default True)
 
         Returns True if the cache was updated (new or existing entry).
         """
@@ -587,13 +595,30 @@ class HealthChecker:
         # Get check history
         check_history = self._get_check_history(ip)
 
+        # Perform DNS lookup if:
+        # - include_dns is enabled
+        # - Device is reachable (no point looking up unreachable devices)
+        # - We don't have cached DNS info OR cached DNS failed
+        dns_result = cached.dns if cached else None
+        if include_dns and reachable:
+            # Refresh DNS if we don't have it or if last lookup failed
+            needs_dns_refresh = dns_result is None or not dns_result.success
+            if needs_dns_refresh:
+                try:
+                    dns_result = await self.check_dns(ip)
+                    logger.debug(f"DNS lookup for {ip}: {dns_result}")
+                except Exception as e:
+                    logger.debug(f"DNS lookup failed for {ip}: {e}")
+                    # Keep existing DNS info if available
+                    dns_result = cached.dns if cached else None
+
         # Build metrics
         metrics = DeviceMetrics(
             ip=ip,
             status=status,
             last_check=now,
             ping=ping_result,
-            dns=cached.dns if cached else None,  # Preserve DNS info if available
+            dns=dns_result,
             open_ports=cached.open_ports if cached else [],
             uptime_percent_24h=uptime_24h,
             avg_latency_24h_ms=avg_lat_24h,

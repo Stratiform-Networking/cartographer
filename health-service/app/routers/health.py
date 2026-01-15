@@ -120,11 +120,12 @@ async def sync_agent_health(request: AgentSyncRequest):
 
     updated_count = 0
     for result in request.results:
-        if health_checker.update_from_agent_health(
+        if await health_checker.update_from_agent_health(
             ip=result.ip,
             reachable=result.reachable,
             response_time_ms=result.response_time_ms,
             network_id=request.network_id,
+            include_dns=True,  # Perform DNS lookups for agent-reported devices
         ):
             updated_count += 1
 

@@ -640,7 +640,8 @@ class TestAgentSync:
     def test_agent_sync_success(self, client):
         """Should update cache with agent health data"""
         with patch("app.routers.health.health_checker") as mock_checker:
-            mock_checker.update_from_agent_health = MagicMock(return_value=True)
+            # Use AsyncMock since update_from_agent_health is now async
+            mock_checker.update_from_agent_health = AsyncMock(return_value=True)
 
             response = client.post(
                 "/api/health/agent-sync",
@@ -684,8 +685,8 @@ class TestAgentSync:
     def test_agent_sync_partial_update(self, client):
         """Should handle partial updates where some devices fail"""
         with patch("app.routers.health.health_checker") as mock_checker:
-            # First call succeeds, second fails
-            mock_checker.update_from_agent_health = MagicMock(side_effect=[True, False])
+            # First call succeeds, second fails - use AsyncMock
+            mock_checker.update_from_agent_health = AsyncMock(side_effect=[True, False])
 
             response = client.post(
                 "/api/health/agent-sync",

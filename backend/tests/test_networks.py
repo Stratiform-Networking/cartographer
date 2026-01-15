@@ -97,6 +97,300 @@ class TestGenerateAgentKey:
         assert len(set(keys)) == 10
 
 
+class TestAgentSyncHelpers:
+    """Tests for agent sync helper functions"""
+
+    def test_initialize_layout_data_with_existing_data(self):
+        """Should return existing layout data unchanged"""
+        from app.routers.networks import _initialize_layout_data
+
+        existing = {"version": 5, "root": {"id": "existing"}}
+        result = _initialize_layout_data("Test Network", existing)
+
+        assert result == existing
+        assert result["version"] == 5
+
+    def test_initialize_layout_data_creates_new_structure(self):
+        """Should create new layout data when none exists"""
+        from app.routers.networks import _initialize_layout_data
+
+        result = _initialize_layout_data("Test Network", None)
+
+        assert result["version"] == 1
+        assert "timestamp" in result
+        assert "positions" in result
+        assert result["root"]["id"] == "root"
+        assert result["root"]["name"] == "Test Network"
+        assert result["root"]["role"] == "gateway/router"
+        assert result["root"]["children"] == []
+
+    def test_ensure_root_node_with_existing_root(self):
+        """Should return existing root node with children"""
+        from app.routers.networks import _ensure_root_node
+
+        layout_data = {"root": {"id": "router-1", "name": "My Router", "children": ["child1"]}}
+        root = _ensure_root_node(layout_data, "Test Network")
+
+        assert root["id"] == "router-1"
+        assert root["name"] == "My Router"
+        assert root["children"] == ["child1"]
+
+    def test_ensure_root_node_creates_missing_root(self):
+        """Should create root node if missing"""
+        from app.routers.networks import _ensure_root_node
+
+        layout_data = {}
+        root = _ensure_root_node(layout_data, "Test Network")
+
+        assert root["id"] == "root"
+        assert root["name"] == "Test Network"
+        assert root["role"] == "gateway/router"
+        assert root["children"] == []
+        assert layout_data["root"] == root
+
+    def test_ensure_root_node_adds_missing_children(self):
+        """Should add children list if missing"""
+        from app.routers.networks import _ensure_root_node
+
+        layout_data = {"root": {"id": "root", "name": "Router"}}
+        root = _ensure_root_node(layout_data, "Test Network")
+
+        assert "children" in root
+        assert root["children"] == []
+
+    def test_build_nodes_by_ip_single_level(self):
+        """Should index nodes by IP address"""
+        from app.routers.networks import _build_nodes_by_ip
+
+        root = {
+            "id": "root",
+            "ip": "192.168.1.1",
+            "children": [
+                {"id": "node1", "ip": "192.168.1.10", "children": []},
+                {"id": "node2", "ip": "192.168.1.20", "children": []},
+            ],
+        }
+
+        nodes_by_ip = _build_nodes_by_ip(root)
+
+        assert len(nodes_by_ip) == 3
+        assert nodes_by_ip["192.168.1.1"]["id"] == "root"
+        assert nodes_by_ip["192.168.1.10"]["id"] == "node1"
+        assert nodes_by_ip["192.168.1.20"]["id"] == "node2"
+
+    def test_build_nodes_by_ip_nested(self):
+        """Should recursively index nested nodes"""
+        from app.routers.networks import _build_nodes_by_ip
+
+        root = {
+            "id": "root",
+            "ip": "192.168.1.1",
+            "children": [
+                {
+                    "id": "switch",
+                    "ip": "192.168.1.5",
+                    "children": [
+                        {"id": "pc1", "ip": "192.168.1.100", "children": []},
+                        {"id": "pc2", "ip": "192.168.1.101", "children": []},
+                    ],
+                }
+            ],
+        }
+
+        nodes_by_ip = _build_nodes_by_ip(root)
+
+        assert len(nodes_by_ip) == 4
+        assert nodes_by_ip["192.168.1.100"]["id"] == "pc1"
+        assert nodes_by_ip["192.168.1.101"]["id"] == "pc2"
+
+    def test_build_nodes_by_ip_ignores_nodes_without_ip(self):
+        """Should skip nodes without IP addresses"""
+        from app.routers.networks import _build_nodes_by_ip
+
+        root = {
+            "id": "root",
+            "name": "Router",
+            "children": [
+                {"id": "node1", "ip": "192.168.1.10", "children": []},
+                {"id": "node2", "name": "No IP", "children": []},
+            ],
+        }
+
+        nodes_by_ip = _build_nodes_by_ip(root)
+
+        assert len(nodes_by_ip) == 1
+        assert "192.168.1.10" in nodes_by_ip
+        assert nodes_by_ip["192.168.1.10"]["id"] == "node1"
+
+    def test_update_existing_device_with_all_fields(self):
+        """Should update existing device with new data"""
+        from datetime import datetime
+
+        from app.routers.networks import _update_existing_device
+        from app.schemas.agent_sync import SyncDevice
+
+        existing_node = {
+            "id": "node-1",
+            "ip": "192.168.1.10",
+            "hostname": None,
+            "mac": None,
+            "updatedAt": "2024-01-01T00:00:00Z",
+        }
+
+        device = SyncDevice(
+            ip="192.168.1.10",
+            hostname="test-pc",
+            mac="AA:BB:CC:DD:EE:FF",
+            response_time_ms=12.5,
+        )
+
+        now = "2024-12-01T12:00:00Z"
+        _update_existing_device(existing_node, device, now)
+
+        assert existing_node["hostname"] == "test-pc"
+        assert existing_node["mac"] == "AA:BB:CC:DD:EE:FF"
+        assert existing_node["updatedAt"] == now
+        assert existing_node["lastSeenAt"] == now
+        assert existing_node["lastResponseMs"] == 12.5
+
+    def test_update_existing_device_preserves_existing_hostname(self):
+        """Should not overwrite existing hostname"""
+        from app.routers.networks import _update_existing_device
+        from app.schemas.agent_sync import SyncDevice
+
+        existing_node = {
+            "id": "node-1",
+            "ip": "192.168.1.10",
+            "hostname": "original-name",
+            "mac": None,
+        }
+
+        device = SyncDevice(ip="192.168.1.10", hostname="new-name")
+        now = "2024-12-01T12:00:00Z"
+
+        _update_existing_device(existing_node, device, now)
+
+        assert existing_node["hostname"] == "original-name"
+
+    def test_update_existing_device_preserves_existing_mac(self):
+        """Should not overwrite existing MAC address"""
+        from app.routers.networks import _update_existing_device
+        from app.schemas.agent_sync import SyncDevice
+
+        existing_node = {
+            "id": "node-1",
+            "ip": "192.168.1.10",
+            "hostname": None,
+            "mac": "AA:BB:CC:DD:EE:FF",
+        }
+
+        device = SyncDevice(ip="192.168.1.10", mac="11:22:33:44:55:66")
+        now = "2024-12-01T12:00:00Z"
+
+        _update_existing_device(existing_node, device, now)
+
+        assert existing_node["mac"] == "AA:BB:CC:DD:EE:FF"
+
+    def test_update_existing_device_without_response_time(self):
+        """Should handle missing response time"""
+        from app.routers.networks import _update_existing_device
+        from app.schemas.agent_sync import SyncDevice
+
+        existing_node = {
+            "id": "node-1",
+            "ip": "192.168.1.10",
+            "lastResponseMs": 5.0,
+        }
+
+        device = SyncDevice(ip="192.168.1.10", response_time_ms=None)
+        now = "2024-12-01T12:00:00Z"
+
+        _update_existing_device(existing_node, device, now)
+
+        # Should not update lastResponseMs if response_time_ms is None
+        assert "lastResponseMs" not in existing_node or existing_node.get("lastResponseMs") == 5.0
+
+    def test_create_new_device_node_with_all_fields(self):
+        """Should create complete device node"""
+        from app.routers.networks import _create_new_device_node
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(
+            ip="192.168.1.50",
+            hostname="new-device",
+            mac="AA:BB:CC:DD:EE:FF",
+            response_time_ms=8.5,
+            is_gateway=False,
+        )
+
+        now = "2024-12-01T12:00:00Z"
+        node = _create_new_device_node(device, "root-id", now)
+
+        assert node["name"] == "new-device"
+        assert node["ip"] == "192.168.1.50"
+        assert node["hostname"] == "new-device"
+        assert node["mac"] == "AA:BB:CC:DD:EE:FF"
+        assert node["role"] == "client"
+        assert node["parentId"] == "root-id"
+        assert node["createdAt"] == now
+        assert node["updatedAt"] == now
+        assert node["lastSeenAt"] == now
+        assert node["monitoringEnabled"] is True
+        assert node["children"] == []
+        assert node["lastResponseMs"] == 8.5
+        assert "id" in node
+
+    def test_create_new_device_node_gateway(self):
+        """Should create gateway device with correct role"""
+        from app.routers.networks import _create_new_device_node
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(ip="192.168.1.1", hostname="gateway", is_gateway=True)
+
+        now = "2024-12-01T12:00:00Z"
+        node = _create_new_device_node(device, "root-id", now)
+
+        assert node["role"] == "gateway/router"
+
+    def test_create_new_device_node_without_hostname(self):
+        """Should use IP as name when hostname missing"""
+        from app.routers.networks import _create_new_device_node
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(ip="192.168.1.100", hostname=None)
+
+        now = "2024-12-01T12:00:00Z"
+        node = _create_new_device_node(device, "root-id", now)
+
+        assert node["name"] == "192.168.1.100"
+
+    def test_create_new_device_node_without_response_time(self):
+        """Should not include lastResponseMs if no response time"""
+        from app.routers.networks import _create_new_device_node
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(ip="192.168.1.100", response_time_ms=None)
+
+        now = "2024-12-01T12:00:00Z"
+        node = _create_new_device_node(device, "root-id", now)
+
+        assert "lastResponseMs" not in node
+
+    def test_create_new_device_node_unique_ids(self):
+        """Should generate unique IDs for different devices"""
+        from app.routers.networks import _create_new_device_node
+        from app.schemas.agent_sync import SyncDevice
+
+        device1 = SyncDevice(ip="192.168.1.10")
+        device2 = SyncDevice(ip="192.168.1.20")
+
+        now = "2024-12-01T12:00:00Z"
+        node1 = _create_new_device_node(device1, "root-id", now)
+        node2 = _create_new_device_node(device2, "root-id", now)
+
+        assert node1["id"] != node2["id"]
+
+
 class TestGetNetworkWithAccess:
     """Tests for get_network_with_access helper"""
 

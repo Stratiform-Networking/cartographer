@@ -900,7 +900,18 @@ async function executeDeleteNetwork() {
 watch(isAuthenticated, async (newValue, oldValue) => {
   console.log('[HomePage] Auth state changed:', oldValue, '->', newValue);
   if (newValue && !oldValue) {
-    // User just became authenticated - clear and load fresh networks
+    // User just became authenticated
+    // First check for pending agent connection code
+    const pendingAgentCode = sessionStorage.getItem('cartographer_pending_agent_code');
+    if (pendingAgentCode) {
+      console.log(
+        '[HomePage] Pending agent code found in watcher, redirecting to cloud connect page'
+      );
+      window.location.href = `/connect?code=${pendingAgentCode}`;
+      return; // Stop processing, we're navigating away
+    }
+
+    // No pending agent code, proceed with normal flow - load networks
     console.log('[HomePage] User authenticated, loading networks...');
     clearNetworks();
     await nextTick();
@@ -919,6 +930,20 @@ watch(isAuthenticated, async (newValue, oldValue) => {
 
 onMounted(async () => {
   await initAuth();
+
+  // Check for pending agent connection code FIRST
+  // If user was trying to connect an agent and is now authenticated, redirect to connect page
+  if (isAuthenticated.value) {
+    const pendingAgentCode = sessionStorage.getItem('cartographer_pending_agent_code');
+    if (pendingAgentCode) {
+      console.log(
+        '[HomePage] Pending agent code found on mount, redirecting to cloud connect page'
+      );
+      window.location.href = `/connect?code=${pendingAgentCode}`;
+      return; // Stop processing, we're navigating away
+    }
+  }
+
   // If already authenticated on mount, load networks and sync preferences
   // (The watcher won't fire for the initial value)
   if (isAuthenticated.value) {

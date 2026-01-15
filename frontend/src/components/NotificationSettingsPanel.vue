@@ -412,11 +412,21 @@ async function handleLinkDiscordWithContext(contextType: 'network' | 'global', n
       window.removeEventListener('discord-oauth-complete', oauthCompleteHandler as EventListener);
 
       if (data.status === 'success') {
-        // Reload data for the specific context
+        // Reload data for the specific context (both link and preferences since backend enables discord)
         if (contextType === 'network' && networkId !== undefined) {
-          networkDiscordLink.value = await getDiscordLink('network', networkId);
+          const [link, prefs] = await Promise.all([
+            getDiscordLink('network', networkId),
+            getNetworkPreferences(networkId),
+          ]);
+          networkDiscordLink.value = link;
+          networkPrefs.value = prefs;
         } else {
-          globalDiscordLink.value = await getDiscordLink('global');
+          const [link, prefs] = await Promise.all([
+            getDiscordLink('global'),
+            getGlobalPreferences(),
+          ]);
+          globalDiscordLink.value = link;
+          globalPrefs.value = prefs;
         }
         const contextLabel = contextType === 'network' ? 'network' : 'global';
         showToast(true, `Discord account linked successfully for ${contextLabel}!`);
@@ -449,10 +459,21 @@ async function handleLinkDiscordWithContext(contextType: 'network' | 'global', n
                 const data = JSON.parse(storedData);
                 localStorage.removeItem('discord_oauth_callback');
                 if (data.status === 'success') {
+                  // Reload both link and preferences since backend enables discord
                   if (contextType === 'network' && networkId !== undefined) {
-                    networkDiscordLink.value = await getDiscordLink('network', networkId);
+                    const [link, prefs] = await Promise.all([
+                      getDiscordLink('network', networkId),
+                      getNetworkPreferences(networkId),
+                    ]);
+                    networkDiscordLink.value = link;
+                    networkPrefs.value = prefs;
                   } else {
-                    globalDiscordLink.value = await getDiscordLink('global');
+                    const [link, prefs] = await Promise.all([
+                      getDiscordLink('global'),
+                      getGlobalPreferences(),
+                    ]);
+                    globalDiscordLink.value = link;
+                    globalPrefs.value = prefs;
                   }
                   showToast(true, 'Discord account linked successfully!');
                 } else {
@@ -464,11 +485,21 @@ async function handleLinkDiscordWithContext(contextType: 'network' | 'global', n
               }
             }
 
-            // No stored data, just reload the link status
+            // No stored data, just reload link and preferences in case linking succeeded
             if (contextType === 'network' && networkId !== undefined) {
-              networkDiscordLink.value = await getDiscordLink('network', networkId);
+              const [link, prefs] = await Promise.all([
+                getDiscordLink('network', networkId),
+                getNetworkPreferences(networkId),
+              ]);
+              networkDiscordLink.value = link;
+              networkPrefs.value = prefs;
             } else {
-              globalDiscordLink.value = await getDiscordLink('global');
+              const [link, prefs] = await Promise.all([
+                getDiscordLink('global'),
+                getGlobalPreferences(),
+              ]);
+              globalDiscordLink.value = link;
+              globalPrefs.value = prefs;
             }
           }
         }, 500);

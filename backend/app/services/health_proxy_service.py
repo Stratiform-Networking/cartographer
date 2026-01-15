@@ -92,3 +92,40 @@ async def get_cached_metrics(timeout: float = 10.0) -> dict:
     response = await health_service_request("GET", "/cached", timeout=timeout)
     response.raise_for_status()
     return response.json()
+
+
+async def sync_agent_health(
+    network_id: str,
+    timestamp: str,
+    results: list[dict],
+    timeout: float = 10.0,
+) -> dict | None:
+    """Forward agent health check results to the health service.
+
+    This updates the health service cache with results from the
+    Cartographer Agent, ensuring the frontend sees up-to-date status.
+
+    Args:
+        network_id: Network ID (UUID string)
+        timestamp: ISO timestamp of the health check
+        results: List of health check results with ip, reachable, response_time_ms
+        timeout: Request timeout in seconds
+
+    Returns:
+        Response from health service or None if service unavailable
+    """
+    body = {
+        "network_id": network_id,
+        "timestamp": timestamp,
+        "results": results,
+    }
+    try:
+        response = await health_service_request(
+            "POST", "/agent-sync", json_body=body, timeout=timeout
+        )
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception:
+        # Health service may not be available, don't fail the main request
+        return None

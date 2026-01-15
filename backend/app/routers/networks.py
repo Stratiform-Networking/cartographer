@@ -28,6 +28,7 @@ from ..schemas import (
     PermissionCreate,
     PermissionResponse,
 )
+from ..services import health_proxy_service
 from ..services.cache_service import CacheService, get_cache
 from ..services.network_service import generate_agent_key, get_network_with_access, is_service_token
 
@@ -1106,6 +1107,25 @@ async def sync_agent_health(
     # Save updated layout
     network.layout_data = layout_data
     await db.commit()
+
+    # Also forward health data to the health-service to update its cache
+    # This ensures the frontend's real-time health metrics are updated
+    try:
+        await health_proxy_service.sync_agent_health(
+            network_id=network_id,
+            timestamp=health_data.timestamp.isoformat(),
+            results=[
+                {
+                    "ip": r.ip,
+                    "reachable": r.reachable,
+                    "response_time_ms": r.response_time_ms,
+                }
+                for r in health_data.results
+            ],
+        )
+    except Exception:
+        # Don't fail the main request if health-service is unavailable
+        pass
 
     return AgentHealthCheckResponse(
         success=True,

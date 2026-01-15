@@ -3,6 +3,8 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 
 from ..models import (
+    AgentSyncRequest,
+    AgentSyncResponse,
     BatchHealthResponse,
     DeviceMetrics,
     GatewayTestIPConfig,
@@ -91,6 +93,47 @@ async def clear_cache():
     """
     health_checker.clear_cache()
     return {"message": "Cache cleared"}
+
+
+# ==================== Agent Sync Endpoint ====================
+
+
+@router.post("/agent-sync", response_model=AgentSyncResponse)
+async def sync_agent_health(request: AgentSyncRequest):
+    """
+    Receive health check data from Cartographer Agent (via cloud backend).
+
+    This endpoint allows the desktop agent to report health check results
+    for devices it monitors locally. The results are merged into the
+    health-service cache so they appear in the frontend dashboard.
+
+    This is called by the core backend when it receives health data
+    from the cloud backend's agent proxy.
+    """
+    if not request.results:
+        return AgentSyncResponse(
+            success=True,
+            results_processed=0,
+            cache_updated=0,
+            message="No results to process",
+        )
+
+    updated_count = 0
+    for result in request.results:
+        if health_checker.update_from_agent_health(
+            ip=result.ip,
+            reachable=result.reachable,
+            response_time_ms=result.response_time_ms,
+            network_id=request.network_id,
+        ):
+            updated_count += 1
+
+    return AgentSyncResponse(
+        success=True,
+        results_processed=len(request.results),
+        cache_updated=updated_count,
+        message=f"Updated health cache for {updated_count} devices",
+    )
 
 
 @router.get("/ping/{ip}")

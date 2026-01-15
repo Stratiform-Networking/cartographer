@@ -632,3 +632,75 @@ class TestSpeedTestEndpoints:
             response = client.get("/api/health/speedtest/all")
 
             assert response.status_code == 200
+
+
+class TestAgentSync:
+    """Tests for POST /api/health/agent-sync - agent health data sync endpoint"""
+
+    def test_agent_sync_success(self, client):
+        """Should update cache with agent health data"""
+        with patch("app.routers.health.health_checker") as mock_checker:
+            mock_checker.update_from_agent_health = MagicMock(return_value=True)
+
+            response = client.post(
+                "/api/health/agent-sync",
+                json={
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "network_id": "test-network-uuid",
+                    "results": [
+                        {"ip": "192.168.1.10", "reachable": True, "response_time_ms": 25.0},
+                        {"ip": "192.168.1.20", "reachable": False, "response_time_ms": None},
+                    ],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["results_processed"] == 2
+            assert data["cache_updated"] == 2
+
+            # Verify update_from_agent_health was called for each result
+            assert mock_checker.update_from_agent_health.call_count == 2
+
+    def test_agent_sync_empty_results(self, client):
+        """Should handle empty results list gracefully"""
+        response = client.post(
+            "/api/health/agent-sync",
+            json={
+                "timestamp": datetime.utcnow().isoformat(),
+                "network_id": "test-network-uuid",
+                "results": [],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["results_processed"] == 0
+        assert data["cache_updated"] == 0
+        assert "No results" in data["message"]
+
+    def test_agent_sync_partial_update(self, client):
+        """Should handle partial updates where some devices fail"""
+        with patch("app.routers.health.health_checker") as mock_checker:
+            # First call succeeds, second fails
+            mock_checker.update_from_agent_health = MagicMock(side_effect=[True, False])
+
+            response = client.post(
+                "/api/health/agent-sync",
+                json={
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "network_id": "test-network-uuid",
+                    "results": [
+                        {"ip": "192.168.1.10", "reachable": True, "response_time_ms": 25.0},
+                        {"ip": "192.168.1.20", "reachable": True, "response_time_ms": 30.0},
+                    ],
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["success"] is True
+            assert data["results_processed"] == 2
+            assert data["cache_updated"] == 1  # Only first one updated

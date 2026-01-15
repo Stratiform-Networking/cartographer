@@ -541,6 +541,79 @@ class HealthChecker:
         """Get all cached metrics"""
         return self._metrics_cache.copy()
 
+    def update_from_agent_health(
+        self,
+        ip: str,
+        reachable: bool,
+        response_time_ms: float | None,
+        network_id: str | None = None,
+    ) -> bool:
+        """
+        Update the cache with health data from an external agent.
+
+        This is used when the Cartographer Agent reports health check results
+        through the cloud backend. We update the local cache so the frontend
+        can see up-to-date device status.
+
+        Returns True if the cache was updated (new or existing entry).
+        """
+        now = datetime.utcnow()
+
+        # Get or create cached entry
+        cached = self._metrics_cache.get(ip)
+
+        # Record for historical tracking
+        self._record_check(ip, reachable, response_time_ms)
+
+        # Calculate historical stats
+        uptime_24h, avg_lat_24h, passed_24h, failed_24h = self._calculate_historical_stats(ip)
+
+        # Determine health status
+        if not reachable:
+            status = HealthStatus.UNHEALTHY
+            consecutive_failures = (cached.consecutive_failures + 1) if cached else 1
+        else:
+            status = HealthStatus.HEALTHY
+            consecutive_failures = 0
+
+        # Build ping result from agent data
+        ping_result = PingResult(
+            success=reachable,
+            latency_ms=response_time_ms,
+            avg_latency_ms=response_time_ms,
+            packet_loss_percent=0.0 if reachable else 100.0,
+        )
+
+        # Get check history
+        check_history = self._get_check_history(ip)
+
+        # Build metrics
+        metrics = DeviceMetrics(
+            ip=ip,
+            status=status,
+            last_check=now,
+            ping=ping_result,
+            dns=cached.dns if cached else None,  # Preserve DNS info if available
+            open_ports=cached.open_ports if cached else [],
+            uptime_percent_24h=uptime_24h,
+            avg_latency_24h_ms=avg_lat_24h,
+            checks_passed_24h=passed_24h,
+            checks_failed_24h=failed_24h,
+            check_history=check_history,
+            last_seen_online=now if reachable else (cached.last_seen_online if cached else None),
+            consecutive_failures=consecutive_failures,
+        )
+
+        # Cache the results
+        self._metrics_cache[ip] = metrics
+
+        # Register the device if we have a network_id and it's not already monitored
+        if network_id and ip not in self._monitored_devices:
+            self._monitored_devices[ip] = network_id
+            logger.debug(f"Registered device {ip} from agent sync for network {network_id}")
+
+        return True
+
     def clear_cache(self):
         """Clear the metrics cache"""
         self._metrics_cache.clear()

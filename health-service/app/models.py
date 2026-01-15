@@ -182,6 +182,34 @@ class SetGatewayTestIPsRequest(BaseModel):
     test_ips: list[GatewayTestIP]
 
 
+# ==================== Agent Sync Models ====================
+
+
+class AgentHealthResult(BaseModel):
+    """Health check result from Cartographer Agent"""
+
+    ip: str
+    reachable: bool
+    response_time_ms: float | None = None
+
+
+class AgentSyncRequest(BaseModel):
+    """Request from agent (via cloud) to update health cache"""
+
+    timestamp: datetime
+    network_id: str  # UUID string
+    results: list[AgentHealthResult]
+
+
+class AgentSyncResponse(BaseModel):
+    """Response after processing agent health sync"""
+
+    success: bool
+    results_processed: int
+    cache_updated: int
+    message: str = "Sync completed"
+
+
 # ==================== Speed Test Models ====================
 
 

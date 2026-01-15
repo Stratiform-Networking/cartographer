@@ -10,7 +10,15 @@ Domain-specific schemas are organized into submodules:
 All schemas are re-exported here for backwards compatibility.
 """
 
-from .agent_sync import AgentSyncRequest, AgentSyncResponse, NetworkInfo, SyncDevice
+from .agent_sync import (
+    AgentHealthCheckRequest,
+    AgentHealthCheckResponse,
+    AgentSyncRequest,
+    AgentSyncResponse,
+    HealthCheckResult,
+    NetworkInfo,
+    SyncDevice,
+)
 from .network import (
     NetworkCreate,
     NetworkLayoutResponse,
@@ -48,4 +56,8 @@ __all__ = [
     "NetworkInfo",
     "AgentSyncRequest",
     "AgentSyncResponse",
+    # Agent Health Check
+    "HealthCheckResult",
+    "AgentHealthCheckRequest",
+    "AgentHealthCheckResponse",
 ]

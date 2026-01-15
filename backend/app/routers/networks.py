@@ -14,6 +14,8 @@ from ..database import get_db
 from ..dependencies.auth import AuthenticatedUser, require_auth
 from ..models.network import Network, NetworkNotificationSettings, NetworkPermission, PermissionRole
 from ..schemas import (
+    AgentHealthCheckRequest,
+    AgentHealthCheckResponse,
     AgentSyncRequest,
     AgentSyncResponse,
     NetworkCreate,
@@ -738,4 +740,89 @@ async def sync_agent_scan(
         devices_added=devices_added,
         devices_updated=devices_updated,
         message=f"Synced {devices_added} new and {devices_updated} existing devices",
+    )
+
+
+@router.post("/{network_id}/health", response_model=AgentHealthCheckResponse)
+async def sync_agent_health(
+    network_id: str,
+    health_data: AgentHealthCheckRequest,
+    current_user: AuthenticatedUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sync device health check data from Cartographer Agent.
+
+    Updates device health status in the network's layout_data:
+    - Marks devices as reachable/unreachable
+    - Records latest response time
+    - Updates lastSeenAt timestamp for reachable devices
+
+    This endpoint is called by the cloud backend when proxying agent health data.
+    """
+    network, is_owner, permission = await get_network_with_access(
+        network_id,
+        current_user.user_id,
+        db,
+        require_write=True,
+        is_service=is_service_token(current_user.user_id),
+    )
+
+    if not network.layout_data:
+        return AgentHealthCheckResponse(
+            success=True,
+            results_received=len(health_data.results),
+            results_applied=0,
+            message="No layout data to update",
+        )
+
+    layout_data = network.layout_data
+    root = layout_data.get("root")
+    if not root:
+        return AgentHealthCheckResponse(
+            success=True,
+            results_received=len(health_data.results),
+            results_applied=0,
+            message="No root node in layout",
+        )
+
+    # Build a map of nodes by IP
+    nodes_by_ip = _build_nodes_by_ip(root)
+
+    now = datetime.now(timezone.utc).isoformat()
+    results_applied = 0
+
+    for result in health_data.results:
+        node = nodes_by_ip.get(result.ip)
+        if not node:
+            continue
+
+        # Update health status
+        node["healthStatus"] = "healthy" if result.reachable else "unreachable"
+        node["lastHealthCheck"] = now
+
+        if result.reachable:
+            node["lastSeenAt"] = now
+            if result.response_time_ms is not None:
+                node["lastResponseMs"] = result.response_time_ms
+        else:
+            # Increment consecutive failures
+            node["consecutiveFailures"] = node.get("consecutiveFailures", 0) + 1
+
+        results_applied += 1
+
+    # Update layout metadata
+    layout_data["version"] = layout_data.get("version", 0) + 1
+    layout_data["timestamp"] = now
+    layout_data["lastHealthCheck"] = now
+
+    # Save updated layout
+    network.layout_data = layout_data
+    await db.commit()
+
+    return AgentHealthCheckResponse(
+        success=True,
+        results_received=len(health_data.results),
+        results_applied=results_applied,
+        message=f"Updated health status for {results_applied} devices",
     )

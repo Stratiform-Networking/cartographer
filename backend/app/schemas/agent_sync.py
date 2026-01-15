@@ -42,3 +42,29 @@ class AgentSyncResponse(BaseModel):
     devices_added: int = 0
     devices_updated: int = 0
     message: str = "Sync completed"
+
+
+class HealthCheckResult(BaseModel):
+    """Result of a single device health check."""
+
+    ip: str = Field(..., description="IP address of the device")
+    reachable: bool = Field(..., description="Whether the device responded to ping")
+    response_time_ms: Optional[float] = Field(None, description="Response time in ms if reachable")
+
+
+class AgentHealthCheckRequest(BaseModel):
+    """Request body for agent health check upload."""
+
+    timestamp: datetime = Field(..., description="When the health check was performed")
+    results: list[HealthCheckResult] = Field(
+        default_factory=list, description="Health check results"
+    )
+
+
+class AgentHealthCheckResponse(BaseModel):
+    """Response from agent health check upload."""
+
+    success: bool
+    results_received: int
+    results_applied: int = 0
+    message: str = "Health check processed"

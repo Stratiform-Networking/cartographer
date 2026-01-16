@@ -2,6 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 
+from ..config import settings
 from ..models import (
     AgentSyncRequest,
     AgentSyncResponse,
@@ -31,7 +32,21 @@ async def check_single_device(
     """
     Check the health of a single device by IP address.
     Returns comprehensive metrics including ping, DNS, and optionally open ports.
+
+    Note: When DISABLE_ACTIVE_CHECKS=true (cloud deployment), this returns cached
+    data from agent syncs. Use /cached/{ip} instead for consistent behavior.
     """
+    # In cloud mode, return cached data from agent syncs instead of performing
+    # active checks which would incorrectly mark devices as unhealthy
+    if settings.disable_active_checks:
+        cached = health_checker.get_cached_metrics(ip)
+        if cached:
+            return cached
+        raise HTTPException(
+            status_code=404,
+            detail=f"No cached health data for {ip}. Device health is provided by the Cartographer Agent.",
+        )
+
     try:
         metrics = await health_checker.check_device_health(
             ip=ip,
@@ -48,12 +63,22 @@ async def check_multiple_devices(request: HealthCheckRequest):
     """
     Check the health of multiple devices at once.
     More efficient than calling the single endpoint multiple times.
+
+    Note: When DISABLE_ACTIVE_CHECKS=true (cloud deployment), this returns cached
+    data from agent syncs. Use /cached endpoint instead for consistent behavior.
     """
     if not request.ips:
         raise HTTPException(status_code=400, detail="No IPs provided")
 
     if len(request.ips) > 100:
         raise HTTPException(status_code=400, detail="Maximum 100 IPs per request")
+
+    # In cloud mode, return cached data from agent syncs instead of performing
+    # active checks which would incorrectly mark devices as unhealthy
+    if settings.disable_active_checks:
+        all_cached = health_checker.get_all_cached_metrics()
+        metrics = {ip: all_cached[ip] for ip in request.ips if ip in all_cached}
+        return BatchHealthResponse(devices=metrics, check_timestamp=datetime.utcnow())
 
     try:
         metrics = await health_checker.check_multiple_devices(
@@ -187,10 +212,22 @@ async def register_devices(request: RegisterDevicesRequest):
 
     Args:
         request: Contains list of IPs and network_id (UUID string)
+
+    Note: When DISABLE_ACTIVE_CHECKS=true (cloud deployment), devices are still
+    registered for tracking purposes but won't be actively pinged. Device health
+    data comes exclusively from the Cartographer Agent via /agent-sync.
     """
     # Create mapping of IP to network_id (now a UUID string)
     devices_map = {ip: request.network_id for ip in request.ips}
-    health_checker.set_monitored_devices(devices_map)
+
+    # Only register for active monitoring if active checks are enabled
+    # In cloud mode, we don't actively ping devices - the agent provides health data
+    if not settings.disable_active_checks:
+        health_checker.set_monitored_devices(devices_map)
+    else:
+        # In cloud mode, just log the registration request
+        # Devices will get their health data from agent-sync
+        pass
 
     # Sync with notification service so ML anomaly detection tracks only current devices
     await sync_devices_with_notification_service(request.ips, network_id=request.network_id)
@@ -199,6 +236,7 @@ async def register_devices(request: RegisterDevicesRequest):
         "message": f"Registered {len(request.ips)} devices for monitoring",
         "devices": request.ips,
         "network_id": request.network_id,
+        "active_monitoring": not settings.disable_active_checks,
     }
 
 
@@ -249,7 +287,18 @@ async def get_monitoring_status():
 
 @router.post("/monitoring/start")
 async def start_monitoring():
-    """Manually start the monitoring loop (usually auto-started)"""
+    """
+    Manually start the monitoring loop (usually auto-started).
+
+    Note: This endpoint is disabled when DISABLE_ACTIVE_CHECKS=true (cloud deployment)
+    since the health service cannot reach devices behind agents.
+    """
+    if settings.disable_active_checks:
+        raise HTTPException(
+            status_code=400,
+            detail="Active monitoring is disabled in cloud deployment. Device health is provided by the Cartographer Agent.",
+        )
+
     health_checker.start_monitoring()
     return {"message": "Monitoring started"}
 
@@ -266,7 +315,16 @@ async def trigger_immediate_check():
     """
     Trigger an immediate health check of all monitored devices.
     Useful for forcing a refresh outside the normal interval.
+
+    Note: This endpoint is disabled when DISABLE_ACTIVE_CHECKS=true (cloud deployment)
+    since the health service cannot reach devices behind agents.
     """
+    if settings.disable_active_checks:
+        raise HTTPException(
+            status_code=400,
+            detail="Active health checks are disabled in cloud deployment. Device health is provided by the Cartographer Agent.",
+        )
+
     if not health_checker.get_monitored_devices():
         raise HTTPException(status_code=400, detail="No devices registered for monitoring")
 

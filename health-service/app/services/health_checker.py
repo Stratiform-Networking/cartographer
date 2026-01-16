@@ -632,8 +632,12 @@ class HealthChecker:
         # Cache the results
         self._metrics_cache[ip] = metrics
 
-        # Register the device if we have a network_id and it's not already monitored
-        if network_id and ip not in self._monitored_devices:
+        # Register the device for active monitoring if we have a network_id,
+        # it's not already monitored, AND active checks are enabled.
+        # When active checks are disabled (cloud deployment), we should NOT register
+        # devices for background monitoring since the health service cannot reach them
+        # and would incorrectly mark them as unhealthy.
+        if network_id and ip not in self._monitored_devices and not settings.disable_active_checks:
             self._monitored_devices[ip] = network_id
             logger.debug(f"Registered device {ip} from agent sync for network {network_id}")
 
@@ -1011,6 +1015,12 @@ class HealthChecker:
 
     async def _perform_monitoring_check(self) -> None:
         """Perform a single monitoring check of all registered devices and test IPs"""
+        # Don't perform active checks when disabled (cloud deployment)
+        # This prevents overwriting agent-provided health data with failed pings
+        if settings.disable_active_checks:
+            logger.debug("Active checks disabled, skipping monitoring check")
+            return
+
         if not self._monitored_devices and not self._gateway_test_ips:
             return
 

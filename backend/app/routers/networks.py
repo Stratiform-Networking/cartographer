@@ -961,9 +961,15 @@ def _create_new_device_node(device, parent_id: str, now: str, role: str | None =
 
 
 def _map_device_type_to_role(device_type: str) -> str:
-    """Map device type from OUI inference to network role."""
+    """Map device type from OUI inference to network role.
+
+    Note: "router" type is only assigned when a device is detected as the network gateway.
+    Network equipment vendors (Cisco, TP-Link, etc.) are classified as "network_device"
+    since they make switches, APs, and other devices - not just routers.
+    """
     mapping = {
         "router": "gateway/router",
+        "network_device": "switch/ap",  # Generic network equipment (switch, AP, etc.)
         "firewall": "firewall",
         "server": "server",
         "service": "service",

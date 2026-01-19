@@ -1521,6 +1521,54 @@ class TestDeviceClassification:
 
         assert role == "nas"
 
+    def test_classify_network_device_type_as_switch_ap(self):
+        """Device with device_type=network_device should be classified as switch/ap.
+
+        Network equipment vendors (Cisco, TP-Link, etc.) are classified as "network_device"
+        by the agent since they make switches, APs, and other devices - not just routers.
+        Actual router detection happens via is_gateway flag.
+        """
+        from app.routers.networks import _classify_device_role
+        from app.schemas.agent_sync import SyncDevice
+
+        # A TP-Link switch should be classified as switch/ap, not router
+        device = SyncDevice(
+            ip="192.168.1.10",
+            hostname="tl-sg108.lan",
+            device_type="network_device",
+            vendor="TP-Link Technologies",
+        )
+        role = _classify_device_role(device)
+        assert role == "switch/ap"
+
+        # A generic network device without hostname hints
+        device2 = SyncDevice(
+            ip="192.168.1.20",
+            device_type="network_device",
+            vendor="Ubiquiti Networks",
+        )
+        role2 = _classify_device_role(device2)
+        assert role2 == "switch/ap"
+
+    def test_router_type_requires_is_gateway_flag(self):
+        """Device with device_type=router should only be gateway/router.
+
+        The "router" device_type is only assigned when a device is the network gateway.
+        Network equipment from vendors like TP-Link are classified as "network_device".
+        """
+        from app.routers.networks import _classify_device_role
+        from app.schemas.agent_sync import SyncDevice
+
+        # Device with device_type=router (set because it's the gateway)
+        device = SyncDevice(
+            ip="192.168.1.1",
+            hostname="router.lan",
+            is_gateway=True,
+            device_type="router",
+        )
+        role = _classify_device_role(device)
+        assert role == "gateway/router"
+
 
 class TestGroupAssignment:
     """Tests for assigning devices to groups based on role"""

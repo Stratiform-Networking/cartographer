@@ -316,3 +316,212 @@ class TestEmbedDataException:
                     await get_embed_data(embed_id="test", db=mock_db)
 
                 assert exc_info.value.status_code == 500
+
+
+class TestAgentSyncEndpoint:
+    """Tests for agent sync endpoint to boost coverage"""
+
+    @pytest.fixture
+    def service_user(self):
+        """Service token user for agent sync"""
+        return AuthenticatedUser(user_id="service", username="service", role=UserRole.ADMIN)
+
+    @pytest.fixture
+    def mock_network(self):
+        """Create a mock network for sync tests"""
+        from app.models.network import Network
+
+        network = MagicMock(spec=Network)
+        network.id = "net-123"
+        network.name = "Test Network"
+        network.layout_data = None
+        network.last_sync_at = None
+        return network
+
+    async def test_sync_agent_scan_with_gateway_device(self, service_user, mock_network):
+        """sync_agent_scan should update root with gateway device"""
+        from datetime import datetime
+
+        from app.routers.networks import sync_agent_scan
+        from app.schemas.agent_sync import AgentSyncRequest, SyncDevice
+
+        mock_db = AsyncMock()
+
+        # Create sync request with gateway device
+        sync_data = AgentSyncRequest(
+            timestamp=datetime.now(),
+            devices=[
+                SyncDevice(
+                    ip="192.168.1.1",
+                    mac="AA:BB:CC:DD:EE:FF",
+                    hostname="router",
+                    is_gateway=True,
+                    vendor="NETGEAR",
+                    device_type="router",
+                ),
+                SyncDevice(
+                    ip="192.168.1.100",
+                    mac="11:22:33:44:55:66",
+                    hostname="laptop",
+                    is_gateway=False,
+                ),
+            ],
+        )
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_scan(
+                network_id="net-123",
+                sync_data=sync_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.devices_received == 2
+            # Gateway updates root + 1 new device added
+            assert response.devices_added >= 1
+            mock_db.commit.assert_called_once()
+
+    async def test_sync_agent_scan_camelcase_fields(self, service_user, mock_network):
+        """sync_agent_scan should accept camelCase fields from agent"""
+        from datetime import datetime
+
+        from app.routers.networks import sync_agent_scan
+        from app.schemas.agent_sync import AgentSyncRequest, SyncDevice
+
+        mock_db = AsyncMock()
+
+        # Simulate what the agent sends (camelCase via model_validate)
+        device_data = {
+            "ip": "192.168.1.1",
+            "mac": "AA:BB:CC:DD:EE:FF",
+            "hostname": "router",
+            "isGateway": True,  # camelCase from Rust agent
+            "responseTimeMs": 5.5,  # camelCase
+            "deviceType": "router",  # camelCase
+            "vendor": "NETGEAR",
+        }
+        gateway_device = SyncDevice.model_validate(device_data)
+
+        sync_data = AgentSyncRequest(
+            timestamp=datetime.now(),
+            devices=[gateway_device],
+        )
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_scan(
+                network_id="net-123",
+                sync_data=sync_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.devices_received == 1
+            # Verify the gateway was properly identified
+            assert gateway_device.is_gateway is True
+            assert gateway_device.response_time_ms == 5.5
+            assert gateway_device.device_type == "router"
+
+    async def test_sync_agent_scan_fallback_to_router_device_type(self, service_user, mock_network):
+        """sync_agent_scan should fallback to device_type=router if no is_gateway"""
+        from datetime import datetime
+
+        from app.routers.networks import sync_agent_scan
+        from app.schemas.agent_sync import AgentSyncRequest, SyncDevice
+
+        mock_db = AsyncMock()
+
+        # No is_gateway flag, but device_type is router
+        sync_data = AgentSyncRequest(
+            timestamp=datetime.now(),
+            devices=[
+                SyncDevice(
+                    ip="192.168.1.1",
+                    mac="AA:BB:CC:DD:EE:FF",
+                    hostname="router",
+                    is_gateway=False,
+                    device_type="router",
+                ),
+                SyncDevice(
+                    ip="192.168.1.100",
+                    hostname="laptop",
+                ),
+            ],
+        )
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_scan(
+                network_id="net-123",
+                sync_data=sync_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.devices_received == 2
+
+    async def test_sync_agent_scan_with_existing_layout(self, service_user):
+        """sync_agent_scan should work with existing layout data"""
+        from datetime import datetime
+
+        from app.models.network import Network
+        from app.routers.networks import sync_agent_scan
+        from app.schemas.agent_sync import AgentSyncRequest, SyncDevice
+
+        mock_db = AsyncMock()
+
+        # Network with existing layout data
+        mock_network = MagicMock(spec=Network)
+        mock_network.id = "net-123"
+        mock_network.name = "Test Network"
+        mock_network.layout_data = {
+            "version": 1,
+            "root": {
+                "id": "root",
+                "name": "192.168.1.1",
+                "ip": "192.168.1.1",
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "role": "gateway/router",
+                "children": [],
+            },
+        }
+        mock_network.last_sync_at = None
+
+        sync_data = AgentSyncRequest(
+            timestamp=datetime.now(),
+            devices=[
+                SyncDevice(
+                    ip="192.168.1.1",
+                    mac="AA:BB:CC:DD:EE:FF",
+                    hostname="router",
+                    is_gateway=True,
+                ),
+                SyncDevice(
+                    ip="192.168.1.100",
+                    mac="11:22:33:44:55:66",
+                    hostname="new-device",
+                    response_time_ms=2.5,
+                ),
+            ],
+        )
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_scan(
+                network_id="net-123",
+                sync_data=sync_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.devices_received == 2
+            mock_db.commit.assert_called_once()

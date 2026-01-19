@@ -1480,11 +1480,12 @@ class TestGroupAssignment:
     """Tests for assigning devices to groups based on role"""
 
     def test_get_group_for_gateway(self):
-        """Gateway should not be in a group (goes to root)"""
+        """Non-primary routers should go to Infrastructure group"""
         from app.routers.networks import _get_group_for_role
 
+        # Gateway/router devices that aren't the primary gateway go to Infrastructure
         group = _get_group_for_role("gateway/router")
-        assert group == "root"
+        assert group == "Infrastructure"
 
     def test_get_group_for_infrastructure(self):
         """Switches and firewalls should go to Infrastructure"""

@@ -644,7 +644,7 @@ _ROLE_PATTERNS: dict[str, list[str]] = {
 
 # Group assignments for each role
 _ROLE_TO_GROUP: dict[str, str] = {
-    "gateway/router": "root",  # Gateway becomes root, not placed in a group
+    "gateway/router": "Infrastructure",  # Non-primary routers go to Infrastructure
     "switch/ap": "Infrastructure",
     "firewall": "Infrastructure",
     "nas": "Servers",
@@ -656,10 +656,10 @@ _ROLE_TO_GROUP: dict[str, str] = {
 
 
 def _classify_device_role(device, is_gateway_ip: bool = False) -> str:
-    """Classify a device's role based on hostname patterns and gateway flag.
+    """Classify a device's role based on hostname patterns, device_type, and gateway flag.
 
     Args:
-        device: Device object with hostname and is_gateway fields
+        device: Device object with hostname, device_type, and is_gateway fields
         is_gateway_ip: Whether this device's IP matches the network gateway
 
     Returns:
@@ -668,6 +668,12 @@ def _classify_device_role(device, is_gateway_ip: bool = False) -> str:
     # Explicit gateway flag takes precedence
     if device.is_gateway or is_gateway_ip:
         return "gateway/router"
+
+    # Check device_type from OUI/vendor inference (set by agent)
+    if device.device_type:
+        role = _map_device_type_to_role(device.device_type)
+        if role != "client":
+            return role
 
     hostname = (device.hostname or "").lower()
 
@@ -1039,8 +1045,17 @@ async def sync_agent_scan(
     devices_added = 0
     devices_updated = 0
 
-    # Handle gateway device
+    # Handle gateway device - first try explicit is_gateway flag
     gateway_device = next((d for d in sync_data.devices if d.is_gateway), None)
+
+    # Fallback: if no explicit gateway, look for a router by device_type (from OUI)
+    # Only use fallback if root has no IP yet (first sync or placeholder)
+    if not gateway_device and not root.get("ip"):
+        gateway_device = next(
+            (d for d in sync_data.devices if d.device_type == "router"),
+            None,
+        )
+
     gateway_ip = None
     if gateway_device and _update_root_with_gateway(root, gateway_device, now):
         devices_updated += 1

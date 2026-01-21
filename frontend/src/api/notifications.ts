@@ -417,6 +417,8 @@ export async function sendNetworkNotification(
   data: {
     title: string;
     message: string;
+    type: string;
+    priority: string;
     delivery_channels?: string[];
   }
 ): Promise<void> {

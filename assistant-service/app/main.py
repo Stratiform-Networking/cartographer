@@ -102,11 +102,10 @@ This service provides intelligent assistance by:
         openapi_url=None if settings.disable_docs else "/openapi.json",
     )
 
-    # CORS middleware
-    allowed_origins = settings.cors_origins.split(",")
+    # CORS middleware - read origins from settings
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins,
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

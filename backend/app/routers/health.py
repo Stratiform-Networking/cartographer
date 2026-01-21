@@ -7,6 +7,7 @@ and monitoring systems.
 
 from fastapi import APIRouter
 
+from ..config import get_settings
 from ..services.http_client import http_pool
 
 router = APIRouter(tags=["internal"])
@@ -53,3 +54,44 @@ async def readyz():
         return {"status": "degraded", "open_circuits": open_circuits}
 
     return {"status": "ready"}
+
+
+@router.get("/config-check")
+async def config_check():
+    """
+    Configuration security check endpoint.
+
+    Returns the status of security-sensitive configuration settings.
+    Does NOT expose actual secret values, only whether they are configured.
+
+    This endpoint helps operators verify their deployment is properly configured
+    before going to production.
+    """
+    settings = get_settings()
+
+    checks = {
+        "jwt_secret_configured": bool(settings.jwt_secret),
+        "cors_restricted": "*" not in settings.cors_origins,
+        "environment": settings.env,
+        "docs_disabled": settings.disable_docs,
+    }
+
+    # Determine overall status
+    issues = []
+    if not checks["jwt_secret_configured"]:
+        issues.append("JWT_SECRET is not set")
+    if not checks["cors_restricted"]:
+        issues.append("CORS allows all origins (*)")
+
+    if settings.env == "production" and issues:
+        status = "misconfigured"
+    elif issues:
+        status = "warning"
+    else:
+        status = "ok"
+
+    return {
+        "status": status,
+        "checks": checks,
+        "issues": issues if issues else None,
+    }

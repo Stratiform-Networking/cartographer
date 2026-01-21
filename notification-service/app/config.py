@@ -5,9 +5,13 @@ All environment variables are loaded through Pydantic BaseSettings,
 providing validation, type coercion, and a single source of truth.
 """
 
+import logging
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -20,6 +24,9 @@ class Settings(BaseSettings):
     - Support .env files for local development
     - Make configuration discoverable and documented
     """
+
+    # Environment mode
+    env: str = "development"
 
     # Database
     database_url: str = (
@@ -81,6 +88,22 @@ class Settings(BaseSettings):
     def is_discord_oauth_configured(self) -> bool:
         """Check if Discord OAuth is configured."""
         return bool(self.discord_client_id and self.discord_client_secret)
+
+    @model_validator(mode="after")
+    def validate_security_settings(self) -> "Settings":
+        """Validate security-sensitive settings for production environments."""
+        if self.env == "production":
+            if "*" in self.cors_origins:
+                raise ValueError(
+                    "CORS wildcard (*) is not allowed in production. "
+                    "Set CORS_ORIGINS to specific allowed origins."
+                )
+        elif "*" in self.cors_origins:
+            logger.warning(
+                "CORS is set to allow all origins (*). "
+                "This is acceptable for development but should be restricted in production."
+            )
+        return self
 
 
 # Global settings instance - import this throughout the application

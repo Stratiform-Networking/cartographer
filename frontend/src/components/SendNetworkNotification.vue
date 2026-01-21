@@ -1022,6 +1022,8 @@ async function handleSend() {
       await notificationsApi.sendNetworkNotification(props.networkId, {
         title: form.value.title,
         message: form.value.message,
+        type: form.value.type,
+        priority: form.value.priority,
       });
 
       emit('sent');

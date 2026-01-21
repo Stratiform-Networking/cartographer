@@ -1,36 +1,102 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Cartographer - Production Docker Compose
-# Uses pre-built images from a container registry
-# Uses host networking to scan actual LAN devices
+# Includes nginx TLS termination for secure HTTPS access
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Usage:
+#   1. Copy .example.env to .env and configure all required values
+#   2. Generate secrets: ./scripts/generate-secrets.sh >> .env
+#   3. Set ENV=production in .env
+#   4. Obtain TLS certificates (see below)
+#   5. Run: docker compose -f docker-compose.prod.yml up -d
+#
+# TLS Certificate Setup:
+#   Option A: Let's Encrypt (recommended for public servers)
+#     - Set your domain in DOMAIN environment variable
+#     - Run: docker compose -f docker-compose.prod.yml run --rm certbot certonly
+#     - Certificates will be stored in letsencrypt volume
+#
+#   Option B: Self-signed (for testing/internal use)
+#     - The nginx container generates a self-signed cert on first start
+#     - Replace with your own certs in ./nginx/ssl/
+#
 # ─────────────────────────────────────────────────────────────────────────────
 version: "3.8"
 
 services:
-  # PostgreSQL database for network data
+  # ───────────────────────────────────────────────────────────────────────────
+  # Nginx - TLS Termination & Reverse Proxy
+  # ───────────────────────────────────────────────────────────────────────────
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: cartographer-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # TLS certificates - choose one:
+      # Option A: Let's Encrypt
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+      # Option B: Custom certificates (uncomment and update paths)
+      # - ./nginx/ssl/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      # - ./nginx/ssl/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - cartographer-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Certbot - Let's Encrypt Certificate Management
+  # ───────────────────────────────────────────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: cartographer-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    profiles:
+      - certbot
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # PostgreSQL - Primary Database
+  # ───────────────────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: cartographer-postgres
-    network_mode: host
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-cartographer}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cartographer_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       POSTGRES_DB: ${POSTGRES_DB:-cartographer}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cartographer"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cartographer}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - cartographer-net
 
-  # Redis for metrics pub/sub
+  # ───────────────────────────────────────────────────────────────────────────
+  # Redis - Pub/Sub & Caching
+  # ───────────────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: cartographer-redis
-    # Use host network for consistency with other services
-    network_mode: host
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -41,35 +107,42 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    networks:
+      - cartographer-net
 
-  # Main application (Backend + Frontend)
+  # ───────────────────────────────────────────────────────────────────────────
+  # Main Application (Backend + Frontend)
+  # ───────────────────────────────────────────────────────────────────────────
   app:
-    image: ${REGISTRY:-yourusername}/cartographer-app:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: cartographer-app
-    # Use host network to access real LAN for scanning
-    network_mode: host
     volumes:
       - cartographer-data:/app/data
     environment:
+      - ENV=production
       - FRONTEND_DIST=/app/frontend/dist
-      # Database connection (PostgreSQL)
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
-      # Health service is on localhost when using host network
-      - HEALTH_SERVICE_URL=http://localhost:8001
-      # Auth service is on localhost when using host network
-      - AUTH_SERVICE_URL=http://localhost:8002
-      # Metrics service is on localhost when using host network
-      - METRICS_SERVICE_URL=http://localhost:8003
-      # Assistant service is on localhost when using host network
-      - ASSISTANT_SERVICE_URL=http://localhost:8004
-      # Notification service is on localhost when using host network
-      - NOTIFICATION_SERVICE_URL=http://localhost:8005
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cartographer}
+      - REDIS_URL=redis://redis:6379
+      - REDIS_DB=2
+      - REDIS_CACHE_ENABLED=true
+      - HEALTH_SERVICE_URL=http://health:8001
+      - AUTH_SERVICE_URL=http://auth:8002
+      - METRICS_SERVICE_URL=http://metrics:8003
+      - ASSISTANT_SERVICE_URL=http://assistant:8004
+      - NOTIFICATION_SERVICE_URL=http://notifications:8005
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      - CORS_ORIGINS=${CORS_ORIGINS:?CORS_ORIGINS must be set for production}
+      - DISABLE_DOCS=${DISABLE_DOCS:-true}
     cap_add:
       - NET_ADMIN
       - NET_RAW
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       health:
         condition: service_healthy
@@ -81,18 +154,30 @@ services:
         condition: service_healthy
       notifications:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - cartographer-net
 
+  # ───────────────────────────────────────────────────────────────────────────
   # Health Monitoring Microservice
+  # ───────────────────────────────────────────────────────────────────────────
   health:
-    image: ${REGISTRY:-yourusername}/cartographer-health:${TAG:-latest}
+    build:
+      context: ./health-service
+      dockerfile: Dockerfile
     container_name: cartographer-health
-    # Use host network to ping actual LAN devices
-    network_mode: host
     volumes:
       - health-data:/app/data
     environment:
-      - CORS_ORIGINS=*
+      - ENV=production
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - HEALTH_DATA_DIR=/app/data
+      - NOTIFICATION_SERVICE_URL=http://notifications:8005
     cap_add:
       - NET_RAW
     restart: unless-stopped
@@ -102,25 +187,34 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - cartographer-net
 
+  # ───────────────────────────────────────────────────────────────────────────
   # Auth Microservice
+  # ───────────────────────────────────────────────────────────────────────────
   auth:
-    image: ${REGISTRY:-yourusername}/cartographer-auth:${TAG:-latest}
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
     container_name: cartographer-auth
-    # Use host network for consistent localhost access
-    network_mode: host
     volumes:
       - auth-data:/app/data
     environment:
-      - CORS_ORIGINS=*
+      - ENV=production
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - AUTH_DATA_DIR=/app/data
-      # IMPORTANT: Set a secure secret in production!
-      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cartographer}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - JWT_EXPIRATION_HOURS=24
-      # Email invitations via Resend (optional - invites work without email)
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-local}
+      - ALLOW_OPEN_REGISTRATION=${ALLOW_OPEN_REGISTRATION:-false}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY:-}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY:-}
+      - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <noreply@cartographer.app>}
-      - APPLICATION_URL=${APPLICATION_URL}
+      - APPLICATION_URL=${APPLICATION_URL:-https://localhost}
       - INVITE_EXPIRATION_HOURS=${INVITE_EXPIRATION_HOURS:-72}
     restart: unless-stopped
     healthcheck:
@@ -129,24 +223,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - cartographer-net
 
+  # ───────────────────────────────────────────────────────────────────────────
   # Metrics Publishing Microservice
+  # ───────────────────────────────────────────────────────────────────────────
   metrics:
-    image: ${REGISTRY:-yourusername}/cartographer-metrics:${TAG:-latest}
+    build:
+      context: ./metrics-service
+      dockerfile: Dockerfile
     container_name: cartographer-metrics
-    # Use host network for consistent localhost access
-    network_mode: host
     environment:
-      - CORS_ORIGINS=*
-      # Redis on localhost when using host network
-      - REDIS_URL=redis://localhost:6379
+      - ENV=production
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - REDIS_URL=redis://redis:6379
       - REDIS_DB=0
-      # Other services on localhost when using host network
-      - HEALTH_SERVICE_URL=http://localhost:8001
-      - BACKEND_SERVICE_URL=http://localhost:8000
-      # JWT secret must match auth service for service-to-service auth
-      - JWT_SECRET=${JWT_SECRET}
-      # Publishing configuration
+      - HEALTH_SERVICE_URL=http://health:8001
+      - BACKEND_SERVICE_URL=http://app:8000
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - METRICS_PUBLISH_INTERVAL=${METRICS_PUBLISH_INTERVAL:-30}
     restart: unless-stopped
     depends_on:
@@ -160,26 +255,39 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - cartographer-net
 
+  # ───────────────────────────────────────────────────────────────────────────
   # AI Assistant Microservice
+  # ───────────────────────────────────────────────────────────────────────────
   assistant:
-    image: ${REGISTRY:-yourusername}/cartographer-assistant:${TAG:-latest}
+    build:
+      context: ./assistant-service
+      dockerfile: Dockerfile
     container_name: cartographer-assistant
-    # Use host network for consistent localhost access
-    network_mode: host
     environment:
-      - CORS_ORIGINS=*
-      # Metrics service for network context
-      - METRICS_SERVICE_URL=http://localhost:8003
-      # AI Provider API Keys (set in environment)
+      - ENV=production
+      - CORS_ORIGINS=${CORS_ORIGINS}
+      - AUTH_SERVICE_URL=http://auth:8002
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      - METRICS_SERVICE_URL=http://metrics:8003
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      # Ollama (local models)
-      - OLLAMA_HOST=${OLLAMA_HOST:-http://localhost:11434}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://host.docker.internal:11434}
+      - REDIS_URL=redis://redis:6379
+      - REDIS_DB=1
+      - ASSISTANT_CHAT_LIMIT_PER_DAY=${ASSISTANT_CHAT_LIMIT_PER_DAY:-99999}
+      - ASSISTANT_RATE_LIMIT_EXEMPT_ROLES=${ASSISTANT_RATE_LIMIT_EXEMPT_ROLES:-}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cartographer}
     restart: unless-stopped
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       metrics:
         condition: service_healthy
     healthcheck:
@@ -188,37 +296,34 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - cartographer-net
 
+  # ───────────────────────────────────────────────────────────────────────────
   # Notification Microservice
+  # ───────────────────────────────────────────────────────────────────────────
   notifications:
-    image: ${REGISTRY:-yourusername}/cartographer-notifications:${TAG:-latest}
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
     container_name: cartographer-notifications
-    # Use host network for consistent localhost access
-    network_mode: host
     volumes:
       - notification-data:/app/data
-      # Mount host timezone so quiet hours work correctly in user's local time
-      - /etc/localtime:/etc/localtime:ro
     environment:
-      # Use host timezone for quiet hours (fallback if /etc/localtime not available)
+      - ENV=production
       - TZ=${TZ:-}
-      - CORS_ORIGINS=*
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - NOTIFICATION_DATA_DIR=/app/data
-      # Database connection (PostgreSQL) for notification preferences and Discord links
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD:-cartographer_secret}@localhost:5432/${POSTGRES_DB:-cartographer}
-      # Current application version for update checking
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-cartographer}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cartographer}
       - CARTOGRAPHER_VERSION=${CARTOGRAPHER_VERSION:-0.1.1}
-      # Email notifications via Resend (same key as auth service)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <notifications@cartographer.app>}
-      - APPLICATION_URL=${APPLICATION_URL}
-      # Discord bot credentials (set in environment)
+      - APPLICATION_URL=${APPLICATION_URL:-https://localhost}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID:-}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET:-}
-      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI}
-      # Health service for integrating with health checks
-      - HEALTH_SERVICE_URL=http://localhost:8001
+      - DISCORD_REDIRECT_URI=${DISCORD_REDIRECT_URI:-https://localhost/api/auth/discord/callback}
+      - HEALTH_SERVICE_URL=http://health:8001
     restart: unless-stopped
     depends_on:
       postgres:
@@ -231,9 +336,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - cartographer-net
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Networks
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  cartographer-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ─────────────────────────────────────────────────────────────────────────────
 volumes:
   postgres-data:
+    driver: local
+  redis-data:
     driver: local
   cartographer-data:
     driver: local
@@ -243,5 +362,7 @@ volumes:
     driver: local
   notification-data:
     driver: local
-  redis-data:
+  letsencrypt:
+    driver: local
+  certbot-www:
     driver: local

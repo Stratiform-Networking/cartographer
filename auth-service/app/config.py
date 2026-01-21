@@ -4,11 +4,19 @@ Centralized configuration for the Auth Service.
 All environment variables should be accessed through the settings object.
 """
 
+import logging
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
     """Auth Service configuration loaded from environment variables."""
+
+    # Environment mode
+    env: str = "development"
 
     # === Auth Provider Configuration ===
     # Determines which authentication system to use
@@ -22,7 +30,8 @@ class Settings(BaseSettings):
     )
 
     # JWT Configuration (used for both local and cloud modes)
-    jwt_secret: str = "cartographer-dev-secret-change-in-production"
+    # No default - must be set via environment variable
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 24
 
@@ -67,6 +76,32 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS into a list."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def validate_security_settings(self) -> "Settings":
+        """Validate security-sensitive settings for production environments."""
+        if self.env == "production":
+            # Strict validation in production
+            if "*" in self.cors_origins:
+                raise ValueError(
+                    "CORS wildcard (*) is not allowed in production. "
+                    "Set CORS_ORIGINS to specific allowed origins."
+                )
+            if not self.jwt_secret:
+                raise ValueError(
+                    "JWT_SECRET must be set in production. "
+                    "Generate one with: openssl rand -hex 32"
+                )
+        else:
+            # Warnings in development
+            if "*" in self.cors_origins:
+                logger.warning(
+                    "CORS is set to allow all origins (*). "
+                    "This should be restricted in production."
+                )
+            if not self.jwt_secret:
+                logger.warning("JWT_SECRET is not set. " "Generate one with: openssl rand -hex 32")
+        return self
 
 
 settings = Settings()

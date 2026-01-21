@@ -127,10 +127,10 @@ def create_app() -> FastAPI:
         openapi_url=None if settings.disable_docs else "/openapi.json",
     )
 
-    # CORS middleware for development
+    # CORS middleware - read origins from settings
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

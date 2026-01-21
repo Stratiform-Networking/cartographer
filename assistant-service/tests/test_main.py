@@ -199,3 +199,67 @@ class TestGlobalAppInstance:
         """Should have a global app instance"""
         assert app is not None
         assert app.title == "Cartographer Assistant Service"
+
+
+class TestConfigValidation:
+    """Tests for configuration validation"""
+
+    def test_production_cors_wildcard_raises(self):
+        """Should raise ValueError for CORS wildcard in production"""
+        import os
+
+        from pydantic import ValidationError
+
+        with patch.dict(
+            os.environ,
+            {
+                "ENV": "production",
+                "CORS_ORIGINS": "*",
+                "JWT_SECRET": "test-secret-32-chars-minimum-len",
+            },
+            clear=False,
+        ):
+            from app.config import Settings
+
+            with pytest.raises(ValidationError) as exc_info:
+                Settings()
+
+            assert "CORS wildcard" in str(exc_info.value)
+
+    def test_production_missing_jwt_secret_raises(self):
+        """Should raise ValueError for missing JWT_SECRET in production"""
+        import os
+
+        from pydantic import ValidationError
+
+        with patch.dict(
+            os.environ,
+            {"ENV": "production", "CORS_ORIGINS": "https://example.com", "JWT_SECRET": ""},
+            clear=False,
+        ):
+            from app.config import Settings
+
+            with pytest.raises(ValidationError) as exc_info:
+                Settings()
+
+            assert "JWT_SECRET" in str(exc_info.value)
+
+    def test_production_valid_config_passes(self):
+        """Should pass validation with proper production config"""
+        import os
+
+        with patch.dict(
+            os.environ,
+            {
+                "ENV": "production",
+                "CORS_ORIGINS": "https://example.com",
+                "JWT_SECRET": "test-secret-at-least-32-characters-long",
+            },
+            clear=False,
+        ):
+            from app.config import Settings
+
+            # Should not raise
+            settings = Settings()
+            assert settings.env == "production"
+            assert settings.cors_origins == "https://example.com"

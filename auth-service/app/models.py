@@ -250,6 +250,39 @@ class InviteTokenInfo(BaseModel):
     is_valid: bool
 
 
+# ==================== Network Limit Models ====================
+
+
+class NetworkLimitStatus(BaseModel):
+    """Network limit status for a user."""
+
+    used: int  # Number of networks owned
+    limit: int  # Max networks allowed (-1 = unlimited)
+    remaining: int  # Networks that can still be created (-1 = unlimited)
+    is_exempt: bool  # Whether user is exempt from limits
+    message: str | None = (
+        None  # Message to display when limit is reached (only included when limit reached)
+    )
+
+
+class NetworkLimitUpdate(BaseModel):
+    """Request to update a user's network limit."""
+
+    network_limit: int | None = Field(
+        None,
+        description="Network limit: -1 = unlimited, null = reset to default, positive = custom limit",
+    )
+
+    @field_validator("network_limit")
+    @classmethod
+    def validate_limit(cls, v: int | None) -> int | None:
+        if v is not None and v < -1:
+            raise ValueError(
+                "Network limit must be -1 (unlimited), null (default), or a positive number"
+            )
+        return v
+
+
 # ==================== Internal Database Models ====================
 
 

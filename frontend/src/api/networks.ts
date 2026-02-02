@@ -98,3 +98,18 @@ export async function addNetworkPermission(
 export async function removeNetworkPermission(networkId: string, userId: string): Promise<void> {
   await client.delete(`/api/networks/${networkId}/permissions/${userId}`);
 }
+
+// ==================== Network Limit ====================
+
+export interface NetworkLimitStatus {
+  used: number; // Number of networks owned
+  limit: number; // Max networks allowed (-1 = unlimited)
+  remaining: number; // Networks that can still be created (-1 = unlimited)
+  is_exempt: boolean; // Whether user is exempt from limits
+  message: string | null; // Message to display when limit is reached
+}
+
+export async function getNetworkLimitStatus(): Promise<NetworkLimitStatus> {
+  const response = await client.get<NetworkLimitStatus>('/api/auth/network-limit');
+  return response.data;
+}

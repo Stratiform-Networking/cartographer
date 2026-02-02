@@ -176,6 +176,32 @@ async def change_password(request: Request, user: AuthenticatedUser = Depends(re
     return await proxy_auth_request("POST", "/me/change-password", request, body)
 
 
+# ==================== Network Limit Endpoints ====================
+
+
+@router.get("/auth/network-limit")
+async def get_network_limit(request: Request, user: AuthenticatedUser = Depends(require_auth)):
+    """Get current user's network limit status. Requires authentication."""
+    return await proxy_auth_request("GET", "/network-limit", request)
+
+
+@router.get("/auth/users/{user_id}/network-limit")
+async def get_user_network_limit(
+    user_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)
+):
+    """Get network limit status for a specific user. Requires owner role."""
+    return await proxy_auth_request("GET", f"/users/{user_id}/network-limit", request)
+
+
+@router.put("/auth/users/{user_id}/network-limit")
+async def set_user_network_limit(
+    user_id: str, request: Request, user: AuthenticatedUser = Depends(require_owner)
+):
+    """Set a custom network limit for a user. Requires owner role."""
+    body = await request.json()
+    return await proxy_auth_request("PUT", f"/users/{user_id}/network-limit", request, body)
+
+
 # ==================== Invitation Endpoints ====================
 # All invitation management endpoints require owner role
 

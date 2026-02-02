@@ -23,6 +23,8 @@ from ..models import (
     InviteTokenInfo,
     LoginRequest,
     LoginResponse,
+    NetworkLimitStatus,
+    NetworkLimitUpdate,
     OwnerSetupRequest,
     SessionInfo,
     SetupStatus,
@@ -462,6 +464,76 @@ async def update_preferences(
 ):
     """Update current user's preferences (partial update)."""
     return await auth_service.update_preferences(db, user, request)
+
+
+# ==================== Network Limit Endpoints ====================
+
+
+@router.get("/network-limit", response_model=NetworkLimitStatus)
+async def get_network_limit(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """
+    Get the current network limit status for the authenticated user.
+
+    Returns:
+        {
+            "used": int,      # Number of networks owned
+            "limit": int,     # Max networks allowed (-1 = unlimited)
+            "remaining": int, # Networks that can still be created (-1 = unlimited)
+            "is_exempt": bool # Whether user is exempt from limits
+        }
+    """
+    from ..services.network_limit import get_network_limit_status
+
+    status = await get_network_limit_status(db, user.id, user.role.value)
+    return status
+
+
+@router.get("/users/{user_id}/network-limit", response_model=NetworkLimitStatus)
+async def get_user_network_limit_endpoint(
+    user_id: str,
+    user: User = Depends(require_admin_access),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get network limit status for a specific user. Requires admin access.
+
+    Returns the same structure as /network-limit.
+    """
+    from ..services.network_limit import get_network_limit_status
+
+    # Get target user's role
+    target_user = await auth_service.get_user(db, user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    status = await get_network_limit_status(db, user_id, target_user.role.value)
+    return status
+
+
+@router.put("/users/{user_id}/network-limit")
+async def set_user_network_limit_endpoint(
+    user_id: str,
+    request: NetworkLimitUpdate,
+    user: User = Depends(require_admin_access),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Set a custom network limit for a user. Requires admin access.
+
+    Request body:
+        {
+            "network_limit": int  # -1 = unlimited, null = reset to default, positive = custom limit
+        }
+    """
+    from ..services.network_limit import set_user_network_limit
+
+    # Verify target user exists
+    target_user = await auth_service.get_user(db, user_id)
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    result = await set_user_network_limit(db, user_id, request.network_limit)
+    return result
 
 
 # ==================== Invitation Endpoints ====================

@@ -5,7 +5,7 @@ Network management API routes.
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -42,14 +42,60 @@ settings = get_settings()
 # ============================================================================
 
 
+async def check_network_limit(user_id: str, user_role: str, auth_header: str | None) -> None:
+    """
+    Check if user can create another network by calling auth-service.
+    Raises HTTPException with 403 if limit exceeded.
+    """
+    from ..services.http_client import http_pool
+
+    headers = {"Content-Type": "application/json"}
+    if auth_header:
+        headers["Authorization"] = auth_header
+
+    try:
+        status_data = await http_pool.request(
+            service_name="auth",
+            method="GET",
+            path="/api/auth/network-limit",
+            headers=headers,
+            timeout=10.0,
+        )
+
+        # Check if limit is exceeded
+        if status_data.get("is_exempt"):
+            return  # Exempt users can always create networks
+
+        remaining = status_data.get("remaining", 1)
+        limit = status_data.get("limit", 1)
+
+        if remaining <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Network limit reached. You can have a maximum of {limit} network(s).",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Log error but don't block network creation if auth-service is unavailable
+        import logging
+
+        logging.getLogger(__name__).warning(f"Failed to check network limit: {e}")
+
+
 @router.post("", response_model=NetworkResponse, status_code=status.HTTP_201_CREATED)
 async def create_network(
+    request: Request,
     network_data: NetworkCreate,
     current_user: AuthenticatedUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
     cache: CacheService = Depends(get_cache),
 ):
     """Create a new network for the current user."""
+    # Check network limit before creating
+    auth_header = request.headers.get("Authorization")
+    await check_network_limit(current_user.user_id, current_user.role, auth_header)
+
     # Generate unique agent key for future cloud sync
     agent_key = generate_agent_key()
 

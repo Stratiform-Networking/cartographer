@@ -223,21 +223,59 @@
           </p>
           <button
             @click="showCreateModal = true"
-            class="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold rounded-xl shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98]"
+            :disabled="!canCreateNetwork"
+            :class="[
+              'px-6 py-3 font-semibold rounded-xl shadow-lg transition-all',
+              canCreateNetwork
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-cyan-500/25 hover:shadow-cyan-500/40 hover:scale-[1.02] active:scale-[0.98]'
+                : 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed',
+            ]"
+            :title="canCreateNetwork ? '' : 'Network limit reached'"
           >
             Create Network
           </button>
+          <p
+            v-if="!canCreateNetwork && networkLimit"
+            class="mt-3 text-sm text-amber-600 dark:text-amber-400"
+          >
+            {{
+              networkLimit.message ||
+              `You've reached your network limit (${networkLimit.limit}). Contact an administrator to increase your limit.`
+            }}
+          </p>
         </div>
 
         <!-- Networks Grid -->
         <div v-else>
           <div class="flex items-center justify-between mb-6">
-            <h2 class="text-xl font-display font-semibold text-slate-900 dark:text-white">
-              Your Networks
-            </h2>
+            <div class="flex items-center gap-4">
+              <h2 class="text-xl font-display font-semibold text-slate-900 dark:text-white">
+                Your Networks
+              </h2>
+              <!-- Network limit indicator -->
+              <span
+                v-if="networkLimit && !networkLimit.is_exempt"
+                class="text-xs px-2 py-1 rounded-full"
+                :class="
+                  networkLimit.remaining <= 0
+                    ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                "
+                :title="`${networkLimit.used} of ${networkLimit.limit} networks used`"
+              >
+                {{ networkLimit.used }}/{{ networkLimit.limit }}
+              </span>
+            </div>
             <button
               @click="showCreateModal = true"
-              class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-medium rounded-lg shadow-lg shadow-cyan-500/20 transition-all hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]"
+              :disabled="!canCreateNetwork"
+              :class="[
+                'px-4 py-2 text-sm font-medium rounded-lg shadow-lg transition-all',
+                canCreateNetwork
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-cyan-500/20 hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98]'
+                  : 'bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed',
+              ]"
+              :title="canCreateNetwork ? 'Create a new network' : 'Network limit reached'"
             >
               + New Network
             </button>
@@ -708,11 +746,12 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { useNetworks, type Network } from '../composables/useNetworks';
 import { useDarkMode } from '../composables/useDarkMode';
 import { formatRelativeTime } from '../utils/formatters';
+import { getNetworkLimitStatus, type NetworkLimitStatus } from '../api/networks';
 import SetupWizard from '../components/SetupWizard.vue';
 import LoginScreen from '../components/LoginScreen.vue';
 import UserMenu from '../components/UserMenu.vue';
@@ -766,6 +805,24 @@ const showDeleteModal = ref(false);
 const isDeleting = ref(false);
 const deleteError = ref('');
 const deletingNetwork = ref<Network | null>(null);
+
+// Network limit state
+const networkLimit = ref<NetworkLimitStatus | null>(null);
+const canCreateNetwork = computed(() => {
+  if (!networkLimit.value) return true; // Allow if limit not loaded yet
+  if (networkLimit.value.is_exempt) return true;
+  return networkLimit.value.remaining > 0;
+});
+
+async function fetchNetworkLimit() {
+  try {
+    networkLimit.value = await getNetworkLimitStatus();
+  } catch (e) {
+    console.error('[HomePage] Failed to fetch network limit:', e);
+    // Allow creation if limit check fails
+    networkLimit.value = null;
+  }
+}
 
 // Check auth status on mount using composable helper
 async function initAuth() {
@@ -824,8 +881,12 @@ async function createNetwork() {
     });
 
     closeCreateModal();
+    // Refresh network limit after creation
+    await fetchNetworkLimit();
   } catch (e: unknown) {
-    createError.value = e instanceof Error ? e.message : 'Failed to create network';
+    const error = e as { response?: { data?: { detail?: string } } };
+    createError.value =
+      error.response?.data?.detail || (e instanceof Error ? e.message : 'Failed to create network');
   } finally {
     isCreating.value = false;
   }
@@ -888,6 +949,8 @@ async function executeDeleteNetwork() {
   try {
     await deleteNetworkApi(deletingNetwork.value.id);
     closeDeleteModal();
+    // Refresh network limit after deletion
+    await fetchNetworkLimit();
   } catch (e: unknown) {
     deleteError.value = e instanceof Error ? e.message : 'Failed to delete network';
   } finally {
@@ -916,7 +979,7 @@ watch(isAuthenticated, async (newValue, oldValue) => {
     clearNetworks();
     await nextTick();
     try {
-      await fetchNetworks();
+      await Promise.all([fetchNetworks(), fetchNetworkLimit()]);
       console.log('[HomePage] Networks loaded:', networks.value.length);
     } catch (e) {
       console.error('[HomePage] Failed to load networks:', e);
@@ -952,7 +1015,7 @@ onMounted(async () => {
     try {
       // Sync dark mode preference from server for cross-device consistency
       await syncFromServer();
-      await fetchNetworks();
+      await Promise.all([fetchNetworks(), fetchNetworkLimit()]);
       console.log('[HomePage] Networks loaded:', networks.value.length);
     } catch (e) {
       console.error('[HomePage] Failed to load networks:', e);

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -157,3 +157,31 @@ class ProviderLink(Base):
 
     # Ensure unique provider + provider_user_id combination
     __table_args__ = (UniqueConstraint("provider", "provider_user_id", name="uq_provider_user"),)
+
+
+class UserLimit(Base):
+    """
+    Per-user limit configuration.
+
+    Stores custom limits for users that differ from system defaults.
+    NULL values mean "use system default", -1 means unlimited.
+    """
+
+    __tablename__ = "user_limits"
+
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # Network limit: NULL = use system default, -1 = unlimited, positive = custom limit
+    network_limit: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+
+    # True if unlimited status was set automatically due to role exemption
+    # False if it was manually set by an admin
+    is_role_exempt: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

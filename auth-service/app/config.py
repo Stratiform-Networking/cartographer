@@ -66,6 +66,27 @@ class Settings(BaseSettings):
     disable_docs: bool = False
     allow_open_registration: bool = False
 
+    # Network Limits
+    network_limit_per_user: int = 1  # Default max networks per user
+    network_limit_exempt_roles: str = "admin,owner"  # Comma-separated roles with unlimited networks
+    network_limit_message: str = ""  # Custom message when limit reached (empty = use default)
+
+    @property
+    def network_limit_exempt_roles_set(self) -> set[str]:
+        """Parse comma-separated exempt roles into a set."""
+        return {
+            role.strip().lower()
+            for role in self.network_limit_exempt_roles.split(",")
+            if role.strip()
+        }
+
+    @property
+    def network_limit_message_text(self) -> str:
+        """Get the network limit message, using default if not set."""
+        if self.network_limit_message:
+            return self.network_limit_message
+        return "You've reached your network limit ({limit}). Contact an administrator to increase your limit."
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

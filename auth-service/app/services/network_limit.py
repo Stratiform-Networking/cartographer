@@ -3,11 +3,11 @@
 import logging
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..db_models import UserLimit, UserRole
+from ..db_models import UserLimit
 
 logger = logging.getLogger(__name__)
 

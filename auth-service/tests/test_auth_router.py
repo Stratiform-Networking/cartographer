@@ -150,6 +150,42 @@ class TestSetupEndpoints:
             assert response.status_code == 400
 
 
+class TestAuthConfigEndpoint:
+    """Tests for auth config endpoint."""
+
+    def test_get_auth_config_local_mode(self, client):
+        with patch("app.routers.auth.settings") as mock_settings:
+            mock_settings.auth_provider = "local"
+            mock_settings.clerk_publishable_key = "pk_local_ignored"
+            mock_settings.clerk_proxy_url = "https://clerk.local"
+            mock_settings.allow_open_registration = False
+
+            response = client.get("/api/auth/config")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["provider"] == "local"
+            assert data["clerk_publishable_key"] is None
+            assert data["clerk_proxy_url"] is None
+            assert data["allow_registration"] is False
+
+    def test_get_auth_config_cloud_mode(self, client):
+        with patch("app.routers.auth.settings") as mock_settings:
+            mock_settings.auth_provider = "cloud"
+            mock_settings.clerk_publishable_key = "pk_test_123"
+            mock_settings.clerk_proxy_url = "https://clerk.example.com"
+            mock_settings.allow_open_registration = True
+
+            response = client.get("/api/auth/config")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["provider"] == "cloud"
+            assert data["clerk_publishable_key"] == "pk_test_123"
+            assert data["clerk_proxy_url"] == "https://clerk.example.com"
+            assert data["allow_registration"] is True
+
+
 class TestAuthenticationEndpoints:
     """Tests for authentication endpoints"""
 
@@ -293,6 +329,126 @@ class TestAuthenticationEndpoints:
 
             assert response.status_code == 200
             assert response.json()["valid"] is False
+
+
+class TestClerkExchangeEndpoint:
+    """Tests for Clerk token exchange endpoint."""
+
+    def test_exchange_clerk_token_rejects_when_not_in_cloud_mode(self, client):
+        with patch("app.routers.auth.settings") as mock_settings:
+            mock_settings.auth_provider = "local"
+
+            response = client.post(
+                "/api/auth/clerk/exchange", headers={"Authorization": "Bearer clerk-token"}
+            )
+
+            assert response.status_code == 400
+            assert "cloud mode" in response.json()["detail"]
+
+    def test_exchange_clerk_token_requires_credentials(self, client):
+        with patch("app.routers.auth.settings") as mock_settings:
+            mock_settings.auth_provider = "cloud"
+
+            response = client.post("/api/auth/clerk/exchange")
+
+            assert response.status_code == 401
+            assert "required" in response.json()["detail"]
+
+    def test_exchange_clerk_token_returns_500_when_sync_fails(self, client):
+        from app.identity.claims import AuthMethod, AuthProvider, IdentityClaims
+
+        claims = IdentityClaims(
+            provider=AuthProvider.CLERK,
+            provider_user_id="clerk-user-1",
+            auth_method=AuthMethod.SOCIAL_OAUTH,
+            email="sync@test.com",
+            email_verified=True,
+            username="syncuser",
+            first_name="Sync",
+            last_name="User",
+            avatar_url=None,
+            session_id="sess_123",
+            issued_at=datetime.now(timezone.utc),
+            expires_at=None,
+            org_id=None,
+            org_slug=None,
+            org_role=None,
+            connection_id=None,
+            connection_type=None,
+            idp_id=None,
+            directory_id=None,
+            raw_attributes=None,
+            local_user_id=None,
+        )
+
+        provider = MagicMock()
+        provider.validate_token = AsyncMock(return_value=claims)
+
+        with (
+            patch("app.routers.auth.settings") as mock_settings,
+            patch("app.routers.auth.get_provider", return_value=provider),
+            patch(
+                "app.routers.auth.sync_provider_user",
+                new=AsyncMock(return_value=(None, False, False)),
+            ),
+        ):
+            mock_settings.auth_provider = "cloud"
+
+            response = client.post(
+                "/api/auth/clerk/exchange", headers={"Authorization": "Bearer clerk-token"}
+            )
+
+            assert response.status_code == 500
+            assert "Failed to sync user" in response.json()["detail"]
+
+    def test_exchange_clerk_token_returns_500_when_synced_user_not_found(self, client):
+        from app.identity.claims import AuthMethod, AuthProvider, IdentityClaims
+
+        claims = IdentityClaims(
+            provider=AuthProvider.CLERK,
+            provider_user_id="clerk-user-2",
+            auth_method=AuthMethod.SOCIAL_OAUTH,
+            email="found@test.com",
+            email_verified=True,
+            username="founduser",
+            first_name="Found",
+            last_name="User",
+            avatar_url=None,
+            session_id="sess_234",
+            issued_at=datetime.now(timezone.utc),
+            expires_at=None,
+            org_id=None,
+            org_slug=None,
+            org_role=None,
+            connection_id=None,
+            connection_type=None,
+            idp_id=None,
+            directory_id=None,
+            raw_attributes=None,
+            local_user_id=None,
+        )
+
+        provider = MagicMock()
+        provider.validate_token = AsyncMock(return_value=claims)
+
+        with (
+            patch("app.routers.auth.settings") as mock_settings,
+            patch("app.routers.auth.get_provider", return_value=provider),
+            patch(
+                "app.routers.auth.sync_provider_user",
+                new=AsyncMock(return_value=("local-123", True, False)),
+            ),
+            patch("app.routers.auth.auth_service") as mock_service,
+        ):
+            mock_settings.auth_provider = "cloud"
+            mock_service.get_user = AsyncMock(return_value=None)
+
+            response = client.post(
+                "/api/auth/clerk/exchange", headers={"Authorization": "Bearer clerk-token"}
+            )
+
+            assert response.status_code == 500
+            assert "retrieve synced user" in response.json()["detail"]
 
 
 class TestUserManagementEndpoints:
@@ -474,6 +630,154 @@ class TestUserManagementEndpoints:
             )
 
             assert response.status_code == 200
+
+
+class TestNetworkLimitEndpoints:
+    """Tests for network limit endpoints."""
+
+    def test_get_network_limit_for_authenticated_user(self, client, mock_user):
+        from app.models import TokenPayload
+
+        with (
+            patch("app.routers.auth.auth_service") as mock_service,
+            patch(
+                "app.services.network_limit.get_network_limit_status",
+                new=AsyncMock(
+                    return_value={
+                        "used": 1,
+                        "limit": 2,
+                        "remaining": 1,
+                        "is_exempt": False,
+                        "message": None,
+                    }
+                ),
+            ),
+        ):
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_user.id,
+                username=mock_user.username,
+                role=mock_user.role,
+                exp=datetime.now(timezone.utc) + timedelta(hours=1),
+                iat=datetime.now(timezone.utc),
+            )
+            mock_service.get_user = AsyncMock(return_value=mock_user)
+
+            response = client.get(
+                "/api/auth/network-limit", headers={"Authorization": "Bearer token123"}
+            )
+
+            assert response.status_code == 200
+            assert response.json()["remaining"] == 1
+
+    def test_get_user_network_limit_returns_404_for_missing_target(self, client, mock_owner):
+        from app.models import TokenPayload
+
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_owner.id,
+                username=mock_owner.username,
+                role=mock_owner.role,
+                exp=datetime.now(timezone.utc) + timedelta(hours=1),
+                iat=datetime.now(timezone.utc),
+            )
+            mock_service.get_user = AsyncMock(side_effect=[mock_owner, None])
+
+            response = client.get(
+                "/api/auth/users/missing-user/network-limit",
+                headers={"Authorization": "Bearer token123"},
+            )
+
+            assert response.status_code == 404
+
+    def test_get_user_network_limit_success(self, client, mock_owner, mock_user):
+        from app.models import TokenPayload
+
+        with (
+            patch("app.routers.auth.auth_service") as mock_service,
+            patch(
+                "app.services.network_limit.get_network_limit_status",
+                new=AsyncMock(
+                    return_value={
+                        "used": 0,
+                        "limit": 1,
+                        "remaining": 1,
+                        "is_exempt": False,
+                        "message": None,
+                    }
+                ),
+            ),
+        ):
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_owner.id,
+                username=mock_owner.username,
+                role=mock_owner.role,
+                exp=datetime.now(timezone.utc) + timedelta(hours=1),
+                iat=datetime.now(timezone.utc),
+            )
+            mock_service.get_user = AsyncMock(side_effect=[mock_owner, mock_user])
+
+            response = client.get(
+                f"/api/auth/users/{mock_user.id}/network-limit",
+                headers={"Authorization": "Bearer token123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["limit"] == 1
+
+    def test_set_user_network_limit_returns_404_for_missing_target(self, client, mock_owner):
+        from app.models import TokenPayload
+
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_owner.id,
+                username=mock_owner.username,
+                role=mock_owner.role,
+                exp=datetime.now(timezone.utc) + timedelta(hours=1),
+                iat=datetime.now(timezone.utc),
+            )
+            mock_service.get_user = AsyncMock(side_effect=[mock_owner, None])
+
+            response = client.put(
+                "/api/auth/users/missing-user/network-limit",
+                headers={"Authorization": "Bearer token123"},
+                json={"network_limit": 2},
+            )
+
+            assert response.status_code == 404
+
+    def test_set_user_network_limit_success(self, client, mock_owner, mock_user):
+        from app.models import TokenPayload
+
+        with (
+            patch("app.routers.auth.auth_service") as mock_service,
+            patch(
+                "app.services.network_limit.set_user_network_limit",
+                new=AsyncMock(
+                    return_value={
+                        "user_id": mock_user.id,
+                        "network_limit": 4,
+                        "is_role_exempt": False,
+                    }
+                ),
+            ),
+        ):
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_owner.id,
+                username=mock_owner.username,
+                role=mock_owner.role,
+                exp=datetime.now(timezone.utc) + timedelta(hours=1),
+                iat=datetime.now(timezone.utc),
+            )
+            mock_service.get_user = AsyncMock(side_effect=[mock_owner, mock_user])
+
+            response = client.put(
+                f"/api/auth/users/{mock_user.id}/network-limit",
+                headers={"Authorization": "Bearer token123"},
+                json={"network_limit": 4},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["network_limit"] == 4
 
 
 class TestProfileEndpoints:

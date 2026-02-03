@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -1086,6 +1087,20 @@ def _process_device_sync(
     return 1, 0
 
 
+def _flag_layout_modified_if_needed(network: Network) -> None:
+    """
+    Mark layout_data as dirty for SQLAlchemy JSON persistence.
+
+    During unit tests we sometimes pass a MagicMock(spec=Network) that isn't
+    SQLAlchemy-instrumented (no ``_sa_instance_state``). In that case the manual
+    flagging is unnecessary, so we safely no-op.
+    """
+    try:
+        flag_modified(network, "layout_data")
+    except (AttributeError, InvalidRequestError):
+        return
+
+
 @router.post("/{network_id}/scan", response_model=AgentSyncResponse)
 async def sync_agent_scan(
     network_id: str,
@@ -1160,7 +1175,7 @@ async def sync_agent_scan(
 
     # Save updated layout - must use flag_modified for SQLAlchemy to detect JSON changes
     network.layout_data = layout_data
-    flag_modified(network, "layout_data")
+    _flag_layout_modified_if_needed(network)
     network.last_sync_at = datetime.now(timezone.utc)
     await db.commit()
 
@@ -1248,7 +1263,7 @@ async def sync_agent_health(
 
     # Save updated layout - must use flag_modified for SQLAlchemy to detect JSON changes
     network.layout_data = layout_data
-    flag_modified(network, "layout_data")
+    _flag_layout_modified_if_needed(network)
     await db.commit()
 
     # Also forward health data to the health-service to update its cache

@@ -525,3 +525,370 @@ class TestAgentSyncEndpoint:
             assert response.success is True
             assert response.devices_received == 2
             mock_db.commit.assert_called_once()
+
+
+class TestAgentHealthEndpoint:
+    """Tests for agent health sync endpoint to boost coverage."""
+
+    @pytest.fixture
+    def service_user(self):
+        """Service token user for agent health sync."""
+        return AuthenticatedUser(user_id="service", username="service", role=UserRole.ADMIN)
+
+    async def test_sync_agent_health_returns_early_when_no_layout(self, service_user):
+        """sync_agent_health should return early when layout_data is missing."""
+        from datetime import datetime
+
+        from app.models.network import Network
+        from app.routers.networks import sync_agent_health
+        from app.schemas.agent_sync import AgentHealthCheckRequest, HealthCheckResult
+
+        mock_db = AsyncMock()
+        mock_network = MagicMock(spec=Network)
+        mock_network.id = "net-123"
+        mock_network.name = "Test Network"
+        mock_network.layout_data = None
+
+        health_data = AgentHealthCheckRequest(
+            timestamp=datetime.now(),
+            results=[HealthCheckResult(ip="192.168.1.1", reachable=True, response_time_ms=4.2)],
+        )
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_health(
+                network_id="net-123",
+                health_data=health_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.results_received == 1
+            assert response.results_applied == 0
+            assert "No layout data" in response.message
+            mock_db.commit.assert_not_called()
+
+    async def test_sync_agent_health_returns_early_when_no_root(self, service_user):
+        """sync_agent_health should return early when root node is missing."""
+        from datetime import datetime
+
+        from app.models.network import Network
+        from app.routers.networks import sync_agent_health
+        from app.schemas.agent_sync import AgentHealthCheckRequest, HealthCheckResult
+
+        mock_db = AsyncMock()
+        mock_network = MagicMock(spec=Network)
+        mock_network.id = "net-123"
+        mock_network.name = "Test Network"
+        mock_network.layout_data = {"version": 1, "timestamp": "2024-01-01T00:00:00Z"}
+
+        health_data = AgentHealthCheckRequest(
+            timestamp=datetime.now(),
+            results=[HealthCheckResult(ip="192.168.1.1", reachable=True)],
+        )
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_health(
+                network_id="net-123",
+                health_data=health_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.results_received == 1
+            assert response.results_applied == 0
+            assert "No root node" in response.message
+            mock_db.commit.assert_not_called()
+
+    async def test_sync_agent_health_updates_nodes_and_forwards_results(self, service_user):
+        """sync_agent_health should apply updates and forward payload to health service."""
+        from datetime import datetime
+
+        from app.models.network import Network
+        from app.routers.networks import sync_agent_health
+        from app.schemas.agent_sync import AgentHealthCheckRequest, HealthCheckResult
+
+        mock_db = AsyncMock()
+        mock_network = MagicMock(spec=Network)
+        mock_network.id = "net-123"
+        mock_network.name = "Test Network"
+        mock_network.layout_data = {
+            "version": 1,
+            "root": {
+                "id": "root",
+                "name": "gateway",
+                "ip": "192.168.1.1",
+                "children": [
+                    {
+                        "id": "child-1",
+                        "name": "client-1",
+                        "ip": "192.168.1.100",
+                        "children": [],
+                    }
+                ],
+            },
+        }
+
+        health_data = AgentHealthCheckRequest(
+            timestamp=datetime.now(),
+            results=[
+                HealthCheckResult(ip="192.168.1.1", reachable=True, response_time_ms=1.1),
+                HealthCheckResult(ip="192.168.1.100", reachable=False),
+                HealthCheckResult(ip="192.168.1.250", reachable=True),  # Not in map -> skipped
+            ],
+        )
+
+        with (
+            patch("app.routers.networks.get_network_with_access") as mock_get,
+            patch(
+                "app.routers.networks.health_proxy_service.sync_agent_health", new=AsyncMock()
+            ) as mock_forward,
+        ):
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_health(
+                network_id="net-123",
+                health_data=health_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.results_received == 3
+            assert response.results_applied == 2
+            assert "Updated health status for 2 devices" in response.message
+            mock_db.commit.assert_called_once()
+            mock_forward.assert_called_once()
+
+            root_node = mock_network.layout_data["root"]
+            child_node = root_node["children"][0]
+            assert root_node["healthStatus"] == "healthy"
+            assert root_node["lastResponseMs"] == 1.1
+            assert child_node["healthStatus"] == "unreachable"
+            assert child_node["consecutiveFailures"] == 1
+            assert mock_network.layout_data["version"] == 2
+            assert "lastHealthCheck" in mock_network.layout_data
+
+    async def test_sync_agent_health_ignores_forwarding_errors(self, service_user):
+        """sync_agent_health should still succeed if forwarding to health service fails."""
+        from datetime import datetime
+
+        from app.models.network import Network
+        from app.routers.networks import sync_agent_health
+        from app.schemas.agent_sync import AgentHealthCheckRequest, HealthCheckResult
+
+        mock_db = AsyncMock()
+        mock_network = MagicMock(spec=Network)
+        mock_network.id = "net-123"
+        mock_network.name = "Test Network"
+        mock_network.layout_data = {
+            "version": 1,
+            "root": {
+                "id": "root",
+                "name": "gateway",
+                "ip": "192.168.1.1",
+                "children": [],
+            },
+        }
+
+        health_data = AgentHealthCheckRequest(
+            timestamp=datetime.now(),
+            results=[HealthCheckResult(ip="192.168.1.1", reachable=True, response_time_ms=3.3)],
+        )
+
+        with (
+            patch("app.routers.networks.get_network_with_access") as mock_get,
+            patch(
+                "app.routers.networks.health_proxy_service.sync_agent_health",
+                new=AsyncMock(side_effect=RuntimeError("health service unavailable")),
+            ),
+        ):
+            mock_get.return_value = (mock_network, True, "owner")
+
+            response = await sync_agent_health(
+                network_id="net-123",
+                health_data=health_data,
+                current_user=service_user,
+                db=mock_db,
+            )
+
+            assert response.success is True
+            assert response.results_received == 1
+            assert response.results_applied == 1
+            mock_db.commit.assert_called_once()
+
+
+class TestNetworksAdditionalCoverage:
+    """Targeted tests for remaining uncovered network router branches."""
+
+    async def test_delete_network_invalidates_member_cache_keys(self, owner_user):
+        """delete_network should clear cache keys for permission members."""
+        from app.routers.networks import delete_network
+
+        mock_db = AsyncMock()
+        mock_cache = MagicMock()
+        mock_cache.make_key = MagicMock(side_effect=lambda *parts: ":".join(parts))
+        mock_cache.delete = AsyncMock()
+
+        mock_network = MagicMock()
+        mock_network.user_id = owner_user.user_id
+        mock_network.is_active = True
+
+        perm_result = MagicMock()
+        perm_result.scalars.return_value.all.return_value = ["member-1", "member-2"]
+        mock_db.execute = AsyncMock(return_value=perm_result)
+        mock_db.commit = AsyncMock()
+        mock_db.delete = AsyncMock()
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            # Called twice in current implementation
+            mock_get.side_effect = [
+                (mock_network, True, "owner"),
+                (mock_network, True, "owner"),
+            ]
+
+            await delete_network(
+                network_id="net-123",
+                current_user=owner_user,
+                db=mock_db,
+                cache=mock_cache,
+            )
+
+        mock_cache.delete.assert_any_await("networks:user:owner-123")
+        mock_cache.delete.assert_any_await("networks:user:member-1")
+        mock_cache.delete.assert_any_await("networks:user:member-2")
+        assert mock_cache.delete.await_count == 3
+
+    async def test_delete_network_raises_if_second_access_check_is_not_owner(self, owner_user):
+        """delete_network should reject if follow-up access check is not owner."""
+        from app.routers.networks import delete_network
+
+        mock_db = AsyncMock()
+        mock_cache = MagicMock()
+        mock_cache.make_key = MagicMock(return_value="networks:user:owner-123")
+        mock_cache.delete = AsyncMock()
+
+        mock_network = MagicMock()
+        mock_network.user_id = owner_user.user_id
+        mock_network.is_active = True
+
+        perm_result = MagicMock()
+        perm_result.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=perm_result)
+        mock_db.commit = AsyncMock()
+
+        with patch("app.routers.networks.get_network_with_access") as mock_get:
+            mock_get.side_effect = [
+                (mock_network, True, "owner"),
+                (mock_network, False, "read"),
+            ]
+
+            with pytest.raises(HTTPException) as exc_info:
+                await delete_network(
+                    network_id="net-123",
+                    current_user=owner_user,
+                    db=mock_db,
+                    cache=mock_cache,
+                )
+
+        assert exc_info.value.status_code == 403
+        assert "Only the owner can delete a network" in exc_info.value.detail
+
+    def test_update_existing_device_sets_vendor_type_and_display_name(self):
+        """_update_existing_device should fill vendor/type and rename IP-only nodes."""
+        from app.routers.networks import _update_existing_device
+        from app.schemas.agent_sync import SyncDevice
+
+        node = {
+            "name": "192.168.1.50",
+            "ip": "192.168.1.50",
+            "hostname": None,
+            "vendor": None,
+            "deviceType": None,
+        }
+        device = SyncDevice(
+            ip="192.168.1.50",
+            vendor="Synology",
+            device_type="nas",
+            is_gateway=False,
+        )
+
+        _update_existing_device(node, device, now="2026-01-01T00:00:00+00:00")
+
+        assert node["vendor"] == "Synology"
+        assert node["deviceType"] == "nas"
+        assert node["name"] == "Synology"
+
+    def test_create_new_device_node_maps_role_from_device_type(self):
+        """_create_new_device_node should map role from device_type when role is None."""
+        from app.routers.networks import _create_new_device_node
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(
+            ip="192.168.1.77",
+            vendor="Cisco",
+            device_type="network_device",
+            is_gateway=False,
+        )
+
+        node = _create_new_device_node(
+            device=device,
+            parent_id="group-infra",
+            now="2026-01-01T00:00:00+00:00",
+            role=None,
+        )
+
+        assert node["role"] == "switch/ap"
+
+
+class TestHealthRouterAdditionalCoverage:
+    """Tests for uncovered internal health router branches."""
+
+    async def test_readyz_returns_not_ready_when_pool_empty(self):
+        """readyz should report not_ready when HTTP pool has no services."""
+        from app.routers.health import readyz
+
+        with patch("app.routers.health.http_pool") as mock_pool:
+            mock_pool._services = {}
+            result = await readyz()
+
+        assert result["status"] == "not_ready"
+        assert "not initialized" in result["reason"]
+
+    async def test_config_check_warning_in_development(self):
+        """config_check should warn in development for weak security settings."""
+        from app.routers.health import config_check
+
+        mock_settings = MagicMock()
+        mock_settings.jwt_secret = ""
+        mock_settings.cors_origins = "*"
+        mock_settings.env = "development"
+        mock_settings.disable_docs = False
+
+        with patch("app.routers.health.get_settings", return_value=mock_settings):
+            result = await config_check()
+
+        assert result["status"] == "warning"
+        assert "JWT_SECRET is not set" in result["issues"]
+        assert "CORS allows all origins (*)" in result["issues"]
+
+    async def test_config_check_misconfigured_in_production(self):
+        """config_check should report misconfigured in production with issues."""
+        from app.routers.health import config_check
+
+        mock_settings = MagicMock()
+        mock_settings.jwt_secret = ""
+        mock_settings.cors_origins = "*"
+        mock_settings.env = "production"
+        mock_settings.disable_docs = True
+
+        with patch("app.routers.health.get_settings", return_value=mock_settings):
+            result = await config_check()
+
+        assert result["status"] == "misconfigured"
+        assert result["checks"]["environment"] == "production"

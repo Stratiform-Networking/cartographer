@@ -47,14 +47,19 @@ async def check_network_limit(user_id: str, user_role: str, auth_header: str | N
     Check if user can create another network by calling auth-service.
     Raises HTTPException with 403 if limit exceeded.
     """
+    import json
+    import logging
+
     from ..services.http_client import http_pool
+
+    logger = logging.getLogger(__name__)
 
     headers = {"Content-Type": "application/json"}
     if auth_header:
         headers["Authorization"] = auth_header
 
     try:
-        status_data = await http_pool.request(
+        response = await http_pool.request(
             service_name="auth",
             method="GET",
             path="/api/auth/network-limit",
@@ -62,11 +67,23 @@ async def check_network_limit(user_id: str, user_role: str, auth_header: str | N
             timeout=10.0,
         )
 
+        # http_pool returns JSONResponse, extract content
+        if response.status_code != 200:
+            logger.warning(f"Network limit check failed with status {response.status_code}")
+            # Fail closed - don't allow network creation if we can't verify limit
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to verify network limit. Please try again.",
+            )
+
+        # Parse response body
+        status_data = json.loads(response.body)
+
         # Check if limit is exceeded
         if status_data.get("is_exempt"):
             return  # Exempt users can always create networks
 
-        remaining = status_data.get("remaining", 1)
+        remaining = status_data.get("remaining", 0)
         limit = status_data.get("limit", 1)
 
         if remaining <= 0:
@@ -77,10 +94,12 @@ async def check_network_limit(user_id: str, user_role: str, auth_header: str | N
     except HTTPException:
         raise
     except Exception as e:
-        # Log error but don't block network creation if auth-service is unavailable
-        import logging
-
-        logging.getLogger(__name__).warning(f"Failed to check network limit: {e}")
+        logger.error(f"Failed to check network limit: {e}")
+        # Fail closed - don't allow network creation if we can't verify limit
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to verify network limit. Please try again.",
+        )
 
 
 @router.post("", response_model=NetworkResponse, status_code=status.HTTP_201_CREATED)

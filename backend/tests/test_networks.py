@@ -665,12 +665,17 @@ class TestGetNetworkMemberUserIds:
 class TestCreateNetwork:
     """Tests for create_network endpoint"""
 
-    async def test_create_network_success(self, owner_user, mock_db, mock_cache):
+    @patch("app.routers.networks.check_network_limit", new_callable=AsyncMock)
+    async def test_create_network_success(self, mock_check_limit, owner_user, mock_db, mock_cache):
         """Should create a new network"""
         from app.routers.networks import create_network
         from app.schemas import NetworkCreate
 
         network_data = NetworkCreate(name="New Network", description="A new test network")
+
+        # Mock request
+        mock_request = MagicMock()
+        mock_request.headers.get.return_value = "Bearer test-token"
 
         # Mock add, commit, refresh
         mock_db.add = MagicMock()
@@ -691,12 +696,126 @@ class TestCreateNetwork:
 
         mock_db.refresh = mock_refresh
 
-        response = await create_network(network_data, owner_user, mock_db, mock_cache)
+        response = await create_network(mock_request, network_data, owner_user, mock_db, mock_cache)
 
         assert response.name == "New Network"
         assert response.description == "A new test network"
         assert response.is_owner is True
         mock_db.add.assert_called_once()
+        mock_check_limit.assert_called_once()
+
+    @patch("app.routers.networks.check_network_limit", new_callable=AsyncMock)
+    async def test_create_network_limit_reached(
+        self, mock_check_limit, owner_user, mock_db, mock_cache
+    ):
+        """Should reject network creation when limit is reached"""
+        from app.routers.networks import create_network
+        from app.schemas import NetworkCreate
+
+        network_data = NetworkCreate(name="New Network", description="A new test network")
+
+        # Mock request
+        mock_request = MagicMock()
+        mock_request.headers.get.return_value = "Bearer test-token"
+
+        # Mock check_network_limit to raise 403 (limit reached)
+        mock_check_limit.side_effect = HTTPException(
+            status_code=403,
+            detail="Network limit reached. You can have a maximum of 1 network(s).",
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_network(mock_request, network_data, owner_user, mock_db, mock_cache)
+
+        assert exc_info.value.status_code == 403
+        assert "Network limit reached" in exc_info.value.detail
+
+
+class TestCheckNetworkLimit:
+    """Tests for check_network_limit function"""
+
+    @patch("app.services.http_client.http_pool")
+    async def test_check_network_limit_allows_exempt_user(self, mock_http_pool):
+        """Should allow exempt users to create networks"""
+        from fastapi.responses import JSONResponse
+
+        from app.routers.networks import check_network_limit
+
+        # Mock response indicating user is exempt
+        response_data = {"used": 5, "limit": -1, "remaining": -1, "is_exempt": True}
+        mock_http_pool.request = AsyncMock(
+            return_value=JSONResponse(content=response_data, status_code=200)
+        )
+
+        # Should not raise any exception
+        await check_network_limit("user-123", "admin", "Bearer token")
+
+    @patch("app.services.http_client.http_pool")
+    async def test_check_network_limit_allows_user_with_remaining(self, mock_http_pool):
+        """Should allow users with remaining quota"""
+        from fastapi.responses import JSONResponse
+
+        from app.routers.networks import check_network_limit
+
+        # Mock response indicating user has 1 remaining
+        response_data = {"used": 0, "limit": 1, "remaining": 1, "is_exempt": False}
+        mock_http_pool.request = AsyncMock(
+            return_value=JSONResponse(content=response_data, status_code=200)
+        )
+
+        # Should not raise any exception
+        await check_network_limit("user-123", "member", "Bearer token")
+
+    @patch("app.services.http_client.http_pool")
+    async def test_check_network_limit_blocks_user_at_limit(self, mock_http_pool):
+        """Should block users who have reached their limit"""
+        from fastapi.responses import JSONResponse
+
+        from app.routers.networks import check_network_limit
+
+        # Mock response indicating user has no remaining
+        response_data = {"used": 1, "limit": 1, "remaining": 0, "is_exempt": False}
+        mock_http_pool.request = AsyncMock(
+            return_value=JSONResponse(content=response_data, status_code=200)
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await check_network_limit("user-123", "member", "Bearer token")
+
+        assert exc_info.value.status_code == 403
+        assert "Network limit reached" in exc_info.value.detail
+
+    @patch("app.services.http_client.http_pool")
+    async def test_check_network_limit_fails_closed_on_error(self, mock_http_pool):
+        """Should fail closed when auth service is unavailable"""
+        from app.routers.networks import check_network_limit
+
+        # Mock auth service being unavailable
+        mock_http_pool.request = AsyncMock(side_effect=Exception("Connection refused"))
+
+        with pytest.raises(HTTPException) as exc_info:
+            await check_network_limit("user-123", "member", "Bearer token")
+
+        assert exc_info.value.status_code == 503
+        assert "Unable to verify network limit" in exc_info.value.detail
+
+    @patch("app.services.http_client.http_pool")
+    async def test_check_network_limit_fails_closed_on_non_200(self, mock_http_pool):
+        """Should fail closed when auth service returns non-200"""
+        from fastapi.responses import JSONResponse
+
+        from app.routers.networks import check_network_limit
+
+        # Mock auth service returning 500
+        mock_http_pool.request = AsyncMock(
+            return_value=JSONResponse(content={"error": "Internal error"}, status_code=500)
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await check_network_limit("user-123", "member", "Bearer token")
+
+        assert exc_info.value.status_code == 503
+        assert "Unable to verify network limit" in exc_info.value.detail
 
 
 class TestListNetworks:

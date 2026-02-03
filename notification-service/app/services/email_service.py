@@ -53,41 +53,42 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
     device_info_html = ""
     if event.device_ip or event.device_name:
         device_info_html = f"""
-        <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin: 0 0 12px; color: #334155; font-size: 14px; font-weight: 600;">Device Information</h3>
+        <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #e2e8f0;">
+            <h3 style="margin: 0 0 16px; color: #0f172a; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Device Information</h3>
             <table style="width: 100%; border-collapse: collapse;">
-                {"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>Name:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>" + (event.device_name or 'Unknown') + "</td></tr>" if event.device_name else ""}
-                {"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>IP Address:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>" + event.device_ip + "</td></tr>" if event.device_ip else ""}
-                {"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>Hostname:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>" + event.device_hostname + "</td></tr>" if event.device_hostname else ""}
-                {"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>Previous State:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>" + event.previous_state + "</td></tr>" if event.previous_state else ""}
-                {"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>Current State:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>" + event.current_state + "</td></tr>" if event.current_state else ""}
+                {"<tr><td style='padding: 6px 0; color: #64748b; font-size: 14px; width: 140px;'>Name</td><td style='padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;'>" + (event.device_name or 'Unknown') + "</td></tr>" if event.device_name else ""}
+                {"<tr><td style='padding: 6px 0; color: #64748b; font-size: 14px;'>IP Address</td><td style='padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;'>" + event.device_ip + "</td></tr>" if event.device_ip else ""}
+                {"<tr><td style='padding: 6px 0; color: #64748b; font-size: 14px;'>Hostname</td><td style='padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;'>" + event.device_hostname + "</td></tr>" if event.device_hostname else ""}
+                {"<tr><td style='padding: 6px 0; color: #64748b; font-size: 14px;'>Previous State</td><td style='padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;'>" + event.previous_state + "</td></tr>" if event.previous_state else ""}
+                {"<tr><td style='padding: 6px 0; color: #64748b; font-size: 14px;'>Current State</td><td style='padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;'>" + event.current_state + "</td></tr>" if event.current_state else ""}
             </table>
         </div>
         """
 
-    # Build anomaly info if presen
+    # Build anomaly info if present
     anomaly_info_html = ""
     if event.anomaly_score is not None:
         anomaly_percent = int(event.anomaly_score * 100)
         anomaly_info_html = f"""
-        <div style="background-color: #fef3c7; padding: 12px 16px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #f59e0b;">
-            <p style="margin: 0; color: #92400e; font-size: 13px;">
-                <strong>Anomaly Score:</strong> {anomaly_percent}% - This event was detected by our ML-based anomaly detection system.
+        <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%); padding: 16px 20px; border-radius: 12px; margin: 20px 0; border-left: 4px solid #f59e0b;">
+            <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.5;">
+                <strong style="font-weight: 600;">Anomaly Score: {anomaly_percent}%</strong><br>
+                <span style="font-size: 13px; opacity: 0.9;">This event was detected by our ML-based anomaly detection system.</span>
             </p>
         </div>
         """
 
-    # Build additional details if presen
+    # Build additional details if present
     details_html = ""
     if event.details:
         details_rows = ""
         for key, value in event.details.items():
             display_key = key.replace("_", " ").title()
-            details_rows += f"<tr><td style='padding: 4px 0; color: #64748b; font-size: 13px;'>{display_key}:</td><td style='padding: 4px 0; color: #0f172a; font-size: 13px;'>{value}</td></tr>"
+            details_rows += f"<tr><td style='padding: 6px 0; color: #64748b; font-size: 14px; width: 140px;'>{display_key}</td><td style='padding: 6px 0; color: #0f172a; font-size: 14px; font-weight: 500;'>{value}</td></tr>"
 
         details_html = f"""
-        <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin: 16px 0;">
-            <h3 style="margin: 0 0 12px; color: #334155; font-size: 14px; font-weight: 600;">Additional Details</h3>
+        <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0; border: 1px solid #e2e8f0;">
+            <h3 style="margin: 0 0 16px; color: #0f172a; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Additional Details</h3>
             <table style="width: 100%; border-collapse: collapse;">
                 {details_rows}
             </table>
@@ -101,22 +102,35 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{event.title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f1f5f9;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f1f5f9;">
+<body style="margin: 0; padding: 0; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #0f172a;">
         <tr>
-            <td style="padding: 40px 20px;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+            <td style="padding: 48px 20px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
                     <!-- Header -->
                     <tr>
-                        <td style="padding: 24px 40px; background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%); border-radius: 12px 12px 0 0;">
+                        <td style="padding: 32px 40px; background: linear-gradient(135deg, #0fb685 0%, #0994ae 100%); border-radius: 16px 16px 0 0;">
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                 <tr>
                                     <td>
-                                        <h1 style="margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;">🗺️ Cartographer Alert</h1>
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                                            <tr>
+                                                <td style="vertical-align: middle; padding-right: 12px;">
+                                                    <div style="width: 40px; height: 40px; background: rgba(255, 255, 255, 0.2); border-radius: 10px; text-align: center; line-height: 40px; font-size: 20px;">🗺️</div>
+                                                </td>
+                                                <td style="vertical-align: middle;">
+                                                    <h1 style="margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: -0.3px;">Cartographer</h1>
+                                                    <p style="margin: 2px 0 0; color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 500;">Network Alert</p>
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </td>
-                                    <td style="text-align: right;">
-                                        <span style="display: inline-block; padding: 4px 12px; background-color: {priority_color}; color: #ffffff; font-size: 11px; font-weight: 600; border-radius: 12px; text-transform: uppercase;">
+                                    <td style="text-align: right; vertical-align: middle;">
+                                        <span style="display: inline-block; padding: 6px 14px; background-color: {priority_color}; color: #ffffff; font-size: 11px; font-weight: 600; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);">
                                             {event.priority.value}
                                         </span>
                                     </td>
@@ -127,11 +141,11 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
 
                     <!-- Body -->
                     <tr>
-                        <td style="padding: 32px 40px;">
-                            <h2 style="margin: 0 0 16px; color: #0f172a; font-size: 18px; font-weight: 600;">
+                        <td style="padding: 36px 40px;">
+                            <h2 style="margin: 0 0 12px; color: #0f172a; font-size: 20px; font-weight: 600; letter-spacing: -0.3px;">
                                 {icon} {event.title}
                             </h2>
-                            <p style="margin: 0 0 24px; color: #475569; font-size: 15px; line-height: 1.6;">
+                            <p style="margin: 0 0 24px; color: #475569; font-size: 15px; line-height: 1.7;">
                                 {event.message}
                             </p>
 
@@ -140,16 +154,16 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
                             {details_html}
 
                             <!-- Timestamp -->
-                            <p style="margin: 24px 0 0; color: #94a3b8; font-size: 12px;">
+                            <p style="margin: 24px 0 0; color: #94a3b8; font-size: 13px;">
                                 Event detected at {event.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}
                             </p>
 
                             <!-- CTA Button -->
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                 <tr>
-                                    <td style="padding: 24px 0 0;">
-                                        <a href="{settings.application_url + ('/network/' + event.network_id if event.network_id else '')}" style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 8px;">
-                                            {'Open Network Map' if event.network_id else 'Open Cartographer'}
+                                    <td style="padding: 28px 0 0;">
+                                        <a href="{settings.application_url + ('/network/' + event.network_id if event.network_id else '')}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 10px; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);">
+                                            {'Open Network Map' if event.network_id else 'Open Cartographer'} →
                                         </a>
                                     </td>
                                 </tr>
@@ -159,10 +173,29 @@ def _build_notification_email_html(event: NetworkEvent) -> str:
 
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
-                            <p style="margin: 0; color: #94a3b8; font-size: 12px; text-align: center;">
-                                Cartographer Network Monitoring<br>
-                                <a href="{settings.application_url}/settings/notifications" style="color: #0891b2;">Manage notification preferences</a>
+                        <td style="padding: 24px 40px 28px; background-color: #f8fafc; border-radius: 0 0 16px 16px; border-top: 1px solid #e2e8f0;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <p style="margin: 0 0 8px; color: #64748b; font-size: 13px; font-weight: 500;">
+                                            Cartographer Network Monitoring
+                                        </p>
+                                        <p style="margin: 0;">
+                                            <a href="{settings.application_url}/settings/notifications" style="color: #0994ae; font-size: 12px; text-decoration: none; font-weight: 500;">Manage notification preferences</a>
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Bottom branding -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 580px; margin: 24px auto 0;">
+                    <tr>
+                        <td style="text-align: center;">
+                            <p style="margin: 0; color: #475569; font-size: 12px;">
+                                Powered by <span style="color: #0fb685; font-weight: 600;">Cartographer</span>
                             </p>
                         </td>
                     </tr>

@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.context import CryptContext
 from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
@@ -94,11 +95,11 @@ class AuthService:
             raise ValueError("Setup already complete - owner account exists")
 
         # Check if username is taken
-        if await self.get_user_by_username(db, request.username):
+        if await self.get_user_by_username(db, request.username, include_inactive=True):
             raise ValueError("Username already taken")
 
         # Check if email is taken
-        if await self.get_user_by_email(db, request.email):
+        if await self.get_user_by_email(db, request.email, include_inactive=True):
             raise ValueError("Email already in use")
 
         password_hash = await hash_password_async(request.password)
@@ -119,7 +120,11 @@ class AuthService:
         )
 
         db.add(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            raise self._map_integrity_error(e)
         await db.refresh(user)
 
         logger.info(f"Owner account created: {user.username}")
@@ -137,10 +142,10 @@ class AuthService:
         if request.role == UserRole.OWNER:
             raise ValueError("Cannot create additional owner accounts")
 
-        if await self.get_user_by_username(db, request.username):
+        if await self.get_user_by_username(db, request.username, include_inactive=True):
             raise ValueError("Username already taken")
 
-        if await self.get_user_by_email(db, request.email):
+        if await self.get_user_by_email(db, request.email, include_inactive=True):
             raise ValueError("Email already in use")
 
         password_hash = await hash_password_async(request.password)
@@ -161,7 +166,11 @@ class AuthService:
         )
 
         db.add(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            raise self._map_integrity_error(e)
         await db.refresh(user)
 
         logger.info(f"User created: {user.username} (role: {user.role})")
@@ -183,10 +192,10 @@ class AuthService:
         if not settings.allow_open_registration:
             raise ValueError("Open registration is disabled. Use an invite to create an account.")
 
-        if await self.get_user_by_username(db, request.username):
+        if await self.get_user_by_username(db, request.username, include_inactive=True):
             raise ValueError("Username already taken")
 
-        if await self.get_user_by_email(db, request.email):
+        if await self.get_user_by_email(db, request.email, include_inactive=True):
             raise ValueError("Email already in use")
 
         password_hash = await hash_password_async(request.password)
@@ -207,7 +216,11 @@ class AuthService:
         )
 
         db.add(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            raise self._map_integrity_error(e)
         await db.refresh(user)
 
         logger.info(f"User registered: {user.username}")
@@ -297,7 +310,7 @@ class AuthService:
             user.last_name = request.last_name
 
         if request.email is not None:
-            existing = await self.get_user_by_email(db, request.email)
+            existing = await self.get_user_by_email(db, request.email, include_inactive=True)
             if existing and existing.id != user_id:
                 raise ValueError("Email already in use")
             user.email = request.email.lower()
@@ -308,7 +321,11 @@ class AuthService:
         if request.password is not None:
             user.hashed_password = await hash_password_async(request.password)
 
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            raise self._map_integrity_error(e)
         await db.refresh(user)
 
         logger.info(f"User updated: {user.username}")
@@ -498,8 +515,8 @@ class AuthService:
         if invited_by.role != UserRole.OWNER:
             raise PermissionError("Only owners can invite new users")
 
-        existing_user = await self.get_user_by_email(db, request.email)
-        if existing_user and existing_user.is_active:
+        existing_user = await self.get_user_by_email(db, request.email, include_inactive=True)
+        if existing_user:
             raise ValueError("A user with this email already exists")
 
         # Check for existing pending invite
@@ -604,11 +621,11 @@ class AuthService:
             await db.commit()
             raise ValueError("Invitation has expired")
 
-        if await self.get_user_by_username(db, username):
+        if await self.get_user_by_username(db, username, include_inactive=True):
             raise ValueError("Username already taken")
 
-        existing = await self.get_user_by_email(db, invite.email)
-        if existing and existing.is_active:
+        existing = await self.get_user_by_email(db, invite.email, include_inactive=True)
+        if existing:
             raise ValueError("A user with this email already exists")
 
         password_hash = await hash_password_async(password)
@@ -632,7 +649,11 @@ class AuthService:
         invite.status = InviteStatus.ACCEPTED
         invite.accepted_at = now
 
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            raise self._map_integrity_error(e)
         await db.refresh(user)
 
         logger.info(f"Invitation accepted: {invite.email} -> {username}")
@@ -736,6 +757,15 @@ class AuthService:
             expires_at=invite.expires_at,
             accepted_at=invite.accepted_at,
         )
+
+    def _map_integrity_error(self, error: IntegrityError) -> ValueError:
+        """Convert DB integrity errors into user-friendly validation errors."""
+        message = str(error).lower()
+        if "ix_users_username" in message or "users_username_key" in message:
+            return ValueError("Username already taken")
+        if "ix_users_email" in message or "users_email_key" in message:
+            return ValueError("Email already in use")
+        return ValueError("Operation failed due to a database constraint")
 
 
 # Singleton instance

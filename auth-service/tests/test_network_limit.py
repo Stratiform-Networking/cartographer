@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from app.services import network_limit as network_limit_service
 
@@ -17,6 +18,7 @@ def _mock_db_with_user_limit(user_limit):
     db.execute = AsyncMock(return_value=result)
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.rollback = AsyncMock()
     return db
 
 
@@ -128,6 +130,29 @@ class TestGetUserNetworkLimit:
 
         assert limit == 6
         db.commit.assert_not_called()
+
+    async def test_handles_integrity_error_when_exempt_record_created_concurrently(self):
+        existing = SimpleNamespace(
+            network_limit=network_limit_service.UNLIMITED_LIMIT, is_role_exempt=True
+        )
+        first_result = MagicMock()
+        first_result.scalar_one_or_none.return_value = None
+        second_result = MagicMock()
+        second_result.scalar_one_or_none.return_value = existing
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[first_result, second_result])
+        db.add = MagicMock()
+        db.commit = AsyncMock(side_effect=[IntegrityError("insert", {}, Exception("duplicate"))])
+        db.rollback = AsyncMock()
+
+        with patch.object(
+            network_limit_service.settings, "network_limit_exempt_roles", "owner,admin"
+        ):
+            limit = await network_limit_service.get_user_network_limit(db, "user-race", "admin")
+
+        assert limit == network_limit_service.UNLIMITED_LIMIT
+        db.rollback.assert_awaited_once()
 
 
 class TestNetworkCountAndStatus:
@@ -250,3 +275,26 @@ class TestSetUserNetworkLimit:
         db.add.assert_not_called()
         db.commit.assert_awaited_once()
         assert response == {"user_id": "user-2", "network_limit": None, "is_role_exempt": False}
+
+    async def test_set_user_network_limit_handles_concurrent_create(self):
+        existing = SimpleNamespace(network_limit=1, is_role_exempt=True)
+        first_result = MagicMock()
+        first_result.scalar_one_or_none.return_value = None
+        second_result = MagicMock()
+        second_result.scalar_one_or_none.return_value = existing
+
+        db = AsyncMock()
+        db.execute = AsyncMock(side_effect=[first_result, second_result])
+        db.add = MagicMock()
+        db.commit = AsyncMock(
+            side_effect=[IntegrityError("insert", {}, Exception("duplicate")), None]
+        )
+        db.rollback = AsyncMock()
+
+        response = await network_limit_service.set_user_network_limit(db, "user-race", 5)
+
+        assert existing.network_limit == 5
+        assert existing.is_role_exempt is False
+        db.rollback.assert_awaited_once()
+        assert db.commit.await_count == 2
+        assert response == {"user_id": "user-race", "network_limit": 5, "is_role_exempt": False}

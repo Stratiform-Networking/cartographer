@@ -4,6 +4,7 @@ import logging
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
@@ -54,10 +55,19 @@ async def get_user_network_limit(
                 is_role_exempt=True,
             )
             db.add(new_limit)
-            await db.commit()
-            logger.info(f"[NetworkLimit] Created unlimited limit for exempt user {user_id}")
-            return UNLIMITED_LIMIT
-        return settings.network_limit_per_user
+            try:
+                await db.commit()
+                logger.info(f"[NetworkLimit] Created unlimited limit for exempt user {user_id}")
+                return UNLIMITED_LIMIT
+            except IntegrityError:
+                # Another concurrent request created this row first.
+                await db.rollback()
+                result = await db.execute(select(UserLimit).where(UserLimit.user_id == user_id))
+                user_limit = result.scalar_one_or_none()
+                if user_limit is None:
+                    raise
+        else:
+            return settings.network_limit_per_user
 
     # Handle exemption status changes
     if is_exempt and not user_limit.is_role_exempt:
@@ -172,7 +182,9 @@ async def check_network_limit(db: AsyncSession, user_id: str, user_role: str | N
     if used >= effective_limit:
         raise HTTPException(
             status_code=403,
-            detail=f"Network limit reached. You can have a maximum of {effective_limit} network(s).",
+            detail=(
+                f"Network limit reached. You can have a maximum of {effective_limit} network(s)."
+            ),
         )
 
 
@@ -204,7 +216,19 @@ async def set_user_network_limit(db: AsyncSession, user_id: str, network_limit: 
         # Manual override clears the role exempt flag
         user_limit.is_role_exempt = False
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Concurrent create: reload and apply update so the request still succeeds.
+        await db.rollback()
+        result = await db.execute(select(UserLimit).where(UserLimit.user_id == user_id))
+        user_limit = result.scalar_one_or_none()
+        if user_limit is None:
+            raise
+
+        user_limit.network_limit = network_limit
+        user_limit.is_role_exempt = False
+        await db.commit()
 
     limit_str = (
         "unlimited"

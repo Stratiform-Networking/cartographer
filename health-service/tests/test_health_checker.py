@@ -722,82 +722,86 @@ class TestAgentHealthSync:
     async def test_update_from_agent_health_reachable(self, health_checker_instance):
         """Should update cache with healthy status for reachable device"""
         # Mock DNS to avoid network calls
-        with patch.object(health_checker_instance, "check_dns") as mock_dns:
-            mock_dns.return_value = DnsResult(success=True, resolved_hostname="device.local")
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                mock_dns.return_value = DnsResult(success=True, resolved_hostname="device.local")
 
-            result = await health_checker_instance.update_from_agent_health(
-                ip="192.168.1.100",
-                reachable=True,
-                response_time_ms=25.0,
-                network_id="test-network-uuid",
-            )
+                result = await health_checker_instance.update_from_agent_health(
+                    ip="192.168.1.100",
+                    reachable=True,
+                    response_time_ms=25.0,
+                    network_id="test-network-uuid",
+                )
 
-            assert result is True
-            cached = health_checker_instance.get_cached_metrics("192.168.1.100")
-            assert cached is not None
-            assert cached.status == HealthStatus.HEALTHY
-            assert cached.ping.success is True
-            assert cached.ping.latency_ms == 25.0
-            assert cached.consecutive_failures == 0
-            assert cached.last_seen_online is not None
-            # Verify DNS was resolved
-            assert cached.dns is not None
-            assert cached.dns.resolved_hostname == "device.local"
+                assert result is True
+                cached = health_checker_instance.get_cached_metrics("192.168.1.100")
+                assert cached is not None
+                assert cached.status == HealthStatus.HEALTHY
+                assert cached.ping.success is True
+                assert cached.ping.latency_ms == 25.0
+                assert cached.consecutive_failures == 0
+                assert cached.last_seen_online is not None
+                # Verify DNS was resolved
+                assert cached.dns is not None
+                assert cached.dns.resolved_hostname == "device.local"
 
     async def test_update_from_agent_health_unreachable(self, health_checker_instance):
         """Should update cache with unhealthy status for unreachable device"""
-        result = await health_checker_instance.update_from_agent_health(
-            ip="192.168.1.101",
-            reachable=False,
-            response_time_ms=None,
-            network_id="test-network-uuid",
-            include_dns=False,  # Skip DNS for unreachable devices
-        )
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            result = await health_checker_instance.update_from_agent_health(
+                ip="192.168.1.101",
+                reachable=False,
+                response_time_ms=None,
+                network_id="test-network-uuid",
+                include_dns=False,  # Skip DNS for unreachable devices
+            )
 
-        assert result is True
-        cached = health_checker_instance.get_cached_metrics("192.168.1.101")
-        assert cached is not None
-        assert cached.status == HealthStatus.UNHEALTHY
-        assert cached.ping.success is False
-        assert cached.consecutive_failures == 1
+            assert result is True
+            cached = health_checker_instance.get_cached_metrics("192.168.1.101")
+            assert cached is not None
+            assert cached.status == HealthStatus.UNHEALTHY
+            assert cached.ping.success is False
+            assert cached.consecutive_failures == 1
 
     async def test_update_from_agent_health_increments_failures(self, health_checker_instance):
         """Should increment consecutive failures for repeated failures"""
         ip = "192.168.1.102"
 
-        # First failure
-        await health_checker_instance.update_from_agent_health(
-            ip=ip, reachable=False, response_time_ms=None, include_dns=False
-        )
-        cached = health_checker_instance.get_cached_metrics(ip)
-        assert cached.consecutive_failures == 1
-
-        # Second failure
-        await health_checker_instance.update_from_agent_health(
-            ip=ip, reachable=False, response_time_ms=None, include_dns=False
-        )
-        cached = health_checker_instance.get_cached_metrics(ip)
-        assert cached.consecutive_failures == 2
-
-        # Recovery resets failures
-        with patch.object(health_checker_instance, "check_dns") as mock_dns:
-            mock_dns.return_value = DnsResult(success=False)
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            # First failure
             await health_checker_instance.update_from_agent_health(
-                ip=ip, reachable=True, response_time_ms=20.0
+                ip=ip, reachable=False, response_time_ms=None, include_dns=False
             )
-        cached = health_checker_instance.get_cached_metrics(ip)
-        assert cached.consecutive_failures == 0
+            cached = health_checker_instance.get_cached_metrics(ip)
+            assert cached.consecutive_failures == 1
+
+            # Second failure
+            await health_checker_instance.update_from_agent_health(
+                ip=ip, reachable=False, response_time_ms=None, include_dns=False
+            )
+            cached = health_checker_instance.get_cached_metrics(ip)
+            assert cached.consecutive_failures == 2
+
+            # Recovery resets failures
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                mock_dns.return_value = DnsResult(success=False)
+                await health_checker_instance.update_from_agent_health(
+                    ip=ip, reachable=True, response_time_ms=20.0
+                )
+            cached = health_checker_instance.get_cached_metrics(ip)
+            assert cached.consecutive_failures == 0
 
     async def test_update_from_agent_health_registers_device(self, health_checker_instance):
         """Should register device for monitoring if network_id provided"""
         ip = "192.168.1.103"
         network_id = "test-network-uuid"
 
-        with patch.object(health_checker_instance, "check_dns") as mock_dns:
-            mock_dns.return_value = DnsResult(success=False)
-            await health_checker_instance.update_from_agent_health(
-                ip=ip, reachable=True, response_time_ms=30.0, network_id=network_id
-            )
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                mock_dns.return_value = DnsResult(success=False)
+                await health_checker_instance.update_from_agent_health(
+                    ip=ip, reachable=True, response_time_ms=30.0, network_id=network_id
+                )
 
         assert ip in health_checker_instance._monitored_devices
         assert health_checker_instance._monitored_devices[ip] == network_id
@@ -807,12 +811,13 @@ class TestAgentHealthSync:
         ip = "192.168.1.104"
 
         # Make several checks
-        with patch.object(health_checker_instance, "check_dns") as mock_dns:
-            mock_dns.return_value = DnsResult(success=False)
-            for _ in range(5):
-                await health_checker_instance.update_from_agent_health(
-                    ip=ip, reachable=True, response_time_ms=25.0
-                )
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                mock_dns.return_value = DnsResult(success=False)
+                for _ in range(5):
+                    await health_checker_instance.update_from_agent_health(
+                        ip=ip, reachable=True, response_time_ms=25.0
+                    )
 
         cached = health_checker_instance.get_cached_metrics(ip)
         assert cached.checks_passed_24h == 5
@@ -820,39 +825,115 @@ class TestAgentHealthSync:
 
     async def test_update_from_agent_health_skips_dns_when_disabled(self, health_checker_instance):
         """Should skip DNS lookup when include_dns is False"""
-        with patch.object(health_checker_instance, "check_dns") as mock_dns:
-            await health_checker_instance.update_from_agent_health(
-                ip="192.168.1.105",
-                reachable=True,
-                response_time_ms=20.0,
-                include_dns=False,
-            )
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                await health_checker_instance.update_from_agent_health(
+                    ip="192.168.1.105",
+                    reachable=True,
+                    response_time_ms=20.0,
+                    include_dns=False,
+                )
 
-            # DNS should not be called
-            mock_dns.assert_not_called()
+                # DNS should not be called
+                mock_dns.assert_not_called()
 
     async def test_update_from_agent_health_performs_dns_lookup(self, health_checker_instance):
         """Should perform DNS lookup for reachable devices"""
-        with patch.object(health_checker_instance, "check_dns") as mock_dns:
-            mock_dns.return_value = DnsResult(
+        with patch("app.services.health_checker.report_health_check", new_callable=AsyncMock):
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                mock_dns.return_value = DnsResult(
+                    success=True,
+                    resolved_hostname="mydevice.local",
+                    reverse_dns="mydevice.lan",
+                )
+
+                await health_checker_instance.update_from_agent_health(
+                    ip="192.168.1.106",
+                    reachable=True,
+                    response_time_ms=15.0,
+                    include_dns=True,
+                )
+
+                # DNS should be called
+                mock_dns.assert_called_once_with("192.168.1.106")
+
+                # Verify DNS result is cached
+                cached = health_checker_instance.get_cached_metrics("192.168.1.106")
+                assert cached.dns is not None
+                assert cached.dns.success is True
+                assert cached.dns.resolved_hostname == "mydevice.local"
+                assert cached.dns.reverse_dns == "mydevice.lan"
+
+    async def test_update_from_agent_health_reports_to_notification_service(
+        self, health_checker_instance
+    ):
+        """Should call report_health_check with correct params for reachable device"""
+        with patch(
+            "app.services.health_checker.report_health_check", new_callable=AsyncMock
+        ) as mock_report:
+            with patch.object(health_checker_instance, "check_dns") as mock_dns:
+                mock_dns.return_value = DnsResult(success=True, resolved_hostname="device.local")
+
+                await health_checker_instance.update_from_agent_health(
+                    ip="192.168.1.110",
+                    reachable=True,
+                    response_time_ms=30.0,
+                    network_id="net-123",
+                )
+
+            mock_report.assert_called_once_with(
+                device_ip="192.168.1.110",
                 success=True,
-                resolved_hostname="mydevice.local",
-                reverse_dns="mydevice.lan",
+                network_id="net-123",
+                latency_ms=30.0,
+                packet_loss=0.0,
+                device_name="device.local",
             )
 
+    async def test_update_from_agent_health_reports_unreachable_to_notification_service(
+        self, health_checker_instance
+    ):
+        """Should call report_health_check with packet_loss=1.0 for unreachable device"""
+        with patch(
+            "app.services.health_checker.report_health_check", new_callable=AsyncMock
+        ) as mock_report:
             await health_checker_instance.update_from_agent_health(
-                ip="192.168.1.106",
-                reachable=True,
-                response_time_ms=15.0,
-                include_dns=True,
+                ip="192.168.1.111",
+                reachable=False,
+                response_time_ms=None,
+                network_id="net-456",
+                include_dns=False,
             )
 
-            # DNS should be called
-            mock_dns.assert_called_once_with("192.168.1.106")
+            mock_report.assert_called_once_with(
+                device_ip="192.168.1.111",
+                success=False,
+                network_id="net-456",
+                latency_ms=None,
+                packet_loss=1.0,
+                device_name=None,
+            )
 
-            # Verify DNS result is cached
-            cached = health_checker_instance.get_cached_metrics("192.168.1.106")
-            assert cached.dns is not None
-            assert cached.dns.success is True
-            assert cached.dns.resolved_hostname == "mydevice.local"
-            assert cached.dns.reverse_dns == "mydevice.lan"
+    async def test_update_from_agent_health_reports_without_network_id(
+        self, health_checker_instance
+    ):
+        """Should still call report_health_check when network_id is None (guard is inside report_health_check)"""
+        with patch(
+            "app.services.health_checker.report_health_check", new_callable=AsyncMock
+        ) as mock_report:
+            await health_checker_instance.update_from_agent_health(
+                ip="192.168.1.112",
+                reachable=True,
+                response_time_ms=10.0,
+                network_id=None,
+                include_dns=False,
+            )
+
+            mock_report.assert_called_once_with(
+                device_ip="192.168.1.112",
+                success=True,
+                network_id=None,
+                latency_ms=10.0,
+                packet_loss=0.0,
+                device_name=None,
+            )

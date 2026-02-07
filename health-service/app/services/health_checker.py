@@ -632,6 +632,22 @@ class HealthChecker:
         # Cache the results
         self._metrics_cache[ip] = metrics
 
+        # Report to notification service (async, fire-and-forget to not slow down sync)
+        asyncio.create_task(
+            report_health_check(
+                device_ip=ip,
+                success=reachable,
+                network_id=network_id,
+                latency_ms=response_time_ms,
+                packet_loss=0.0 if reachable else 1.0,
+                device_name=(
+                    dns_result.resolved_hostname
+                    if dns_result and dns_result.resolved_hostname
+                    else None
+                ),
+            )
+        )
+
         # Register the device for active monitoring if we have a network_id,
         # it's not already monitored, AND active checks are enabled.
         # When active checks are disabled (cloud deployment), we should NOT register

@@ -63,61 +63,79 @@ def send_invitation_email(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>You're Invited to Cartographer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f1f5f9;">
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f1f5f9;">
+<body style="margin: 0; padding: 0; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0f172a;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #0f172a;">
         <tr>
-            <td style="padding: 40px 20px;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 560px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);">
+            <td style="padding: 48px 20px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
                     <!-- Header -->
                     <tr>
-                        <td style="padding: 32px 40px 24px; text-align: center; background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%); border-radius: 12px 12px 0 0;">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">🗺️ Cartographer</h1>
-                            <p style="margin: 8px 0 0; color: #e0f2fe; font-size: 14px;">Network Mapping Made Simple</p>
+                        <td style="padding: 40px 40px 32px; text-align: center; background: linear-gradient(135deg, #0fb685 0%, #0994ae 100%); border-radius: 16px 16px 0 0;">
+                            <div style="width: 56px; height: 56px; background: rgba(255, 255, 255, 0.2); border-radius: 14px; margin: 0 auto 16px; text-align: center; line-height: 56px; font-size: 28px;">🗺️</div>
+                            <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">Cartographer</h1>
+                            <p style="margin: 10px 0 0; color: rgba(255, 255, 255, 0.9); font-size: 15px; font-weight: 500;">Network Mapping Made Simple</p>
                         </td>
                     </tr>
 
                     <!-- Body -->
                     <tr>
-                        <td style="padding: 32px 40px;">
-                            <h2 style="margin: 0 0 16px; color: #0f172a; font-size: 20px; font-weight: 600;">You're Invited!</h2>
-                            <p style="margin: 0 0 24px; color: #475569; font-size: 15px; line-height: 1.6;">
-                                <strong>{invited_by_name}</strong> has invited you to join their Cartographer network map with <strong>{role_display}</strong> access.
+                        <td style="padding: 40px 40px 36px;">
+                            <h2 style="margin: 0 0 16px; color: #0f172a; font-size: 24px; font-weight: 600; letter-spacing: -0.3px; text-align: center;">You're Invited!</h2>
+                            <p style="margin: 0 0 32px; color: #475569; font-size: 16px; line-height: 1.7; text-align: center;">
+                                <strong style="color: #0f172a;">{invited_by_name}</strong> has invited you to join their Cartographer network map with <strong style="color: #0f172a;">{role_display}</strong> access.
                             </p>
 
                             <!-- CTA Button -->
                             <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
                                 <tr>
-                                    <td style="padding: 8px 0 24px;">
-                                        <a href="{invite_url}" style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%); color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 8px; box-shadow: 0 2px 4px rgba(8, 145, 178, 0.3);">
-                                            Accept Invitation
+                                    <td style="padding: 8px 0 32px; text-align: center;">
+                                        <a href="{invite_url}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 600; border-radius: 12px; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);">
+                                            Accept Invitation →
                                         </a>
                                     </td>
                                 </tr>
                             </table>
 
-                            <p style="margin: 0 0 16px; color: #64748b; font-size: 13px; line-height: 1.5;">
-                                This invitation will expire in <strong>{expires_hours} hours</strong>.
-                            </p>
+                            <!-- Expiry notice -->
+                            <div style="background-color: #f8fafc; padding: 16px 20px; border-radius: 12px; margin: 0 0 20px; border: 1px solid #e2e8f0; text-align: center;">
+                                <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">
+                                    ⏰ This invitation will expire in <strong style="color: #0f172a;">{expires_hours} hours</strong>
+                                </p>
+                            </div>
 
-                            <p style="margin: 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+                            <p style="margin: 0; color: #94a3b8; font-size: 13px; line-height: 1.5; text-align: center;">
                                 If you didn't expect this invitation, you can safely ignore this email.
                             </p>
 
                             <!-- Fallback link -->
-                            <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;">
-                            <p style="margin: 0; color: #94a3b8; font-size: 11px; line-height: 1.5;">
-                                If the button doesn't work, copy and paste this link into your browser:<br>
-                                <a href="{invite_url}" style="color: #0891b2; word-break: break-all;">{invite_url}</a>
+                            <hr style="margin: 28px 0; border: none; border-top: 1px solid #e2e8f0;">
+                            <p style="margin: 0; color: #94a3b8; font-size: 12px; line-height: 1.6; text-align: center;">
+                                If the button doesn't work, copy and paste this link:<br>
+                                <a href="{invite_url}" style="color: #0994ae; word-break: break-all; font-weight: 500;">{invite_url}</a>
                             </p>
                         </td>
                     </tr>
 
                     <!-- Footer -->
                     <tr>
-                        <td style="padding: 24px 40px; background-color: #f8fafc; border-radius: 0 0 12px 12px; border-top: 1px solid #e2e8f0;">
-                            <p style="margin: 0; color: #94a3b8; font-size: 12px; text-align: center;">
+                        <td style="padding: 24px 40px 28px; background-color: #f8fafc; border-radius: 0 0 16px 16px; border-top: 1px solid #e2e8f0;">
+                            <p style="margin: 0; color: #64748b; font-size: 13px; text-align: center; font-weight: 500;">
                                 Cartographer - Network Mapping Tool
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Bottom branding -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 580px; margin: 24px auto 0;">
+                    <tr>
+                        <td style="text-align: center;">
+                            <p style="margin: 0; color: #475569; font-size: 12px;">
+                                Powered by <span style="color: #0fb685; font-weight: 600;">Cartographer</span>
                             </p>
                         </td>
                     </tr>

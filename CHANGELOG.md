@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Bug Fixes
 
 * disable Scan button on cloud ([d04bdd6](https://github.com/devartech/cartographer/commit/d04bdd673f664ae039888e05db900c9cfc107838))
+* match emails style ([0bfbbbc](https://github.com/devartech/cartographer/commit/0bfbbbc3aba6cdb739c9b87998ffd119566bf43f))
 
 ### [0.29.1](https://github.com/devartech/cartographer/compare/v0.29.0...v0.29.1) (2026-02-03)
 

@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import Request
 
+from ..dependencies.token_extractor import resolve_authorization_header
 from .http_client import http_pool
 
 # Service path prefixes - defines the API path structure for each service
@@ -48,7 +49,7 @@ def extract_auth_headers(request: Request) -> dict[str, str]:
         Dictionary with Authorization header if present, empty dict otherwise
     """
     headers: dict[str, str] = {}
-    auth_header = request.headers.get("Authorization")
+    auth_header = resolve_authorization_header(request)
     if auth_header:
         headers["Authorization"] = auth_header
     return headers

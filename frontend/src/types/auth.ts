@@ -55,7 +55,6 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  access_token: string;
   token_type: string;
   expires_in: number;
   user: User;
@@ -75,12 +74,6 @@ export interface SessionInfo {
 export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
-}
-
-export interface AuthState {
-  token: string;
-  user: User;
-  expiresAt: number;
 }
 
 export type AuthProvider = 'local' | 'cloud';

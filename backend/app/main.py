@@ -26,6 +26,7 @@ from .routers.networks import router as networks_router
 from .routers.notification_proxy import router as notification_proxy_router
 from .routers.static import create_static_router, mount_assets
 from .services.cache_service import cache_service
+from .services.csrf_middleware import CSRFMiddleware
 from .services.http_client import http_pool, register_all_services
 from .services.usage_middleware import UsageTrackingMiddleware
 
@@ -135,6 +136,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # CSRF protection for cookie-authenticated browser requests
+    app.add_middleware(CSRFMiddleware)
 
     # Usage tracking middleware - reports endpoint usage to metrics service
     app.add_middleware(UsageTrackingMiddleware, service_name="backend")

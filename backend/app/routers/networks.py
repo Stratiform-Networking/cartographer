@@ -16,6 +16,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from ..config import get_settings
 from ..database import get_db
 from ..dependencies.auth import AuthenticatedUser, require_auth
+from ..dependencies.token_extractor import resolve_request_token
 from ..models.network import Network, NetworkNotificationSettings, NetworkPermission, PermissionRole
 from ..schemas import (
     AgentHealthCheckRequest,
@@ -47,7 +48,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-async def check_network_limit(user_id: str, user_role: str, auth_header: str | None) -> None:
+async def check_network_limit(user_id: str, user_role: str, auth_token: str | None) -> None:
     """
     Check if user can create another network by calling auth-service.
     Raises HTTPException with 403 if limit exceeded.
@@ -60,8 +61,8 @@ async def check_network_limit(user_id: str, user_role: str, auth_header: str | N
     logger = logging.getLogger(__name__)
 
     headers = {"Content-Type": "application/json"}
-    if auth_header:
-        headers["Authorization"] = auth_header
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
 
     try:
         response = await http_pool.request(
@@ -117,8 +118,8 @@ async def create_network(
 ):
     """Create a new network for the current user."""
     # Check network limit before creating
-    auth_header = request.headers.get("Authorization")
-    await check_network_limit(current_user.user_id, current_user.role, auth_header)
+    auth_token = resolve_request_token(request=request)
+    await check_network_limit(current_user.user_id, current_user.role, auth_token)
 
     # Generate unique agent key for future cloud sync
     agent_key = generate_agent_key()

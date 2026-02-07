@@ -701,20 +701,14 @@ const providerLabels: Record<string, string> = {
   ollama: 'Ollama',
 };
 
-// Helper to get auth token from storage
-function getAuthToken(): string | null {
-  try {
-    const stored = localStorage.getItem('cartographer_auth');
-    if (stored) {
-      const state = JSON.parse(stored);
-      if (state.token && state.expiresAt > Date.now()) {
-        return state.token;
-      }
-    }
-  } catch (e) {
-    console.error('Failed to get auth token:', e);
-  }
-  return null;
+function getCookieValue(name: string): string | null {
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  if (!cookie) return null;
+  return decodeURIComponent(cookie.slice(prefix.length));
 }
 
 // Check rate limit status proactively
@@ -1021,16 +1015,14 @@ async function handleSubmit() {
       content: m.content,
     }));
 
-    const authToken = getAuthToken();
-    if (!authToken) {
-      throw new Error('Not authenticated. Please log in again.');
-    }
+    const csrfToken = getCookieValue('cartographer_csrf');
 
     const response = await fetch(apiUrl('/api/assistant/chat/stream'), {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
+        ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
       },
       body: JSON.stringify({
         message,

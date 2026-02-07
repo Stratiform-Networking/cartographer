@@ -17,15 +17,12 @@ import type {
   UserCreateRequest,
   UserUpdateRequest,
   ChangePasswordRequest,
-  AuthState,
   Invite,
   InviteCreateRequest,
   InviteTokenInfo,
   AcceptInviteRequest,
   AuthConfig,
 } from '../types/auth';
-
-const AUTH_STORAGE_KEY = 'cartographer_auth';
 
 // Reactive state
 const user = ref<User | null>(null);
@@ -37,7 +34,7 @@ const setupStatus = ref<SetupStatus | null>(null);
 const authConfig = ref<AuthConfig | null>(null);
 
 // Computed properties
-const isAuthenticated = computed(() => !!token.value && !!user.value);
+const isAuthenticated = computed(() => !!user.value);
 const isOwner = computed(() => user.value?.role === 'owner');
 const canWrite = computed(() => user.value?.role === 'owner' || user.value?.role === 'admin');
 const isReadOnly = computed(() => user.value?.role === 'member');
@@ -49,49 +46,15 @@ function clearAuth(): void {
   token.value = null;
   user.value = null;
   permissions.value = [];
-  localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
 // Set up the unauthorized callback
 setOnUnauthorized(() => {
-  if (token.value) {
+  if (user.value) {
     console.warn('[Auth] Session invalidated, clearing');
     clearAuth();
   }
 });
-
-// Save to localStorage
-function saveToStorage(authToken: string, authUser: User, expiresIn: number): void {
-  const state: AuthState = {
-    token: authToken,
-    user: authUser,
-    expiresAt: Date.now() + expiresIn * 1000,
-  };
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(state));
-}
-
-// Initialize from localStorage
-function initFromStorage(): void {
-  try {
-    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (stored) {
-      const state: AuthState = JSON.parse(stored);
-
-      // Check if token is expired
-      if (state.expiresAt > Date.now()) {
-        token.value = state.token;
-        user.value = state.user;
-        console.log('[Auth] Restored session for:', state.user.username);
-      } else {
-        console.log('[Auth] Stored session expired, clearing');
-        clearAuth();
-      }
-    }
-  } catch (e) {
-    console.error('[Auth] Failed to restore session:', e);
-    clearAuth();
-  }
-}
 
 // ==================== Setup & Session ====================
 
@@ -149,14 +112,11 @@ async function login(request: LoginRequest): Promise<User> {
 
   try {
     const response = await authApi.login(request);
-    const { access_token, expires_in, user: authUser } = response;
+    const { user: authUser } = response;
 
     // Update state
-    token.value = access_token;
     user.value = authUser;
-
-    // Save to storage
-    saveToStorage(access_token, authUser, expires_in);
+    await refreshSession();
 
     console.log('[Auth] Login successful:', authUser.username);
     return authUser;
@@ -175,14 +135,11 @@ async function loginWithClerkToken(clerkToken: string): Promise<User> {
 
   try {
     const response = await authApi.exchangeClerkToken(clerkToken);
-    const { access_token, expires_in, user: authUser } = response;
+    const { user: authUser } = response;
 
     // Update state
-    token.value = access_token;
     user.value = authUser;
-
-    // Save to storage
-    saveToStorage(access_token, authUser, expires_in);
+    await refreshSession();
 
     console.log('[Auth] Clerk login successful:', authUser.username);
     return authUser;
@@ -226,15 +183,14 @@ async function logout(): Promise<void> {
 }
 
 async function verifySession(): Promise<boolean> {
-  if (!token.value) {
-    return false;
-  }
-
   try {
     const response = await authApi.verifySession();
     if (!response.valid) {
       clearAuth();
       return false;
+    }
+    if (!user.value) {
+      await refreshSession();
     }
     return true;
   } catch (e) {
@@ -245,12 +201,9 @@ async function verifySession(): Promise<boolean> {
 }
 
 async function refreshSession(): Promise<{ user: User; permissions: string[] } | null> {
-  if (!token.value) {
-    return null;
-  }
-
   try {
     const sessionInfo = await authApi.getSessionInfo();
+    token.value = null;
     user.value = sessionInfo.user;
     permissions.value = sessionInfo.permissions;
     return sessionInfo;
@@ -404,11 +357,6 @@ export async function initAuthState(): Promise<{ needsSetup: boolean; config: Au
 
 // Main composable export
 export function useAuth() {
-  // Initialize from storage on first use
-  if (!token.value) {
-    initFromStorage();
-  }
-
   return {
     // State (readonly)
     user: readonly(user),

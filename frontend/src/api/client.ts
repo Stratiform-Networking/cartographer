@@ -2,7 +2,8 @@
  * Centralized HTTP client wrapper
  *
  * All HTTP requests go through this client which handles:
- * - Auth headers (attached automatically from stored token)
+ * - Cookie-based session auth (with credentials enabled)
+ * - CSRF header injection for unsafe methods
  * - Error handling with typed responses
  * - Request timeouts
  * - Response interceptors for 401 handling
@@ -11,8 +12,30 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { API_BASE } from '../config';
 
-const AUTH_STORAGE_KEY = 'cartographer_auth';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
+const CSRF_COOKIE_NAME = 'cartographer_csrf';
+
+function getCookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  if (!cookie) return null;
+  return decodeURIComponent(cookie.slice(prefix.length));
+}
+
+function isUnsafeMethod(method?: string): boolean {
+  if (!method) return false;
+  const normalized = method.toUpperCase();
+  return (
+    normalized === 'POST' ||
+    normalized === 'PUT' ||
+    normalized === 'PATCH' ||
+    normalized === 'DELETE'
+  );
+}
 
 export interface ApiError {
   status: number;
@@ -31,24 +54,21 @@ export function setOnUnauthorized(callback: () => void): void {
 const client: AxiosInstance = axios.create({
   baseURL: API_BASE,
   timeout: REQUEST_TIMEOUT,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor: attach auth token
+// Request interceptor: attach CSRF token for unsafe cookie-authenticated requests
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    try {
-      const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        const authState = JSON.parse(stored);
-        if (authState.token && authState.expiresAt > Date.now()) {
-          config.headers.Authorization = `Bearer ${authState.token}`;
-        }
+    config.withCredentials = true;
+    if (isUnsafeMethod(config.method)) {
+      const csrfToken = getCookieValue(CSRF_COOKIE_NAME);
+      if (csrfToken) {
+        config.headers['X-CSRF-Token'] = csrfToken;
       }
-    } catch {
-      // Ignore storage errors
     }
     return config;
   },

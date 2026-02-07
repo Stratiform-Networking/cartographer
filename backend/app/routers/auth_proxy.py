@@ -14,13 +14,53 @@ Security:
 - Owner-only endpoints (user management, invitations) require owner role at proxy level
 """
 
+import json
+
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 
 from ..dependencies import AuthenticatedUser, require_auth, require_owner
+from ..services.auth_cookies import (
+    clear_auth_cookies,
+    sanitize_browser_auth_payload,
+    set_auth_cookies,
+)
 from ..services.cache_service import CacheService, get_cache
 from ..services.proxy_service import proxy_auth_request
 
 router = APIRouter(tags=["auth"])
+
+
+def _to_json_payload(response) -> dict | None:
+    if isinstance(response, JSONResponse):
+        try:
+            return json.loads(response.body)
+        except Exception:
+            return None
+    if isinstance(response, dict):
+        return response
+    return None
+
+
+def _issue_cookies_and_sanitize(response):
+    if not isinstance(response, JSONResponse):
+        return response
+    if response.status_code not in (200, 201):
+        return response
+
+    payload = _to_json_payload(response)
+    if not payload:
+        return response
+
+    access_token = payload.get("access_token")
+    expires_in = payload.get("expires_in")
+    if not access_token or not isinstance(expires_in, int) or expires_in <= 0:
+        return response
+
+    browser_payload = sanitize_browser_auth_payload(payload)
+    sanitized = JSONResponse(content=browser_payload, status_code=response.status_code)
+    set_auth_cookies(sanitized, session_token=access_token, expires_in=expires_in)
+    return sanitized
 
 
 # ==================== Setup Endpoints ====================
@@ -48,13 +88,21 @@ async def setup_owner(request: Request):
 async def login(request: Request):
     """Authenticate and get access token (public endpoint)"""
     body = await request.json()
-    return await proxy_auth_request("POST", "/login", request, body)
+    response = await proxy_auth_request("POST", "/login", request, body)
+    return _issue_cookies_and_sanitize(response)
 
 
 @router.post("/auth/logout")
 async def logout(request: Request, user: AuthenticatedUser = Depends(require_auth)):
     """Logout current user. Requires authentication."""
-    return await proxy_auth_request("POST", "/logout", request)
+    upstream_response = await proxy_auth_request("POST", "/logout", request)
+    payload = _to_json_payload(upstream_response) or {"message": "Logged out successfully"}
+    status_code = (
+        upstream_response.status_code if isinstance(upstream_response, JSONResponse) else 200
+    )
+    response = JSONResponse(content=payload, status_code=status_code)
+    clear_auth_cookies(response)
+    return response
 
 
 @router.get("/auth/session")
@@ -101,14 +149,16 @@ async def get_auth_config(request: Request):
 @router.post("/auth/clerk/exchange")
 async def exchange_clerk_token(request: Request):
     """Exchange Clerk session token for local JWT (public endpoint - cloud mode only)"""
-    return await proxy_auth_request("POST", "/clerk/exchange", request)
+    response = await proxy_auth_request("POST", "/clerk/exchange", request)
+    return _issue_cookies_and_sanitize(response)
 
 
 @router.post("/auth/register")
 async def register(request: Request):
     """Public registration endpoint (cloud mode with open registration)"""
     body = await request.json()
-    return await proxy_auth_request("POST", "/register", request, body)
+    response = await proxy_auth_request("POST", "/register", request, body)
+    return _issue_cookies_and_sanitize(response)
 
 
 # ==================== User Management Endpoints ====================

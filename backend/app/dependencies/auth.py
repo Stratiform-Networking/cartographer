@@ -6,7 +6,7 @@ Verifies tokens by calling the auth service.
 import logging
 from enum import Enum
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ from ..services.auth_service import verify_service_token as _verify_service_toke
 from ..services.auth_service import (
     verify_token_with_auth_service as _verify_token_with_auth_service,
 )
+from .token_extractor import resolve_request_token
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -69,6 +70,7 @@ async def verify_token_with_auth_service(token: str) -> AuthenticatedUser | None
 
 
 async def get_current_user(
+    request: Request = None,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
     token: str | None = Query(
         None, description="JWT token (for SSE/EventSource which doesn't support headers)"
@@ -82,14 +84,11 @@ async def get_current_user(
 
     Also supports service-to-service tokens (validated locally without auth service).
     """
-    actual_token = None
-
-    # Try Authorization header first
-    if credentials:
-        actual_token = credentials.credentials
-    # Fall back to query parameter (for SSE/EventSource)
-    elif token:
-        actual_token = token
+    actual_token = resolve_request_token(
+        request=request,
+        credentials=credentials,
+        query_token=token,
+    )
 
     if not actual_token:
         return None

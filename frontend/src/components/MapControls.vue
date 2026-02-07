@@ -553,7 +553,6 @@ import {
   type MonitoringConfig,
   type MonitoringStatus,
 } from '../composables/useHealthMonitoring';
-import { useAuth } from '../composables/useAuth';
 import { useDarkMode } from '../composables/useDarkMode';
 import { apiUrl } from '../config';
 import EmbedGenerator from './EmbedGenerator.vue';
@@ -583,7 +582,6 @@ const message = ref('');
 const { parseNetworkMap } = useNetworkData();
 const { exportLayout, importLayout } = useMapLayout();
 const { fetchConfig, updateConfig, fetchStatus } = useHealthMonitoring();
-const { token } = useAuth();
 const { isDark, toggleDarkMode } = useDarkMode();
 let es: EventSource | null = null;
 // Prefer relative URLs to avoid mixed-content; use APPLICATION_URL only if safe (https or same protocol)
@@ -795,15 +793,10 @@ function startSSE() {
   message.value = 'Scanning network...';
   emit('running', true);
   try {
-    // Build SSE URL with token as query parameter (EventSource doesn't support custom headers)
+    // Build SSE URL for same-origin cookie-authenticated requests
     let sseUrl = `${baseUrl.value}/api/run-mapper/stream`.replace(/^\/\//, '/');
     if (!baseUrl.value) {
       sseUrl = apiUrl('/api/run-mapper/stream');
-    }
-    // Add token as query parameter for SSE authentication
-    if (token.value) {
-      const separator = sseUrl.includes('?') ? '&' : '?';
-      sseUrl = `${sseUrl}${separator}token=${encodeURIComponent(token.value)}`;
     }
     es = new EventSource(sseUrl);
     es.addEventListener('log', (e: MessageEvent) => {

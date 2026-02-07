@@ -60,10 +60,43 @@ class Settings(BaseSettings):
     # CORS configuration
     cors_origins: str = "*"
 
+    # Cookie / CSRF configuration
+    auth_cookie_name: str = "cartographer_session"
+    csrf_cookie_name: str = "cartographer_csrf"
+    auth_cookie_secure: bool | None = None
+    auth_cookie_samesite: str = "lax"
+    auth_cookie_path: str = "/"
+    csrf_trusted_origins: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse CORS_ORIGINS into a list."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def csrf_trusted_origins_list(self) -> list[str]:
+        """
+        Parse CSRF_TRUSTED_ORIGINS into a list.
+
+        If unset, fallback to CORS origins excluding wildcard values.
+        """
+        if self.csrf_trusted_origins.strip():
+            return [
+                origin.strip() for origin in self.csrf_trusted_origins.split(",") if origin.strip()
+            ]
+
+        return [origin for origin in self.cors_origins_list if origin != "*"]
+
+    @property
+    def auth_cookie_secure_value(self) -> bool:
+        """
+        Resolve effective cookie secure flag.
+
+        Defaults to True in production and False otherwise when AUTH_COOKIE_SECURE is unset.
+        """
+        if self.auth_cookie_secure is not None:
+            return self.auth_cookie_secure
+        return self.env == "production"
 
     @property
     def resolved_frontend_dist(self) -> Path:
@@ -76,6 +109,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_security_settings(self) -> "Settings":
         """Validate security-sensitive settings for production environments."""
+        if self.auth_cookie_samesite.lower() not in {"lax", "strict", "none"}:
+            raise ValueError("AUTH_COOKIE_SAMESITE must be one of: lax, strict, none")
+
         if self.env == "production":
             # Strict validation in production
             if "*" in self.cors_origins:
@@ -83,6 +119,8 @@ class Settings(BaseSettings):
                     "CORS wildcard (*) is not allowed in production. "
                     "Set CORS_ORIGINS to specific allowed origins."
                 )
+            if self.auth_cookie_samesite.lower() == "none" and not self.auth_cookie_secure_value:
+                raise ValueError("SameSite=None requires AUTH_COOKIE_SECURE=true")
             if not self.jwt_secret:
                 raise ValueError(
                     "JWT_SECRET must be set in production. "

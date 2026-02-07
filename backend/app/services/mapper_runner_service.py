@@ -11,6 +11,8 @@ Handles:
 import json
 import os
 import pathlib
+import platform
+import shutil
 import subprocess
 from dataclasses import dataclass
 from typing import Generator
@@ -96,7 +98,29 @@ def get_script_command() -> list[str]:
         Command list for subprocess
     """
     script = script_path()
+    system = platform.system().lower()
+
+    if system.startswith("win"):
+        ps1 = project_root() / "lan_mapper.ps1"
+        if ps1.exists():
+            for candidate in ("pwsh", "powershell.exe", "powershell"):
+                resolved = shutil.which(candidate)
+                if resolved:
+                    return [
+                        resolved,
+                        "-NoProfile",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                        str(ps1),
+                    ]
+        bash = shutil.which("bash")
+        if bash:
+            return [bash, str(script)]
+
     if not os.access(script, os.X_OK):
+        if system.startswith("win"):
+            return [str(script)]
         # Try to run with /bin/bash if not executable
         return ["/bin/bash", str(script)]
     return [str(script)]

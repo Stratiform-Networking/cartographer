@@ -65,6 +65,35 @@ class TestPingHost:
             assert result.success is False
             assert result.packet_loss_percent == 100.0
 
+    async def test_ping_success_windows_output(
+        self, health_checker_instance, mock_subprocess_ping_success_windows
+    ):
+        """Should parse successful Windows ping output"""
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(mock_subprocess_ping_success_windows, b""))
+
+        with patch("platform.system", return_value="Windows"):
+            with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+                result = await health_checker_instance.ping_host("192.168.1.1")
+
+                assert result.success is True
+                assert result.packet_loss_percent == 0.0
+                assert result.avg_latency_ms is not None
+
+    async def test_ping_failure_windows_output(
+        self, health_checker_instance, mock_subprocess_ping_failure_windows
+    ):
+        """Should parse failed Windows ping output"""
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(mock_subprocess_ping_failure_windows, b""))
+
+        with patch("platform.system", return_value="Windows"):
+            with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+                result = await health_checker_instance.ping_host("192.168.1.1")
+
+                assert result.success is False
+                assert result.packet_loss_percent == 100.0
+
     async def test_ping_timeout(self, health_checker_instance):
         """Should handle ping timeout"""
         with patch("asyncio.create_subprocess_exec", side_effect=asyncio.TimeoutError()):
@@ -190,6 +219,214 @@ class TestCheckDeviceHealth:
 
             assert metrics.status == HealthStatus.UNHEALTHY
             assert metrics.consecutive_failures == 1
+
+
+class TestHealthCheckerCoverageBoost:
+    """Additional tests for uncovered branches"""
+
+    def test_calculate_historical_stats_ignores_old_entries(self, health_checker_instance):
+        """Should return None stats when history is older than cutoff"""
+        old_ts = datetime.now(timezone.utc) - timedelta(hours=25)
+        health_checker_instance._history["192.168.1.1"] = deque(
+            [(old_ts, True, 10.0)], maxlen=health_checker_instance._history_max_size
+        )
+
+        uptime, avg, passed, failed = health_checker_instance._calculate_historical_stats(
+            "192.168.1.1"
+        )
+
+        assert uptime is None
+        assert avg is None
+        assert passed == 0
+        assert failed == 0
+
+    async def test_ping_parses_latencies_without_stats(self, health_checker_instance, monkeypatch):
+        """Should derive transmitted/received from latency count when stats missing"""
+        output = b"""PING 192.168.1.1 (192.168.1.1): 56 data bytes
+64 bytes from 192.168.1.1: time=10.1 ms
+64 bytes from 192.168.1.1: time=11.2 ms
+"""
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(output, b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await health_checker_instance.ping_host("192.168.1.1", count=2)
+
+            assert result.success is True
+            assert result.packet_loss_percent == 0.0
+
+    async def test_ping_parses_windows_summary_without_latencies(self, health_checker_instance):
+        """Should parse Windows summary when per-packet times are missing"""
+        output = b"""Pinging 192.168.1.1 with 32 bytes of data:
+Request timed out.
+Request timed out.
+Request timed out.
+
+Ping statistics for 192.168.1.1:
+    Packets: Sent = 3, Received = 0, Lost = 3 (100% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 10ms, Maximum = 12ms, Average = 11ms
+"""
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = AsyncMock(return_value=(output, b""))
+
+        with patch("platform.system", return_value="Windows"):
+            with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+                result = await health_checker_instance.ping_host("192.168.1.1", count=3)
+
+                assert result.avg_latency_ms == 11.0
+                assert result.success is True
+
+    async def test_check_dns_outer_exception(self, health_checker_instance, monkeypatch):
+        """Should return failure when DNS check raises unexpected exception"""
+
+        def boom():
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("app.services.health_checker.time.time", boom)
+
+        result = await health_checker_instance.check_dns("192.168.1.1")
+
+        assert result.success is False
+
+    async def test_check_multiple_devices_logs_bulk_failure(self, health_checker_instance, caplog):
+        """Should log a warning when most devices fail"""
+        now = datetime.now(timezone.utc)
+        unhealthy = DeviceMetrics(ip="192.168.1.1", status=HealthStatus.UNHEALTHY, last_check=now)
+        healthy = DeviceMetrics(ip="192.168.1.2", status=HealthStatus.HEALTHY, last_check=now)
+
+        health_checker_instance.check_device_health = AsyncMock(
+            side_effect=[unhealthy, unhealthy, healthy]
+        )
+
+        with caplog.at_level("WARNING"):
+            await health_checker_instance.check_multiple_devices(
+                ["192.168.1.1", "192.168.1.3", "192.168.1.2"]
+            )
+
+        assert "Bulk health check failure detected" in caplog.text
+
+    async def test_update_from_agent_health_dns_exception_uses_cached(
+        self, health_checker_instance
+    ):
+        """Should keep cached DNS when refresh fails"""
+        cached_dns = DnsResult(success=False)
+        cached_metrics = DeviceMetrics(
+            ip="192.168.1.1",
+            status=HealthStatus.UNHEALTHY,
+            last_check=datetime.now(timezone.utc),
+            dns=cached_dns,
+        )
+        health_checker_instance._metrics_cache["192.168.1.1"] = cached_metrics
+        health_checker_instance.check_dns = AsyncMock(side_effect=RuntimeError("dns failed"))
+
+        await health_checker_instance.update_from_agent_health(
+            ip="192.168.1.1",
+            reachable=True,
+            response_time_ms=10.0,
+            network_id=None,
+            include_dns=True,
+        )
+
+        assert health_checker_instance._metrics_cache["192.168.1.1"].dns == cached_dns
+
+    def test_calculate_test_ip_stats_ignores_old_entries(self, health_checker_instance):
+        """Should return None stats when test IP history is older than cutoff"""
+        old_ts = datetime.now(timezone.utc) - timedelta(hours=25)
+        key = health_checker_instance._get_test_ip_history_key("gw", "1.1.1.1")
+        health_checker_instance._test_ip_history[key] = deque(
+            [(old_ts, True, 10.0)], maxlen=health_checker_instance._history_max_size
+        )
+
+        uptime, avg, passed, failed = health_checker_instance._calculate_test_ip_historical_stats(
+            "gw", "1.1.1.1"
+        )
+
+        assert uptime is None
+        assert avg is None
+        assert passed == 0
+        assert failed == 0
+
+    async def test_speed_test_import_error(self, health_checker_instance, monkeypatch):
+        """Should return failure when speedtest dependency is missing"""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "speedtest":
+                raise ImportError("missing speedtest")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        result = await health_checker_instance.run_speed_test()
+
+        assert result.success is False
+        assert "speedtest-cli" in (result.error_message or "")
+
+    async def test_perform_monitoring_check_skips_when_disabled(
+        self, health_checker_instance, monkeypatch
+    ):
+        """Should skip monitoring when active checks are disabled"""
+        monkeypatch.setattr("app.services.health_checker.settings.disable_active_checks", True)
+        health_checker_instance._monitored_devices = {"192.168.1.1": "net-1"}
+        health_checker_instance.check_multiple_devices = AsyncMock()
+
+        await health_checker_instance._perform_monitoring_check()
+
+        health_checker_instance.check_multiple_devices.assert_not_called()
+
+    async def test_monitoring_loop_timeout_resets_flag(self, health_checker_instance, monkeypatch):
+        """Should handle monitoring timeouts and reset checking flag"""
+        health_checker_instance._monitoring_config = MonitoringConfig(
+            enabled=True, check_interval_seconds=1, include_dns=True
+        )
+        health_checker_instance._monitored_devices = {"192.168.1.1": "net-1"}
+        health_checker_instance._perform_monitoring_check = AsyncMock()
+
+        async def fake_wait_for(coro, timeout):
+            if hasattr(coro, "close"):
+                coro.close()
+            raise asyncio.TimeoutError()
+
+        call_count = {"sleep": 0}
+
+        async def fake_sleep(_):
+            call_count["sleep"] += 1
+            raise asyncio.CancelledError()
+
+        monkeypatch.setattr("asyncio.wait_for", fake_wait_for)
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+        await health_checker_instance._monitoring_loop()
+
+        assert health_checker_instance._is_checking is False
+
+    async def test_monitoring_loop_exception_path(self, health_checker_instance, monkeypatch):
+        """Should log and retry on unexpected errors in monitoring loop"""
+        health_checker_instance._monitoring_config = MonitoringConfig(
+            enabled=True, check_interval_seconds=1, include_dns=True
+        )
+        health_checker_instance._monitored_devices = {"192.168.1.1": "net-1"}
+        health_checker_instance._perform_monitoring_check = AsyncMock()
+
+        call_count = {"sleep": 0}
+
+        async def fake_sleep(_):
+            call_count["sleep"] += 1
+            if call_count["sleep"] == 1:
+                raise RuntimeError("boom")
+            raise asyncio.CancelledError()
+
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+        try:
+            await health_checker_instance._monitoring_loop()
+        except asyncio.CancelledError:
+            pass
 
     async def test_degraded_high_packet_loss(self, health_checker_instance):
         """Should report degraded for high packet loss"""

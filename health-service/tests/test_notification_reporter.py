@@ -8,7 +8,9 @@ import httpx
 import pytest
 
 from app.services.notification_reporter import (
+    _load_network_states,
     _previous_states,
+    _save_network_states,
     clear_state_tracking,
     report_health_check,
     report_health_checks_batch,
@@ -249,6 +251,71 @@ class TestClearStateTracking:
         from app.services.notification_reporter import _previous_states
 
         assert len(_previous_states) == 0
+
+
+class TestStatePersistenceHelpers:
+    """Tests for state load/save helpers"""
+
+    def test_load_network_states_success(self, tmp_path, monkeypatch):
+        """Should load state file when it exists"""
+        state_dir = tmp_path / "states"
+        state_dir.mkdir()
+        state_file = state_dir / "net-1.json"
+        state_file.write_text('{"192.168.1.1": "online"}')
+
+        monkeypatch.setattr("app.services.notification_reporter._STATE_DIR", state_dir)
+
+        states = _load_network_states("net-1")
+
+        assert states == {"192.168.1.1": "online"}
+        clear_state_tracking()
+
+    def test_load_network_states_handles_error(self, tmp_path, monkeypatch):
+        """Should return empty dict on read error"""
+        state_dir = tmp_path / "states"
+        state_dir.mkdir()
+        state_file = state_dir / "net-1.json"
+        state_file.write_text('{"192.168.1.1": "online"}')
+        monkeypatch.setattr("app.services.notification_reporter._STATE_DIR", state_dir)
+
+        def boom(*args, **kwargs):
+            raise OSError("nope")
+
+        monkeypatch.setattr("builtins.open", boom)
+
+        states = _load_network_states("net-1")
+
+        assert states == {}
+        clear_state_tracking()
+
+    def test_save_network_states_handles_error(self, tmp_path, monkeypatch):
+        """Should swallow errors when saving states"""
+        state_dir = tmp_path / "states"
+        monkeypatch.setattr("app.services.notification_reporter._STATE_DIR", state_dir)
+        _previous_states["net-1"] = {"192.168.1.1": "online"}
+
+        def boom(*args, **kwargs):
+            raise OSError("nope")
+
+        monkeypatch.setattr("builtins.open", boom)
+
+        _save_network_states("net-1")
+        clear_state_tracking()
+
+    def test_clear_state_tracking_removes_file(self, tmp_path, monkeypatch):
+        """Should remove state file when clearing a specific network"""
+        state_dir = tmp_path / "states"
+        state_dir.mkdir()
+        state_file = state_dir / "net-1.json"
+        state_file.write_text('{"192.168.1.1": "online"}')
+
+        monkeypatch.setattr("app.services.notification_reporter._STATE_DIR", state_dir)
+        _previous_states["net-1"] = {"192.168.1.1": "online"}
+
+        clear_state_tracking("net-1")
+
+        assert not state_file.exists()
+        assert "net-1" not in _previous_states
 
 
 class TestSyncDevicesWithNotificationService:

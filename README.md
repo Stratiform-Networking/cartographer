@@ -118,21 +118,32 @@ flowchart TB
 
 ## Getting started
 
-You'll need [Docker](https://docs.docker.com/get-docker/) installed.
+If you're self-hosting, a Linux box or Docker is the smoothest path. Docker on Linux can use host networking, which gives the mapper and health checks the best LAN visibility.
 
-**Option 1** — Use the helper script:
-```bash
-./deploy.sh up
-```
+**Docker (recommended for all platforms)**
 
-**Option 2** — Or run Docker Compose directly:
-```bash
-docker compose up --build -d
-```
+Linux (best LAN visibility):
+1. `./deploy.sh up`
+2. Or `docker compose up --build -d`
+
+macOS and Windows (Docker Desktop):
+1. `docker compose -f docker-compose.windows.yml up --build -d`
+
+Note: Docker Desktop does not support host networking, so LAN discovery and ICMP health checks can be limited. For the most reliable results, run Cartographer on a Linux box or a Linux VM/host.
 
 Then open **http://localhost:8000** in your browser.
 
 The first time you visit, you'll create an owner account. After that, click **Run Mapper** to scan your network and start building your map!
+
+**Native (no Docker)**
+
+Linux/macOS:
+1. `./dev.sh setup`
+2. `./dev.sh start`
+
+Windows (supported, but Docker Desktop is recommended for self-hosting):
+1. `.\dev.ps1 setup`
+2. `.\dev.ps1 start`
 
 ## AI Assistant
 

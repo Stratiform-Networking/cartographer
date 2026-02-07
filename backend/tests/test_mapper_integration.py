@@ -475,6 +475,88 @@ class TestHelperPaths:
         assert all(isinstance(p, Path) for p in candidates)
 
 
+class TestGetScriptCommandWindows:
+    """Tests for Windows-specific mapper command selection"""
+
+    def test_windows_prefers_pwsh(self, tmp_path):
+        """Should use pwsh for Windows when available"""
+        from app.services import mapper_runner_service
+
+        script = tmp_path / "lan_mapper.sh"
+        script.write_text("#!/bin/bash\necho ok")
+        ps1 = tmp_path / "lan_mapper.ps1"
+        ps1.write_text("Write-Host ok")
+
+        with patch.object(mapper_runner_service, "project_root", return_value=tmp_path):
+            with patch.object(mapper_runner_service, "script_path", return_value=script):
+                with patch(
+                    "app.services.mapper_runner_service.platform.system", return_value="Windows"
+                ):
+                    with patch("app.services.mapper_runner_service.shutil.which") as mock_which:
+
+                        def which_side(name):
+                            if name == "pwsh":
+                                return "C:\\Program Files\\PowerShell\\pwsh.exe"
+                            return None
+
+                        mock_which.side_effect = which_side
+                        cmd = mapper_runner_service.get_script_command()
+
+                        assert cmd == [
+                            "C:\\Program Files\\PowerShell\\pwsh.exe",
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(ps1),
+                        ]
+
+    def test_windows_falls_back_to_bash(self, tmp_path):
+        """Should use bash when PowerShell is unavailable on Windows"""
+        from app.services import mapper_runner_service
+
+        script = tmp_path / "lan_mapper.sh"
+        script.write_text("#!/bin/bash\necho ok")
+        ps1 = tmp_path / "lan_mapper.ps1"
+        ps1.write_text("Write-Host ok")
+
+        with patch.object(mapper_runner_service, "project_root", return_value=tmp_path):
+            with patch.object(mapper_runner_service, "script_path", return_value=script):
+                with patch(
+                    "app.services.mapper_runner_service.platform.system", return_value="Windows"
+                ):
+                    with patch("app.services.mapper_runner_service.shutil.which") as mock_which:
+
+                        def which_side(name):
+                            if name == "bash":
+                                return "/usr/bin/bash"
+                            return None
+
+                        mock_which.side_effect = which_side
+                        cmd = mapper_runner_service.get_script_command()
+
+                        assert cmd == ["/usr/bin/bash", str(script)]
+
+    def test_windows_falls_back_to_script(self, tmp_path):
+        """Should return script directly when no shells are available on Windows"""
+        from app.services import mapper_runner_service
+
+        script = tmp_path / "lan_mapper.sh"
+        script.write_text("#!/bin/bash\necho ok")
+
+        with patch.object(mapper_runner_service, "project_root", return_value=tmp_path):
+            with patch.object(mapper_runner_service, "script_path", return_value=script):
+                with patch(
+                    "app.services.mapper_runner_service.platform.system", return_value="Windows"
+                ):
+                    with patch(
+                        "app.services.mapper_runner_service.shutil.which", return_value=None
+                    ):
+                        cmd = mapper_runner_service.get_script_command()
+
+                        assert cmd == [str(script)]
+
+
 class TestHealthServiceRequestErrors:
     """Test health service request error handling"""
 

@@ -717,3 +717,82 @@ class TestAgentSync:
             assert data["success"] is True
             assert data["results_processed"] == 2
             assert data["cache_updated"] == 1  # Only first one updated
+
+
+class TestDisabledActiveChecks:
+    """Tests for disable_active_checks behavior"""
+
+    def test_check_device_returns_cached_when_disabled(self, client, sample_metrics, monkeypatch):
+        """Should return cached metrics when active checks are disabled"""
+        monkeypatch.setattr("app.routers.health.settings.disable_active_checks", True)
+        with patch("app.routers.health.health_checker") as mock_checker:
+            mock_checker.get_cached_metrics = MagicMock(return_value=sample_metrics)
+
+            response = client.get("/api/health/check/192.168.1.1")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ip"] == "192.168.1.1"
+
+    def test_check_device_returns_404_when_no_cache(self, client, monkeypatch):
+        """Should return 404 when cache is empty and active checks are disabled"""
+        monkeypatch.setattr("app.routers.health.settings.disable_active_checks", True)
+        with patch("app.routers.health.health_checker") as mock_checker:
+            mock_checker.get_cached_metrics = MagicMock(return_value=None)
+
+            response = client.get("/api/health/check/192.168.1.1")
+
+            assert response.status_code == 404
+
+    def test_batch_check_returns_cached_when_disabled(self, client, sample_metrics, monkeypatch):
+        """Should return cached metrics for requested IPs when active checks are disabled"""
+        monkeypatch.setattr("app.routers.health.settings.disable_active_checks", True)
+        with patch("app.routers.health.health_checker") as mock_checker:
+            mock_checker.get_all_cached_metrics = MagicMock(
+                return_value={"192.168.1.1": sample_metrics}
+            )
+
+            response = client.post(
+                "/api/health/check/batch", json={"ips": ["192.168.1.1", "192.168.1.2"]}
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert "192.168.1.1" in data["devices"]
+            assert "192.168.1.2" not in data["devices"]
+
+    def test_register_devices_disabled_active_checks(self, client, monkeypatch):
+        """Should skip active monitoring when active checks are disabled"""
+        monkeypatch.setattr("app.routers.health.settings.disable_active_checks", True)
+        with patch("app.routers.health.health_checker") as mock_checker:
+            with patch(
+                "app.routers.health.sync_devices_with_notification_service",
+                new_callable=AsyncMock,
+            ) as mock_sync:
+                mock_sync.return_value = True
+
+                response = client.post(
+                    "/api/health/monitoring/devices",
+                    json={"ips": ["192.168.1.1"], "network_id": "net-1"},
+                )
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["active_monitoring"] is False
+                mock_checker.set_monitored_devices.assert_not_called()
+
+    def test_start_monitoring_disabled(self, client, monkeypatch):
+        """Should reject monitoring start when active checks are disabled"""
+        monkeypatch.setattr("app.routers.health.settings.disable_active_checks", True)
+
+        response = client.post("/api/health/monitoring/start")
+
+        assert response.status_code == 400
+
+    def test_trigger_check_now_disabled(self, client, monkeypatch):
+        """Should reject immediate check when active checks are disabled"""
+        monkeypatch.setattr("app.routers.health.settings.disable_active_checks", True)
+
+        response = client.post("/api/health/monitoring/check-now")
+
+        assert response.status_code == 400

@@ -3,6 +3,34 @@
 
 set -e
 
+### ====================================================================================
+### WINDOWS DETECTION (MSYS/GIT BASH/CYGWIN) - DELEGATE TO POWERSHELL
+### ====================================================================================
+
+if [[ "${OS:-}" == "Windows_NT" ]] || uname -s 2>/dev/null | grep -qiE 'MINGW|MSYS|CYGWIN'; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    PS_SCRIPT="$SCRIPT_DIR/lan_mapper.ps1"
+
+    if [[ ! -f "$PS_SCRIPT" ]]; then
+        echo "ERROR: Windows mapper script not found at $PS_SCRIPT"
+        exit 1
+    fi
+
+    if command -v pwsh >/dev/null 2>&1; then
+        PSH="pwsh"
+    elif command -v powershell.exe >/dev/null 2>&1; then
+        PSH="powershell.exe"
+    elif command -v powershell >/dev/null 2>&1; then
+        PSH="powershell"
+    else
+        echo "ERROR: PowerShell not found. Install PowerShell 7 or enable Windows PowerShell."
+        exit 1
+    fi
+
+    "$PSH" -NoProfile -ExecutionPolicy Bypass -File "$PS_SCRIPT"
+    exit $?
+fi
+
 echo "=== LAN Mapper Starting ==="
 echo
 

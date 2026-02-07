@@ -114,6 +114,42 @@ class TestUsageTrackingMiddlewareDispatch:
 
         assert response.status_code == 200
 
+    @pytest.mark.asyncio
+    async def test_dispatch_triggers_immediate_flush(self, monkeypatch):
+        """Should trigger immediate flush when buffer reaches batch size"""
+        app = MagicMock()
+        middleware = UsageTrackingMiddleware(app)
+        middleware._running = True
+
+        monkeypatch.setattr("app.services.usage_middleware.settings.usage_batch_size", 1)
+
+        created = []
+
+        def fake_create_task(coro):
+            if hasattr(coro, "close"):
+                coro.close()
+            created.append(coro)
+            return AsyncMock()
+
+        flush_mock = AsyncMock()
+        monkeypatch.setattr(middleware, "_flush_buffer", flush_mock)
+        monkeypatch.setattr("asyncio.create_task", fake_create_task)
+
+        async def call_next(request):
+            return Response(status_code=200)
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/test",
+            "headers": [],
+        }
+        request = Request(scope)
+
+        await middleware.dispatch(request, call_next)
+
+        assert len(created) == 1
+
     def test_dispatch_skips_excluded_paths(self, app_with_middleware):
         """Should skip tracking for excluded paths"""
         client = TestClient(app_with_middleware)
@@ -243,6 +279,25 @@ class TestUsageTrackingMiddlewareFlush:
         # Record should be put back
         assert len(middleware._buffer) == 1
 
+    async def test_flush_buffer_returns_when_batch_size_zero(self, middleware, monkeypatch):
+        """Should return early when batch size is zero"""
+        now = datetime.now(timezone.utc)
+        middleware._buffer.append(
+            UsageRecord(
+                endpoint="/api/test",
+                method="GET",
+                status_code=200,
+                response_time_ms=10.0,
+                timestamp=now,
+            )
+        )
+
+        monkeypatch.setattr("app.services.usage_middleware.settings.usage_batch_size", 0)
+
+        await middleware._flush_buffer()
+
+        assert len(middleware._buffer) == 1
+
 
 class TestUsageTrackingMiddlewareClient:
     """Tests for HTTP client management"""
@@ -332,6 +387,44 @@ class TestUsageTrackingMiddlewareFlushLoop:
                 await task
             except asyncio.CancelledError:
                 pass
+
+    async def test_flush_loop_calls_flush_buffer(self, middleware, monkeypatch):
+        """Should call flush_buffer inside loop"""
+        called = {"count": 0}
+
+        async def fake_flush():
+            called["count"] += 1
+            middleware._running = False
+
+        async def fake_sleep(_):
+            return None
+
+        monkeypatch.setattr(middleware, "_flush_buffer", fake_flush)
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+        middleware._running = True
+        await middleware._flush_loop()
+
+        assert called["count"] == 1
+
+    async def test_flush_loop_handles_exception(self, middleware, monkeypatch, caplog):
+        """Should log flush loop exceptions"""
+
+        async def fake_flush():
+            middleware._running = False
+            raise RuntimeError("boom")
+
+        async def fake_sleep(_):
+            return None
+
+        monkeypatch.setattr(middleware, "_flush_buffer", fake_flush)
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+
+        middleware._running = True
+        with caplog.at_level("DEBUG"):
+            await middleware._flush_loop()
+
+        assert "Flush loop error" in caplog.text
 
 
 class TestUsageTrackingMiddlewareShutdown:

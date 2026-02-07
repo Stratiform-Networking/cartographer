@@ -118,6 +118,34 @@ def mock_subprocess_ping_failure():
 
 
 @pytest.fixture
+def mock_subprocess_ping_success_windows():
+    """Mock successful Windows ping output"""
+    return b"""Pinging 192.168.1.1 with 32 bytes of data:
+Reply from 192.168.1.1: bytes=32 time=10ms TTL=64
+Reply from 192.168.1.1: bytes=32 time=12ms TTL=64
+Reply from 192.168.1.1: bytes=32 time=11ms TTL=64
+
+Ping statistics for 192.168.1.1:
+    Packets: Sent = 3, Received = 3, Lost = 0 (0% loss),
+Approximate round trip times in milli-seconds:
+    Minimum = 10ms, Maximum = 12ms, Average = 11ms
+"""
+
+
+@pytest.fixture
+def mock_subprocess_ping_failure_windows():
+    """Mock failed Windows ping output"""
+    return b"""Pinging 192.168.1.1 with 32 bytes of data:
+Request timed out.
+Request timed out.
+Request timed out.
+
+Ping statistics for 192.168.1.1:
+    Packets: Sent = 3, Received = 0, Lost = 3 (100% loss),
+"""
+
+
+@pytest.fixture
 def sample_gateway_test_ips():
     """Sample gateway test IP configuration"""
     from app.models import GatewayTestIP

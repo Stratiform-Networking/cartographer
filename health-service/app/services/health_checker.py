@@ -239,11 +239,11 @@ class HealthChecker:
 
         try:
             # Use system ping command for reliability
-            import re
+            import platform
             import subprocess  # noqa: F401
 
-            # Build ping command (works on both Linux and macOS)
-            cmd = ["ping", "-c", str(count), "-W", str(int(timeout)), ip]
+            system = platform.system().lower()
+            cmd = self._build_ping_command(system, count, timeout, ip)
 
             start_time = time.time()
             proc = await asyncio.create_subprocess_exec(
@@ -254,59 +254,116 @@ class HealthChecker:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout * count + 5)
 
             output = stdout.decode("utf-8", errors="ignore")
-
-            # Parse ping output
-            latencies = []
-            received = 0
-            transmitted = count
-
-            # Match individual ping times: "time=X.XX ms" or "time=X ms"
-            time_matches = re.findall(r"time[=<](\d+\.?\d*)\s*ms", output)
-            latencies = [float(t) for t in time_matches]
-
-            # Match packet statistics: "X packets transmitted, Y received"
-            stats_match = re.search(
-                r"(\d+)\s+packets?\s+transmitted.*?(\d+)\s+(?:packets?\s+)?received",
-                output,
-            )
-            if stats_match:
-                transmitted = int(stats_match.group(1))
-                received = int(stats_match.group(2))
-
-            if latencies:
-                min_lat = min(latencies)
-                max_lat = max(latencies)
-                avg_lat = sum(latencies) / len(latencies)
-
-                # Calculate jitter (variance in latency)
-                if len(latencies) > 1:
-                    jitter = sum(
-                        abs(latencies[i] - latencies[i - 1]) for i in range(1, len(latencies))
-                    ) / (len(latencies) - 1)
-                else:
-                    jitter = 0.0
-
-                packet_loss = (
-                    ((transmitted - received) / transmitted) * 100 if transmitted > 0 else 100
-                )
-
-                return PingResult(
-                    success=received > 0,
-                    latency_ms=avg_lat,
-                    packet_loss_percent=packet_loss,
-                    min_latency_ms=min_lat,
-                    max_latency_ms=max_lat,
-                    avg_latency_ms=avg_lat,
-                    jitter_ms=jitter,
-                )
-            else:
-                return PingResult(success=False, packet_loss_percent=100.0)
+            return self._parse_ping_output(output, count)
 
         except asyncio.TimeoutError:
             return PingResult(success=False, packet_loss_percent=100.0)
         except Exception as e:
             logger.error(f"Ping failed for {ip}: {e}")
             return PingResult(success=False, packet_loss_percent=100.0)
+
+    @staticmethod
+    def _build_ping_command(system: str, count: int, timeout: float, ip: str) -> list[str]:
+        if system.startswith("win"):
+            timeout_ms = max(1, int(timeout * 1000))
+            return ["ping", "-n", str(count), "-w", str(timeout_ms), ip]
+        return ["ping", "-c", str(count), "-W", str(int(timeout)), ip]
+
+    @staticmethod
+    def _calculate_packet_loss(transmitted: int, received: int) -> float:
+        if transmitted <= 0:
+            return 100.0
+        return ((transmitted - received) / transmitted) * 100
+
+    def _parse_ping_output(self, output: str, count: int) -> PingResult:
+        import re
+
+        latencies = []
+        received = 0
+        transmitted = count
+
+        # Match individual ping times: "time=X.XX ms" or "time=X ms"
+        time_matches = re.findall(r"time[=<](\d+\.?\d*)\s*ms", output, re.IGNORECASE)
+        latencies = [float(t) for t in time_matches]
+
+        # Match packet statistics: "X packets transmitted, Y received"
+        stats_match = re.search(
+            r"(\d+)\s+packets?\s+transmitted.*?(\d+)\s+(?:packets?\s+)?received",
+            output,
+            re.IGNORECASE,
+        )
+        if stats_match:
+            transmitted = int(stats_match.group(1))
+            received = int(stats_match.group(2))
+        else:
+            # Windows ping: "Packets: Sent = X, Received = Y, Lost = Z (P% loss)"
+            win_stats_match = re.search(
+                r"Sent\s*=\s*(\d+).*?Received\s*=\s*(\d+).*?Lost\s*=\s*(\d+)\s*\((\d+)%\s*loss\)",
+                output,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if win_stats_match:
+                transmitted = int(win_stats_match.group(1))
+                received = int(win_stats_match.group(2))
+            elif latencies:
+                transmitted = count
+                received = len(latencies)
+
+        # Windows summary fallback: "Minimum = Xms, Maximum = Yms, Average = Zms"
+        min_lat = None
+        max_lat = None
+        avg_lat = None
+        if not latencies:
+            summary_match = re.search(
+                r"Minimum\s*=\s*(\d+)\s*ms.*?Maximum\s*=\s*(\d+)\s*ms.*?Average\s*=\s*(\d+)\s*ms",
+                output,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if summary_match:
+                min_lat = float(summary_match.group(1))
+                max_lat = float(summary_match.group(2))
+                avg_lat = float(summary_match.group(3))
+                if received == 0:
+                    received = 1
+
+        if latencies:
+            min_lat = min(latencies)
+            max_lat = max(latencies)
+            avg_lat = sum(latencies) / len(latencies)
+
+            # Calculate jitter (variance in latency)
+            if len(latencies) > 1:
+                jitter = sum(
+                    abs(latencies[i] - latencies[i - 1]) for i in range(1, len(latencies))
+                ) / (len(latencies) - 1)
+            else:
+                jitter = 0.0
+
+            packet_loss = self._calculate_packet_loss(transmitted, received)
+
+            return PingResult(
+                success=received > 0,
+                latency_ms=avg_lat,
+                packet_loss_percent=packet_loss,
+                min_latency_ms=min_lat,
+                max_latency_ms=max_lat,
+                avg_latency_ms=avg_lat,
+                jitter_ms=jitter,
+            )
+
+        if avg_lat is not None:
+            packet_loss = self._calculate_packet_loss(transmitted, received)
+            return PingResult(
+                success=received > 0,
+                latency_ms=avg_lat,
+                packet_loss_percent=packet_loss,
+                min_latency_ms=min_lat,
+                max_latency_ms=max_lat,
+                avg_latency_ms=avg_lat,
+                jitter_ms=0.0,
+            )
+
+        return PingResult(success=False, packet_loss_percent=100.0)
 
     async def check_dns(self, ip: str) -> DnsResult:
         """Perform DNS resolution and reverse DNS lookup"""

@@ -5,6 +5,18 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.30.3](https://github.com/devartech/cartographer/compare/v0.30.2...v0.30.3) (2026-02-07)
+
+
+### ✨ Features
+
+* improve Windows support: native LAN mapper, health checks, and setup docs ([#17](https://github.com/devartech/cartographer/issues/17)) ([adea383](https://github.com/devartech/cartographer/commit/adea383c612ab6f0de7b2021e3c361b2ebc87ae0))
+
+
+### 🐛 Bug Fixes
+
+* health checks in self-host ([bba4f0f](https://github.com/devartech/cartographer/commit/bba4f0f11d6a8b036055f7434b8d6ebf01c2fa8a))
+
 ### [0.30.2](https://github.com/devartech/cartographer/compare/v0.30.1...v0.30.2) (2026-02-07)
 
 

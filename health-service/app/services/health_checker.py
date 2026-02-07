@@ -365,44 +365,46 @@ class HealthChecker:
 
         return PingResult(success=False, packet_loss_percent=100.0)
 
+    def _blocking_dns_lookup(self, ip: str) -> DnsResult:
+        """Synchronous DNS lookup — runs in a thread pool to avoid blocking the event loop."""
+        import dns.resolver
+        import dns.reversename
+
+        start_time = time.time()
+
+        reverse_name = None
+        try:
+            addr = dns.reversename.from_address(ip)
+            answers = dns.resolver.resolve(addr, "PTR", lifetime=3)
+            if answers:
+                reverse_name = str(answers[0]).rstrip(".")
+        except Exception:
+            pass
+
+        resolution_time = (time.time() - start_time) * 1000
+
+        resolved_hostname = None
+        try:
+            resolved_hostname = socket.gethostbyaddr(ip)[0]
+        except Exception:
+            pass
+
+        return DnsResult(
+            success=reverse_name is not None or resolved_hostname is not None,
+            resolved_hostname=resolved_hostname,
+            reverse_dns=reverse_name,
+            resolution_time_ms=resolution_time,
+        )
+
     async def check_dns(self, ip: str) -> DnsResult:
-        """Perform DNS resolution and reverse DNS lookup"""
+        """Perform DNS resolution and reverse DNS lookup (non-blocking)."""
         # Security: Skip active checks if disabled (e.g., cloud deployment)
         if settings.disable_active_checks:
             logger.debug(f"Active checks disabled, skipping DNS check for {ip}")
             return DnsResult(success=False)
 
         try:
-            import dns.resolver
-            import dns.reversename
-
-            start_time = time.time()
-
-            # Reverse DNS lookup
-            reverse_name = None
-            try:
-                addr = dns.reversename.from_address(ip)
-                answers = dns.resolver.resolve(addr, "PTR")
-                if answers:
-                    reverse_name = str(answers[0]).rstrip(".")
-            except Exception:
-                pass
-
-            resolution_time = (time.time() - start_time) * 1000
-
-            # Also try socket reverse lookup as fallback
-            resolved_hostname = None
-            try:
-                resolved_hostname = socket.gethostbyaddr(ip)[0]
-            except Exception:
-                pass
-
-            return DnsResult(
-                success=reverse_name is not None or resolved_hostname is not None,
-                resolved_hostname=resolved_hostname,
-                reverse_dns=reverse_name,
-                resolution_time_ms=resolution_time,
-            )
+            return await asyncio.to_thread(self._blocking_dns_lookup, ip)
         except Exception as e:
             logger.debug(f"DNS check failed for {ip}: {e}")
             return DnsResult(success=False)
@@ -557,8 +559,14 @@ class HealthChecker:
         include_ports: bool = False,
         include_dns: bool = True,
     ) -> dict[str, DeviceMetrics]:
-        """Check health of multiple devices in parallel"""
-        tasks = [self.check_device_health(ip, include_ports, include_dns) for ip in ips]
+        """Check health of multiple devices in parallel with concurrency limiting"""
+        semaphore = asyncio.Semaphore(10)
+
+        async def _bounded_check(ip: str) -> DeviceMetrics:
+            async with semaphore:
+                return await self.check_device_health(ip, include_ports, include_dns)
+
+        tasks = [_bounded_check(ip) for ip in ips]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 

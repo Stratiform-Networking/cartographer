@@ -146,6 +146,31 @@ class TestAgentSyncHelpers:
         assert device.is_gateway is True
         assert device.device_type == "router"
 
+    def test_prepare_sync_devices_filters_and_deduplicates(self):
+        """Should drop invalid/out-of-subnet IPs and dedupe by normalized IP."""
+        from app.routers.networks import _prepare_sync_devices
+        from app.schemas.agent_sync import AgentSyncRequest, NetworkInfo, SyncDevice
+
+        sync_data = AgentSyncRequest(
+            timestamp=datetime.now(),
+            network_info=NetworkInfo(subnet="192.168.50.0/24", interface="en0"),
+            devices=[
+                SyncDevice(ip="192.168.50.10", mac="AA-BB-CC-DD-EE-FF", hostname="host-a"),
+                SyncDevice(ip="192.168.50.10", response_time_ms=4.2),  # duplicate IP
+                SyncDevice(ip="10.0.0.5"),  # out of subnet
+                SyncDevice(ip="not-an-ip"),  # invalid
+            ],
+        )
+
+        devices, stats = _prepare_sync_devices(sync_data)
+
+        assert len(devices) == 1
+        assert devices[0].ip == "192.168.50.10"
+        assert devices[0].mac == "aa:bb:cc:dd:ee:ff"
+        assert stats["deduplicated"] == 1
+        assert stats["out_of_subnet"] == 1
+        assert stats["invalid_ip"] == 1
+
     def test_initialize_layout_data_with_existing_data(self):
         """Should return existing layout data unchanged"""
         from app.routers.networks import _initialize_layout_data
@@ -294,7 +319,7 @@ class TestAgentSyncHelpers:
         _update_existing_device(existing_node, device, now)
 
         assert existing_node["hostname"] == "test-pc"
-        assert existing_node["mac"] == "AA:BB:CC:DD:EE:FF"
+        assert existing_node["mac"] == "aa:bb:cc:dd:ee:ff"
         assert existing_node["updatedAt"] == now
         assert existing_node["lastSeenAt"] == now
         assert existing_node["lastResponseMs"] == 12.5
@@ -375,7 +400,7 @@ class TestAgentSyncHelpers:
         assert node["name"] == "new-device"
         assert node["ip"] == "192.168.1.50"
         assert node["hostname"] == "new-device"
-        assert node["mac"] == "AA:BB:CC:DD:EE:FF"
+        assert node["mac"] == "aa:bb:cc:dd:ee:ff"
         assert node["role"] == "client"
         assert node["parentId"] == "root-id"
         assert node["createdAt"] == now
@@ -1824,7 +1849,7 @@ class TestUpdateRootWithGateway:
         assert result is True
         assert root["ip"] == "192.168.1.1"
         assert root["hostname"] == "router.lan"
-        assert root["mac"] == "AA:BB:CC:DD:EE:FF"
+        assert root["mac"] == "aa:bb:cc:dd:ee:ff"
         assert root["name"] == "192.168.1.1 (router.lan)"
         assert root["lastResponseMs"] == 1.5
 
@@ -1970,9 +1995,10 @@ class TestProcessDeviceSync:
         device = SyncDevice(ip="192.168.1.1")
         groups = {"Clients": {"id": "group:clients", "children": []}}
         nodes_by_ip = {}
+        nodes_by_mac = {}
 
         added, updated = _process_device_sync(
-            device, "192.168.1.1", groups, nodes_by_ip, "2024-01-01T00:00:00Z"
+            device, "192.168.1.1", groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
         )
 
         assert added == 0
@@ -1987,9 +2013,10 @@ class TestProcessDeviceSync:
         existing = {"id": "d1", "ip": "192.168.1.50", "role": "client"}
         groups = {"Clients": {"id": "group:clients", "children": []}}
         nodes_by_ip = {"192.168.1.50": existing}
+        nodes_by_mac = {}
 
         added, updated = _process_device_sync(
-            device, None, groups, nodes_by_ip, "2024-01-01T00:00:00Z"
+            device, None, groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
         )
 
         assert added == 0
@@ -2003,9 +2030,10 @@ class TestProcessDeviceSync:
         device = SyncDevice(ip="192.168.1.50")
         groups = {"Clients": {"id": "group:clients", "children": []}}
         nodes_by_ip = {}
+        nodes_by_mac = {}
 
         added, updated = _process_device_sync(
-            device, None, groups, nodes_by_ip, "2024-01-01T00:00:00Z"
+            device, None, groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
         )
 
         assert added == 1
@@ -2024,7 +2052,36 @@ class TestProcessDeviceSync:
             "Clients": {"id": "group:clients", "children": []},
         }
         nodes_by_ip = {"192.168.1.50": existing}
+        nodes_by_mac = {}
 
-        _process_device_sync(device, None, groups, nodes_by_ip, "2024-01-01T00:00:00Z")
+        _process_device_sync(
+            device, None, groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
+        )
 
         assert existing["role"] == "nas"
+
+    def test_matches_existing_device_by_mac_and_updates_ip(self):
+        """Should update existing node IP when MAC matches and IP changed."""
+        from app.routers.networks import _process_device_sync
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(ip="192.168.1.99", mac="AA-BB-CC-DD-EE-FF", hostname="renumbered")
+        existing = {
+            "id": "d1",
+            "ip": "192.168.1.50",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "role": "client",
+        }
+        groups = {"Clients": {"id": "group:clients", "children": []}}
+        nodes_by_ip = {"192.168.1.50": existing}
+        nodes_by_mac = {"aa:bb:cc:dd:ee:ff": existing}
+
+        added, updated = _process_device_sync(
+            device, None, groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
+        )
+
+        assert added == 0
+        assert updated == 1
+        assert existing["ip"] == "192.168.1.99"
+        assert "192.168.1.50" not in nodes_by_ip
+        assert nodes_by_ip["192.168.1.99"] == existing

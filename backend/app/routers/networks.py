@@ -2,6 +2,8 @@
 Network management API routes.
 """
 
+import ipaddress
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -29,6 +31,7 @@ from ..schemas import (
     NetworkUpdate,
     PermissionCreate,
     PermissionResponse,
+    SyncDevice,
 )
 from ..services import health_proxy_service
 from ..services.cache_service import CacheService, get_cache
@@ -36,6 +39,7 @@ from ..services.network_service import generate_agent_key, get_network_with_acce
 
 router = APIRouter(prefix="/networks", tags=["Networks"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -815,6 +819,125 @@ def _find_device_in_groups(groups: dict[str, dict], ip: str) -> dict | None:
     return None
 
 
+def _normalize_ip(ip: str | None) -> str | None:
+    """Normalize an IP address to canonical string form."""
+    if not ip:
+        return None
+    try:
+        return str(ipaddress.ip_address(ip.strip()))
+    except ValueError:
+        return None
+
+
+def _normalize_mac(mac: str | None) -> str | None:
+    """Normalize MAC address to lowercase colon-separated format."""
+    if not mac:
+        return None
+
+    normalized = mac.strip().lower().replace("-", ":")
+    parts = normalized.split(":")
+    if len(parts) != 6:
+        return None
+
+    try:
+        normalized_parts = [f"{int(part, 16):02x}" for part in parts]
+    except ValueError:
+        return None
+
+    return ":".join(normalized_parts)
+
+
+def _merge_sync_device_records(existing: SyncDevice, incoming: SyncDevice) -> SyncDevice:
+    """Merge duplicate sync payload records for the same IP."""
+    merged = existing.model_dump()
+
+    merged["is_gateway"] = existing.is_gateway or incoming.is_gateway
+
+    incoming_mac = _normalize_mac(incoming.mac)
+    existing_mac = _normalize_mac(existing.mac)
+    merged["mac"] = existing_mac or incoming_mac
+
+    if not merged.get("hostname") and incoming.hostname:
+        merged["hostname"] = incoming.hostname
+    if not merged.get("vendor") and incoming.vendor:
+        merged["vendor"] = incoming.vendor
+    if not merged.get("device_type") and incoming.device_type:
+        merged["device_type"] = incoming.device_type
+
+    existing_rt = existing.response_time_ms
+    incoming_rt = incoming.response_time_ms
+    if existing_rt is None and incoming_rt is not None:
+        merged["response_time_ms"] = incoming_rt
+    elif (
+        existing_rt is not None
+        and incoming_rt is not None
+        and existing_rt == 0.0
+        and incoming_rt > 0.0
+    ):
+        merged["response_time_ms"] = incoming_rt
+
+    return SyncDevice.model_validate(merged)
+
+
+def _prepare_sync_devices(sync_data: AgentSyncRequest) -> tuple[list[SyncDevice], dict[str, int]]:
+    """
+    Normalize and sanitize incoming scan payload.
+
+    - Drops invalid IPs
+    - Filters out-of-subnet addresses when subnet is provided
+    - Deduplicates devices by normalized IP within a single payload
+    """
+    stats = {
+        "invalid_ip": 0,
+        "out_of_subnet": 0,
+        "deduplicated": 0,
+    }
+
+    subnet = None
+    subnet_str = sync_data.network_info.subnet if sync_data.network_info else None
+    if subnet_str:
+        try:
+            subnet = ipaddress.ip_network(subnet_str, strict=False)
+        except ValueError:
+            logger.warning(
+                "Agent sync provided invalid subnet '%s'; skipping subnet filter", subnet_str
+            )
+
+    by_ip: dict[str, SyncDevice] = {}
+
+    for device in sync_data.devices:
+        normalized_ip = _normalize_ip(device.ip)
+        if not normalized_ip:
+            stats["invalid_ip"] += 1
+            continue
+
+        ip_obj = ipaddress.ip_address(normalized_ip)
+        if subnet and (ip_obj.version != subnet.version or ip_obj not in subnet):
+            stats["out_of_subnet"] += 1
+            continue
+
+        normalized_device = SyncDevice.model_validate(
+            {
+                "ip": normalized_ip,
+                "mac": _normalize_mac(device.mac),
+                "hostname": device.hostname,
+                "response_time_ms": device.response_time_ms,
+                "is_gateway": device.is_gateway,
+                "vendor": device.vendor,
+                "device_type": device.device_type,
+            }
+        )
+
+        existing = by_ip.get(normalized_ip)
+        if existing:
+            stats["deduplicated"] += 1
+            by_ip[normalized_ip] = _merge_sync_device_records(existing, normalized_device)
+        else:
+            by_ip[normalized_ip] = normalized_device
+
+    return list(by_ip.values()), stats
+
+
 def _update_root_with_gateway(root: dict, gateway_device, now: str) -> bool:
     """Update the root node with gateway device information.
 
@@ -835,7 +958,7 @@ def _update_root_with_gateway(root: dict, gateway_device, now: str) -> bool:
 
     root["ip"] = gateway_device.ip
     root["hostname"] = gateway_device.hostname
-    root["mac"] = gateway_device.mac
+    root["mac"] = _normalize_mac(gateway_device.mac)
     root["vendor"] = gateway_device.vendor
     root["deviceType"] = gateway_device.device_type
 
@@ -882,6 +1005,28 @@ def _build_nodes_by_ip_with_groups(root: dict, groups: dict[str, dict]) -> dict[
             nodes_by_ip[child["ip"]] = child
 
     return nodes_by_ip
+
+
+def _build_nodes_by_mac_with_groups(root: dict, groups: dict[str, dict]) -> dict[str, dict]:
+    """Build a map of all nodes indexed by normalized MAC address."""
+    nodes_by_mac: dict[str, dict] = {}
+
+    def index_mac(node: dict) -> None:
+        mac = _normalize_mac(node.get("mac"))
+        if mac:
+            nodes_by_mac[mac] = node
+
+    index_mac(root)
+
+    for group in groups.values():
+        for child in group.get("children", []):
+            index_mac(child)
+
+    for child in root.get("children", []):
+        if child.get("role") != "group":
+            index_mac(child)
+
+    return nodes_by_mac
 
 
 def _migrate_legacy_devices(root: dict, groups: dict[str, dict]) -> None:
@@ -964,8 +1109,9 @@ def _update_existing_device(existing_node: dict, device, now: str) -> None:
     """Update an existing device node with new scan data."""
     if device.hostname and not existing_node.get("hostname"):
         existing_node["hostname"] = device.hostname
-    if device.mac and not existing_node.get("mac"):
-        existing_node["mac"] = device.mac
+    normalized_mac = _normalize_mac(device.mac)
+    if normalized_mac and not existing_node.get("mac"):
+        existing_node["mac"] = normalized_mac
     # Update vendor info if not already set
     if device.vendor and not existing_node.get("vendor"):
         existing_node["vendor"] = device.vendor
@@ -1011,7 +1157,7 @@ def _create_new_device_node(device, parent_id: str, now: str, role: str | None =
         "name": display_name,
         "ip": device.ip,
         "hostname": device.hostname,
-        "mac": device.mac,
+        "mac": _normalize_mac(device.mac),
         "vendor": device.vendor,
         "deviceType": device.device_type,
         "role": role,
@@ -1052,7 +1198,12 @@ def _map_device_type_to_role(device_type: str) -> str:
 
 
 def _process_device_sync(
-    device, gateway_ip: str | None, groups: dict, nodes_by_ip: dict, now: str
+    device,
+    gateway_ip: str | None,
+    groups: dict,
+    nodes_by_ip: dict,
+    nodes_by_mac: dict,
+    now: str,
 ) -> tuple[int, int]:
     """Process a single device during sync.
 
@@ -1061,6 +1212,7 @@ def _process_device_sync(
         gateway_ip: IP of the gateway device (to skip)
         groups: Dictionary of group nodes
         nodes_by_ip: Map of existing devices by IP
+        nodes_by_mac: Map of existing devices by normalized MAC
         now: Current timestamp
 
     Returns:
@@ -1074,16 +1226,34 @@ def _process_device_sync(
     target_group_name = _get_group_for_role(role)
     existing = nodes_by_ip.get(device.ip)
 
+    # If IP changed (DHCP churn), match by MAC to avoid duplicate nodes.
+    if not existing:
+        device_mac = _normalize_mac(device.mac)
+        if device_mac:
+            existing = nodes_by_mac.get(device_mac)
+            if existing:
+                old_ip = existing.get("ip")
+                if old_ip and old_ip != device.ip:
+                    nodes_by_ip.pop(old_ip, None)
+                existing["ip"] = device.ip
+
     if existing:
         _update_existing_device(existing, device, now)
         if existing.get("role") == "client" and role != "client":
             existing["role"] = role
+        nodes_by_ip[device.ip] = existing
+        existing_mac = _normalize_mac(existing.get("mac"))
+        if existing_mac:
+            nodes_by_mac[existing_mac] = existing
         return 0, 1
 
     target_group = groups.get(target_group_name, groups["Clients"])
     new_node = _create_new_device_node(device, target_group["id"], now, role)
     target_group["children"].append(new_node)
     nodes_by_ip[device.ip] = new_node
+    device_mac = _normalize_mac(new_node.get("mac"))
+    if device_mac:
+        nodes_by_mac[device_mac] = new_node
     return 1, 0
 
 
@@ -1132,11 +1302,19 @@ async def sync_agent_scan(
     root = _ensure_root_node(layout_data, network.name)
     now = datetime.now(timezone.utc).isoformat()
 
+    devices_to_process, sanitize_stats = _prepare_sync_devices(sync_data)
+    if any(sanitize_stats.values()):
+        logger.info(
+            "Sanitized agent sync payload for network %s: %s",
+            network_id,
+            sanitize_stats,
+        )
+
     devices_added = 0
     devices_updated = 0
 
     # Handle gateway device - first try explicit is_gateway flag
-    gateway_device = next((d for d in sync_data.devices if d.is_gateway), None)
+    gateway_device = next((d for d in devices_to_process if d.is_gateway), None)
 
     # Fallback: if no explicit gateway, look for a router by device_type (from OUI)
     # Use fallback if:
@@ -1149,7 +1327,7 @@ async def sync_agent_scan(
     )
     if not gateway_device and root_is_placeholder:
         gateway_device = next(
-            (d for d in sync_data.devices if d.device_type == "router"),
+            (d for d in devices_to_process if d.device_type == "router"),
             None,
         )
 
@@ -1161,10 +1339,13 @@ async def sync_agent_scan(
     # Setup groups and device index
     groups = _ensure_groups_exist(root)
     nodes_by_ip = _build_nodes_by_ip_with_groups(root, groups)
+    nodes_by_mac = _build_nodes_by_mac_with_groups(root, groups)
 
     # Process each device
-    for device in sync_data.devices:
-        added, updated = _process_device_sync(device, gateway_ip, groups, nodes_by_ip, now)
+    for device in devices_to_process:
+        added, updated = _process_device_sync(
+            device, gateway_ip, groups, nodes_by_ip, nodes_by_mac, now
+        )
         devices_added += added
         devices_updated += updated
 
@@ -1184,7 +1365,12 @@ async def sync_agent_scan(
         devices_received=len(sync_data.devices),
         devices_added=devices_added,
         devices_updated=devices_updated,
-        message=f"Synced {devices_added} new and {devices_updated} existing devices",
+        message=(
+            f"Synced {devices_added} new and {devices_updated} existing devices"
+            f" (dropped invalid: {sanitize_stats['invalid_ip']},"
+            f" out-of-subnet: {sanitize_stats['out_of_subnet']},"
+            f" deduplicated: {sanitize_stats['deduplicated']})"
+        ),
     )
 
 

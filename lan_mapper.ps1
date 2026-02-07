@@ -79,14 +79,14 @@ function Resolve-Hostname {
 
     if (-not $hostName) {
         try {
-            $nbt = nbtstat -A $IpAddress 2>$null
-            $line = $nbt | Select-String -Pattern "<00>" | Select-Object -First 1
-            if ($line) {
-                $hostName = ($line.Line -split "\s+")[0]
-            }
-        } catch {
-            $null = $null
+        $nbt = nbtstat -A $IpAddress 2>$null
+        $line = $nbt | Select-String -Pattern "<00>" | Select-Object -First 1
+        if ($line) {
+            $hostName = ($line.Line.Trim() -split "\s+")[0]
         }
+    } catch {
+        $null = $null
+    }
     }
 
     if (-not $hostName) {
@@ -291,8 +291,8 @@ if (Test-Path $nmapFile) {
 $ipsFromNmap = $ipsFromNmap | Sort-Object -Unique
 
 foreach ($ip in $ipsFromNmap) {
-    $host = Resolve-Hostname $ip
-    "$ip | $host" | Add-Content $hostsFile
+    $resolvedHost = Resolve-Hostname $ip
+    "$ip | $resolvedHost" | Add-Content $hostsFile
 }
 
 Write-Host "Classifying hosts..."

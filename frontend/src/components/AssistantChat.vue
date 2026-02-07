@@ -68,8 +68,9 @@
           </svg>
         </button>
       </div>
-      <!-- Model selection row -->
+      <!-- Model selection row (hidden in cloud deployment) -->
       <div
+        v-if="!isCloudDeployment"
         class="flex items-center gap-2 px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-t border-slate-200/50 dark:border-slate-800/50"
       >
         <!-- Provider icon buttons -->
@@ -622,6 +623,11 @@ const props = defineProps<{
 
 const emit = defineEmits(['close']);
 
+// Cloud deployment detection - hide model/provider selection and force Claude Haiku
+const isCloudDeployment = (import.meta.env.BASE_URL || '/').startsWith('/app');
+const CLOUD_PROVIDER = 'anthropic';
+const CLOUD_MODEL = 'claude-haiku-4-5-20251001';
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -781,6 +787,13 @@ onUnmounted(() => {
 });
 
 async function fetchProviders() {
+  // In cloud deployment, force Anthropic/Claude Haiku - skip provider discovery
+  if (isCloudDeployment) {
+    selectedProvider.value = CLOUD_PROVIDER;
+    selectedModel.value = CLOUD_MODEL;
+    return;
+  }
+
   try {
     const config = await assistantApi.getAssistantConfig();
     const providers = config.providers || [];
@@ -1021,8 +1034,8 @@ async function handleSubmit() {
       },
       body: JSON.stringify({
         message,
-        provider: selectedProvider.value,
-        model: selectedModel.value || undefined,
+        provider: isCloudDeployment ? CLOUD_PROVIDER : selectedProvider.value,
+        model: isCloudDeployment ? CLOUD_MODEL : selectedModel.value || undefined,
         conversation_history: history,
         include_network_context: includeContext.value,
         network_id: props.networkId,

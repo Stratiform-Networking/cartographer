@@ -7,7 +7,6 @@ since this is the metrics service itself that handles usage data.
 
 import asyncio
 import logging
-import os
 import time
 from collections import deque
 from collections.abc import Callable
@@ -21,15 +20,6 @@ from ..config import settings
 from ..models import EndpointUsageRecord
 
 logger = logging.getLogger(__name__)
-
-POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "phc_wva5vQhVaZRCEUh691CYejTmZK60EdyqkRFToNIBVl2")
-POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
-POSTHOG_ENABLED = os.getenv("POSTHOG_ENABLED", "true").strip().lower() not in {
-    "0",
-    "false",
-    "no",
-    "off",
-}
 
 try:
     import posthog
@@ -45,19 +35,19 @@ EXCLUDED_PATHS = {"/healthz", "/ready", "/", "/docs", "/openapi.json", "/redoc"}
 USAGE_PATHS = {"/api/metrics/usage/record", "/api/metrics/usage/record/batch"}
 
 
-def _initialize_posthog() -> bool:
+def _initialize_posthog(posthog_api_key: str, posthog_host: str, posthog_enabled: bool) -> bool:
     """Initialize the PostHog client once per process."""
     global _POSTHOG_INITIALIZED
 
     if _POSTHOG_INITIALIZED:
         return True
 
-    if not POSTHOG_ENABLED or not POSTHOG_API_KEY or posthog is None:
+    if not posthog_enabled or not posthog_api_key or posthog is None:
         return False
 
     try:
-        posthog.api_key = POSTHOG_API_KEY
-        posthog.host = POSTHOG_HOST
+        posthog.api_key = posthog_api_key
+        posthog.host = posthog_host
         _POSTHOG_INITIALIZED = True
         return True
     except Exception as exc:
@@ -71,9 +61,12 @@ def _capture_posthog_api_event(
     method: str,
     status_code: int,
     response_time_ms: float,
+    posthog_api_key: str,
+    posthog_host: str,
+    posthog_enabled: bool,
 ) -> None:
     """Send a backend API usage event to PostHog."""
-    if not _initialize_posthog():
+    if not _initialize_posthog(posthog_api_key, posthog_host, posthog_enabled):
         return
 
     try:
@@ -225,6 +218,9 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             method=request.method,
             status_code=response.status_code,
             response_time_ms=response_time_ms,
+            posthog_api_key=settings.posthog_api_key,
+            posthog_host=settings.posthog_host,
+            posthog_enabled=settings.posthog_enabled,
         )
 
         # Trigger immediate flush if buffer is getting full

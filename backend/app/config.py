@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     usage_batch_size: int = 10
     usage_batch_interval_seconds: float = 5.0
 
+    # PostHog analytics
+    posthog_api_key: str = "phc_wva5vQhVaZRCEUh691CYejTmZK60EdyqkRFToNIBVl2"
+    posthog_host: str = "https://us.i.posthog.com"
+    posthog_enabled: bool = True
+
     # Redis for caching
     redis_url: str = "redis://localhost:6379"
     redis_db: int = 2  # DB 2 for backend cache (0=metrics, 1=assistant)

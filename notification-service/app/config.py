@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     disable_docs: bool = False
 
+    # PostHog analytics
+    posthog_api_key: str = "phc_wva5vQhVaZRCEUh691CYejTmZK60EdyqkRFToNIBVl2"
+    posthog_host: str = "https://us.i.posthog.com"
+    posthog_enabled: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

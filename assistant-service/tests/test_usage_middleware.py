@@ -3,6 +3,8 @@ Unit tests for usage tracking middleware.
 """
 
 import asyncio
+import base64
+import json
 from collections import deque
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,7 +25,15 @@ from app.services.usage_middleware import (
     UsageTrackingMiddleware,
     _capture_posthog_api_event,
     _initialize_posthog,
+    _is_service_bearer_token,
+    _is_user_generated_request,
 )
+
+
+def _build_token(payload: dict) -> str:
+    encoded_payload = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
+    encoded_payload = encoded_payload.rstrip("=")
+    return f"header.{encoded_payload}.signature"
 
 
 class TestUsageRecord:
@@ -537,6 +547,44 @@ class TestPostHogHelpers:
                 assert _initialize_posthog("key", "https://host", True) is True
                 assert mock_posthog.api_key == "key"
                 assert mock_posthog.host == "https://host"
+
+    def test_is_service_bearer_token_handles_invalid_values(self):
+        assert _is_service_bearer_token(None) is False
+        assert _is_service_bearer_token("invalid") is False
+        assert _is_service_bearer_token("Bearer not-a-jwt") is False
+        assert _is_service_bearer_token("Bearer a.b.c") is False
+
+    def test_is_service_bearer_token_detects_service_claims(self):
+        service_flag_token = _build_token({"service": True})
+        service_type_token = _build_token({"type": "service"})
+        user_token = _build_token({"service": False, "type": "user"})
+
+        assert _is_service_bearer_token(f"Bearer {service_flag_token}") is True
+        assert _is_service_bearer_token(f"Bearer {service_type_token}") is True
+        assert _is_service_bearer_token(f"Bearer {user_token}") is False
+
+    def test_is_user_generated_request_filters_internal_headers(self):
+        request = MagicMock()
+        request.headers = {"x-service-name": "metrics-service"}
+        assert _is_user_generated_request(request) is False
+
+    def test_is_user_generated_request_filters_service_tokens(self):
+        request = MagicMock()
+        request.headers = {"authorization": f"Bearer {_build_token({'service': True})}"}
+        assert _is_user_generated_request(request) is False
+
+    def test_is_user_generated_request_filters_probe_user_agents(self):
+        request = MagicMock()
+        request.headers = {"user-agent": "kube-probe/1.0"}
+        assert _is_user_generated_request(request) is False
+
+        request.headers = {"user-agent": "prometheus/2.0"}
+        assert _is_user_generated_request(request) is False
+
+    def test_is_user_generated_request_accepts_normal_user_traffic(self):
+        request = MagicMock()
+        request.headers = {"user-agent": "Mozilla/5.0"}
+        assert _is_user_generated_request(request) is True
 
     def test_capture_posthog_api_event_calls_capture(self):
         mock_posthog = MagicMock()

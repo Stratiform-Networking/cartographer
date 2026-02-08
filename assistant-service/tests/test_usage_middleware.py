@@ -548,6 +548,8 @@ class TestPostHogHelpers:
                     method="POST",
                     status_code=200,
                     response_time_ms=12.345,
+                    is_user_generated=True,
+                    error_type=None,
                     posthog_api_key="key",
                     posthog_host="https://host",
                     posthog_enabled=True,
@@ -559,6 +561,47 @@ class TestPostHogHelpers:
         assert kwargs["event"] == "api_request"
         assert kwargs["properties"]["path"] == "/api/assistant/chat"
         assert kwargs["properties"]["response_time_ms"] == 12.35
+
+    def test_capture_posthog_api_event_drops_non_user_non_error(self):
+        mock_posthog = MagicMock()
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                _capture_posthog_api_event(
+                    service_name="assistant-service",
+                    path="/api/assistant/chat",
+                    method="POST",
+                    status_code=200,
+                    response_time_ms=5.0,
+                    is_user_generated=False,
+                    error_type=None,
+                    posthog_api_key="key",
+                    posthog_host="https://host",
+                    posthog_enabled=True,
+                )
+
+        mock_posthog.capture.assert_not_called()
+
+    def test_capture_posthog_api_event_keeps_server_errors(self):
+        mock_posthog = MagicMock()
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                _capture_posthog_api_event(
+                    service_name="assistant-service",
+                    path="/api/assistant/chat",
+                    method="POST",
+                    status_code=500,
+                    response_time_ms=7.0,
+                    is_user_generated=False,
+                    error_type="RuntimeError",
+                    posthog_api_key="key",
+                    posthog_host="https://host",
+                    posthog_enabled=True,
+                )
+
+        mock_posthog.capture.assert_called_once()
+        kwargs = mock_posthog.capture.call_args.kwargs
+        assert kwargs["properties"]["request_source"] == "server"
+        assert kwargs["properties"]["error_type"] == "RuntimeError"
 
     def test_initialize_posthog_handles_assignment_error(self):
         class BrokenPostHog:
@@ -581,6 +624,8 @@ class TestPostHogHelpers:
                     method="POST",
                     status_code=500,
                     response_time_ms=45.0,
+                    is_user_generated=True,
+                    error_type="RuntimeError",
                     posthog_api_key="key",
                     posthog_host="https://host",
                     posthog_enabled=True,

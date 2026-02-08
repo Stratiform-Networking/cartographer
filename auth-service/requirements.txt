@@ -9,6 +9,7 @@ python-jose[cryptography]==3.4.0
 PyJWT==2.9.0
 bcrypt==4.2.0
 resend==2.19.0
+posthog>=3.0.0
 
 # External Auth Providers (cloud mode)
 svix==1.37.0  # Clerk webhook verification

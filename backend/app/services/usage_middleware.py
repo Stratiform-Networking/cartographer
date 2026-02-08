@@ -7,6 +7,7 @@ to the metrics service for aggregation.
 
 import asyncio
 import logging
+import os
 import time
 from collections import deque
 from collections.abc import Callable
@@ -21,9 +22,72 @@ from ..config import get_settings
 
 logger = logging.getLogger(__name__)
 
+POSTHOG_API_KEY = os.getenv("POSTHOG_API_KEY", "phc_wva5vQhVaZRCEUh691CYejTmZK60EdyqkRFToNIBVl2")
+POSTHOG_HOST = os.getenv("POSTHOG_HOST", "https://us.i.posthog.com")
+POSTHOG_ENABLED = os.getenv("POSTHOG_ENABLED", "true").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
+
+try:
+    import posthog
+except Exception:  # pragma: no cover - only exercised when dependency is absent
+    posthog = None
+
+_POSTHOG_INITIALIZED = False
+
 # Excluded paths and prefixes (not configurable - these are internal)
 EXCLUDED_PATHS = {"/healthz", "/ready", "/", "/docs", "/openapi.json", "/redoc", "/favicon.png"}
 EXCLUDED_PREFIXES = ("/docs", "/openapi", "/assets", "/api/metrics/usage")
+
+
+def _initialize_posthog() -> bool:
+    """Initialize the PostHog client once per process."""
+    global _POSTHOG_INITIALIZED
+
+    if _POSTHOG_INITIALIZED:
+        return True
+
+    if not POSTHOG_ENABLED or not POSTHOG_API_KEY or posthog is None:
+        return False
+
+    try:
+        posthog.api_key = POSTHOG_API_KEY
+        posthog.host = POSTHOG_HOST
+        _POSTHOG_INITIALIZED = True
+        return True
+    except Exception as exc:
+        logger.debug(f"Failed to initialize PostHog: {exc}")
+        return False
+
+
+def _capture_posthog_api_event(
+    service_name: str,
+    path: str,
+    method: str,
+    status_code: int,
+    response_time_ms: float,
+) -> None:
+    """Send a backend API usage event to PostHog."""
+    if not _initialize_posthog():
+        return
+
+    try:
+        posthog.capture(
+            distinct_id=f"service:{service_name}",
+            event="api_request",
+            properties={
+                "service": service_name,
+                "path": path,
+                "method": method,
+                "status_code": status_code,
+                "response_time_ms": round(response_time_ms, 2),
+            },
+        )
+    except Exception as exc:
+        logger.debug(f"Failed to capture PostHog event: {exc}")
 
 
 class UsageRecord:
@@ -189,6 +253,13 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
 
         # Add to buffer (non-blocking)
         self._buffer.append(record)
+        _capture_posthog_api_event(
+            service_name=self.service_name,
+            path=path,
+            method=request.method,
+            status_code=response.status_code,
+            response_time_ms=response_time_ms,
+        )
 
         # Trigger immediate flush if buffer is getting full
         if len(self._buffer) >= self._settings.usage_batch_size:

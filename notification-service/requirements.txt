@@ -21,6 +21,7 @@ aiohttp>=3.9.0
 # Additional utilities
 python-dateutil>=2.8.0
 python-multipart>=0.0.6
+posthog>=3.0.0
 
 # Database
 sqlalchemy>=2.0.0

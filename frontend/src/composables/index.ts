@@ -15,6 +15,7 @@ export { useNetworkData } from './useNetworkData';
 export { useMapLayout } from './useMapLayout';
 export { useDarkMode } from './useDarkMode';
 export { useAutoSave } from './useAutoSave';
+export { usePostHog } from './usePostHog';
 
 // NOTE: Type re-exports removed. Import types from their canonical locations:
 // - Network types: import from 'types/networks'

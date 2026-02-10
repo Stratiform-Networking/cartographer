@@ -322,8 +322,8 @@
 
       <!-- Settings Group -->
       <div class="flex items-center gap-0.5">
-        <!-- Health Monitoring Button -->
-        <div class="relative">
+        <!-- Health Monitoring Button (hidden in cloud deployment) -->
+        <div v-if="!isCloudDeployment" class="relative">
           <button
             @click="showHealthSettings = !showHealthSettings"
             class="flex items-center justify-center w-8 h-8 rounded-md transition-colors"

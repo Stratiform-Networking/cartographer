@@ -9,6 +9,7 @@ import { ref, computed, readonly } from 'vue';
 import type { Clerk } from '@clerk/clerk-js';
 import { setOnUnauthorized, extractErrorMessage } from '../api/client';
 import * as authApi from '../api/auth';
+import { syncPostHogUser, resetPostHogUser } from './usePostHog';
 import type {
   User,
   SetupStatus,
@@ -50,6 +51,7 @@ function clearAuth(): void {
   user.value = null;
   permissions.value = [];
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  resetPostHogUser();
 }
 
 // Set up the unauthorized callback
@@ -81,6 +83,7 @@ function initFromStorage(): void {
       if (state.expiresAt > Date.now()) {
         token.value = state.token;
         user.value = state.user;
+        syncPostHogUser(state.user);
         console.log('[Auth] Restored session for:', state.user.username);
       } else {
         console.log('[Auth] Stored session expired, clearing');
@@ -157,6 +160,7 @@ async function login(request: LoginRequest): Promise<User> {
 
     // Save to storage
     saveToStorage(access_token, authUser, expires_in);
+    syncPostHogUser(authUser);
 
     console.log('[Auth] Login successful:', authUser.username);
     return authUser;
@@ -183,6 +187,7 @@ async function loginWithClerkToken(clerkToken: string): Promise<User> {
 
     // Save to storage
     saveToStorage(access_token, authUser, expires_in);
+    syncPostHogUser(authUser);
 
     console.log('[Auth] Clerk login successful:', authUser.username);
     return authUser;
@@ -253,6 +258,7 @@ async function refreshSession(): Promise<{ user: User; permissions: string[] } |
     const sessionInfo = await authApi.getSessionInfo();
     user.value = sessionInfo.user;
     permissions.value = sessionInfo.permissions;
+    syncPostHogUser(sessionInfo.user);
     return sessionInfo;
   } catch (e: unknown) {
     const axiosError = e as { response?: { status?: number } };
@@ -290,6 +296,7 @@ async function updateUser(userId: string, request: UserUpdateRequest): Promise<U
     // Update local user if it's the current user
     if (user.value && user.value.id === userId) {
       user.value = updatedUser;
+      syncPostHogUser(updatedUser);
     }
 
     return updatedUser;

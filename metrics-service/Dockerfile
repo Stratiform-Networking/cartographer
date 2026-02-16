@@ -26,6 +26,11 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # Application code
 COPY app/ /app/app/
 
+# Run as non-root user
+RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app && \
+    chown -R app:app /app
+USER app
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8003/healthz || exit 1

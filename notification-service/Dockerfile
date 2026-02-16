@@ -30,6 +30,11 @@ COPY alembic.ini ./
 # Create data directory
 RUN mkdir -p /app/data
 
+# Run as non-root user
+RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app && \
+    chown -R app:app /app
+USER app
+
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1

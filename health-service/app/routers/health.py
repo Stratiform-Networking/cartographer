@@ -1,3 +1,4 @@
+import ipaddress
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
@@ -23,6 +24,14 @@ from ..services.notification_reporter import sync_devices_with_notification_serv
 router = APIRouter(prefix="/health", tags=["health"])
 
 
+def _validate_ip(ip: str) -> None:
+    """Validate that the string is a valid IPv4 or IPv6 address."""
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid IP address: {ip}")
+
+
 @router.get("/check/{ip}", response_model=DeviceMetrics)
 async def check_single_device(
     ip: str,
@@ -36,6 +45,7 @@ async def check_single_device(
     Note: When DISABLE_ACTIVE_CHECKS=true (cloud deployment), this returns cached
     data from agent syncs. Use /cached/{ip} instead for consistent behavior.
     """
+    _validate_ip(ip)
     # In cloud mode, return cached data from agent syncs instead of performing
     # active checks which would incorrectly mark devices as unhealthy
     if settings.disable_active_checks:
@@ -97,6 +107,7 @@ async def get_cached_metrics(ip: str):
     Get cached metrics for a device without performing a new check.
     Returns None if no cached data exists.
     """
+    _validate_ip(ip)
     metrics = health_checker.get_cached_metrics(ip)
     if metrics is None:
         raise HTTPException(status_code=404, detail="No cached data for this IP")
@@ -168,6 +179,7 @@ async def quick_ping(ip: str, count: int = Query(3, ge=1, le=10)):
     Perform a quick ping test on a device.
     Lightweight endpoint for just ping data.
     """
+    _validate_ip(ip)
     try:
         result = await health_checker.ping_host(ip, count=count)
         return result
@@ -181,6 +193,7 @@ async def scan_ports(ip: str):
     Scan common ports on a device.
     Returns only open ports.
     """
+    _validate_ip(ip)
     try:
         open_ports = await health_checker.scan_common_ports(ip)
         return {"ip": ip, "open_ports": open_ports}
@@ -194,6 +207,7 @@ async def check_dns(ip: str):
     Perform DNS lookup for an IP address.
     Returns reverse DNS and hostname resolution.
     """
+    _validate_ip(ip)
     try:
         result = await health_checker.check_dns(ip)
         return result

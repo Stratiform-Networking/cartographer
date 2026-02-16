@@ -6,6 +6,8 @@ to the metrics service for aggregation.
 """
 
 import asyncio
+import base64
+import json
 import logging
 import time
 from collections import deque
@@ -31,6 +33,7 @@ _POSTHOG_INITIALIZED = False
 # Excluded paths and prefixes (not configurable - these are internal)
 EXCLUDED_PATHS = {"/healthz", "/ready", "/", "/docs", "/openapi.json", "/redoc", "/favicon.png"}
 EXCLUDED_PREFIXES = ("/docs", "/openapi", "/assets", "/api/metrics/usage")
+INTERNAL_HEADER_KEYS = ("x-service-name", "x-request-signature", "x-request-timestamp")
 
 
 def _initialize_posthog(posthog_api_key: str, posthog_host: str, posthog_enabled: bool) -> bool:
@@ -53,31 +56,83 @@ def _initialize_posthog(posthog_api_key: str, posthog_host: str, posthog_enabled
         return False
 
 
+def _is_service_bearer_token(authorization: str | None) -> bool:
+    """Best-effort check for service-to-service bearer tokens without signature verification."""
+    if not authorization:
+        return False
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return False
+
+    token_parts = parts[1].split(".")
+    if len(token_parts) < 2:
+        return False
+
+    try:
+        payload_segment = token_parts[1]
+        padding = "=" * (-len(payload_segment) % 4)
+        payload_json = base64.urlsafe_b64decode((payload_segment + padding).encode("utf-8"))
+        payload = json.loads(payload_json.decode("utf-8"))
+    except Exception:
+        return False
+
+    return payload.get("service") is True or str(payload.get("type", "")).lower() == "service"
+
+
+def _is_user_generated_request(request: Request) -> bool:
+    """Classify request origin for analytics filtering."""
+    headers = request.headers
+
+    for header_key in INTERNAL_HEADER_KEYS:
+        if headers.get(header_key):
+            return False
+
+    if _is_service_bearer_token(headers.get("authorization")):
+        return False
+
+    user_agent = (headers.get("user-agent") or "").lower()
+    if user_agent.startswith("kube-probe/") or user_agent.startswith("prometheus/"):
+        return False
+
+    return True
+
+
 def _capture_posthog_api_event(
     service_name: str,
     path: str,
     method: str,
     status_code: int,
     response_time_ms: float,
+    is_user_generated: bool,
+    error_type: str | None,
     posthog_api_key: str,
     posthog_host: str,
     posthog_enabled: bool,
 ) -> None:
     """Send a backend API usage event to PostHog."""
+    if not is_user_generated and status_code < 500:
+        return
+
     if not _initialize_posthog(posthog_api_key, posthog_host, posthog_enabled):
         return
+
+    properties = {
+        "service": service_name,
+        "path": path,
+        "method": method,
+        "status_code": status_code,
+        "response_time_ms": round(response_time_ms, 2),
+        "request_source": "user" if is_user_generated else "server",
+    }
+    if error_type:
+        properties["error_type"] = error_type
 
     try:
         posthog.capture(
             distinct_id=f"service:{service_name}",
             event="api_request",
-            properties={
-                "service": service_name,
-                "path": path,
-                "method": method,
-                "status_code": status_code,
-                "response_time_ms": round(response_time_ms, 2),
-            },
+            properties=properties,
         )
     except Exception as exc:
         logger.debug(f"Failed to capture PostHog event: {exc}")
@@ -227,9 +282,26 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
 
         # Track timing
         start_time = time.perf_counter()
+        is_user_generated = _is_user_generated_request(request)
 
         # Process request
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            response_time_ms = (time.perf_counter() - start_time) * 1000
+            _capture_posthog_api_event(
+                service_name=self.service_name,
+                path=path,
+                method=request.method,
+                status_code=500,
+                response_time_ms=response_time_ms,
+                is_user_generated=is_user_generated,
+                error_type=exc.__class__.__name__,
+                posthog_api_key=self._settings.posthog_api_key,
+                posthog_host=self._settings.posthog_host,
+                posthog_enabled=self._settings.posthog_enabled,
+            )
+            raise
 
         # Calculate response time
         response_time_ms = (time.perf_counter() - start_time) * 1000
@@ -252,6 +324,8 @@ class UsageTrackingMiddleware(BaseHTTPMiddleware):
             method=request.method,
             status_code=response.status_code,
             response_time_ms=response_time_ms,
+            is_user_generated=is_user_generated,
+            error_type=None,
             posthog_api_key=self._settings.posthog_api_key,
             posthog_host=self._settings.posthog_host,
             posthog_enabled=self._settings.posthog_enabled,

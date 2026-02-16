@@ -54,8 +54,9 @@ export function useNetworks() {
     } catch (e: unknown) {
       const axiosError = e as { response?: { status?: number }; message?: string };
       console.error('[Networks] Fetch failed:', axiosError.response?.status, axiosError.message);
-      error.value = extractErrorMessage(e);
-      const err = new Error(error.value!) as Error & { status?: number };
+      const message = extractErrorMessage(e);
+      error.value = message;
+      const err = new Error(message) as Error & { status?: number };
       err.status = axiosError.response?.status;
       throw err;
     } finally {

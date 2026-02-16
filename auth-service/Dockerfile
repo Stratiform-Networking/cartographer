@@ -33,6 +33,11 @@ COPY migrations/ /app/migrations/
 # Create data directory for persistent storage
 RUN mkdir -p /app/data
 
+# Run as non-root user
+RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app && \
+    chown -R app:app /app
+USER app
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8002/healthz || exit 1

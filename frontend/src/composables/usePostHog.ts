@@ -7,6 +7,15 @@ const POSTHOG_DEFAULTS = import.meta.env.VITE_POSTHOG_DEFAULTS || '2025-11-30';
 
 let initialized = false;
 
+export interface PostHogUserInfo {
+  id?: string | null;
+  username?: string | null;
+  email?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  role?: string | null;
+}
+
 export function usePostHog() {
   if (!initialized && typeof window !== 'undefined') {
     posthog.init(POSTHOG_API_KEY, {
@@ -19,4 +28,37 @@ export function usePostHog() {
   }
 
   return { posthog };
+}
+
+function resolveDistinctId(user: PostHogUserInfo): string | null {
+  return user.id || user.username || user.email || null;
+}
+
+export function syncPostHogUser(user: PostHogUserInfo | null | undefined): void {
+  if (!user || typeof window === 'undefined') {
+    return;
+  }
+
+  const distinctId = resolveDistinctId(user);
+  if (!distinctId) {
+    return;
+  }
+
+  usePostHog();
+  posthog.identify(distinctId, {
+    username: user.username,
+    email: user.email,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    role: user.role,
+  });
+}
+
+export function resetPostHogUser(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  usePostHog();
+  posthog.reset();
 }

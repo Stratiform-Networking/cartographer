@@ -6,6 +6,7 @@
 
 import { ref, computed } from 'vue';
 import * as healthApi from '../api/health';
+import { toApiError } from '../api/client';
 import type { DeviceMetrics } from '../types/network';
 
 // Re-export types for backwards compatibility
@@ -21,6 +22,9 @@ const monitoringConfig = ref<healthApi.MonitoringConfig>({
 const monitoringStatus = ref<healthApi.MonitoringStatus | null>(null);
 const isPolling = ref(false);
 let pollInterval: ReturnType<typeof setInterval> | null = null;
+let lastCachedMetricsUnavailableLogAt = 0;
+
+const CACHED_METRICS_ERROR_LOG_COOLDOWN_MS = 60_000;
 
 export function useHealthMonitoring() {
   /**
@@ -41,8 +45,14 @@ export function useHealthMonitoring() {
 
       // Trigger an immediate check so we have data right away
       if (triggerCheck && ips.length > 0) {
-        console.log('[Health] Triggering immediate health check...');
-        await triggerImmediateCheck();
+        if (response.active_monitoring) {
+          console.log('[Health] Triggering immediate health check...');
+          await triggerImmediateCheck();
+        } else {
+          // Cloud mode: active checks are disabled and metrics come from agent sync.
+          console.log('[Health] Active checks disabled on backend; using cached metrics only');
+          await fetchAllCachedMetrics();
+        }
       }
     } catch (error) {
       console.error('[Health] Failed to register devices:', error);
@@ -104,8 +114,22 @@ export function useHealthMonitoring() {
       }
       return data;
     } catch (error) {
+      const apiError = toApiError(error);
+      const isUpstreamUnavailable = [502, 503, 504].includes(apiError.status);
+
+      if (isUpstreamUnavailable) {
+        const now = Date.now();
+        if (now - lastCachedMetricsUnavailableLogAt >= CACHED_METRICS_ERROR_LOG_COOLDOWN_MS) {
+          console.warn(
+            `[Health] Cached metrics temporarily unavailable (${apiError.status}): ${apiError.message}`
+          );
+          lastCachedMetricsUnavailableLogAt = now;
+        }
+        return cachedMetrics.value;
+      }
+
       console.error('[Health] Failed to fetch cached metrics:', error);
-      return {};
+      return cachedMetrics.value;
     }
   }
 
@@ -125,6 +149,20 @@ export function useHealthMonitoring() {
       // Fetch updated cached metrics after check
       await fetchAllCachedMetrics();
     } catch (error) {
+      const apiError = toApiError(error);
+      const detail = apiError.detail || apiError.message;
+      const isExpectedSkip =
+        apiError.status === 400 &&
+        (detail.includes('disabled in cloud deployment') ||
+          detail.includes('No devices registered for monitoring'));
+
+      if (isExpectedSkip) {
+        // Expected in cloud mode or before any device registration completes.
+        console.log(`[Health] Immediate check skipped: ${detail}`);
+        await fetchAllCachedMetrics();
+        return;
+      }
+
       console.error('[Health] Failed to trigger check:', error);
     }
   }

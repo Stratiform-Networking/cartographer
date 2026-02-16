@@ -678,6 +678,181 @@ class TestUserSync:
         assert updated is True
         mock_db.add.assert_called_once()  # ProviderLink added
 
+    async def test_sync_manual_signup_then_oauth_same_email(self):
+        """Should link OAuth to manually created account with same email (case-insensitive)."""
+        from app.identity.sync import sync_provider_user
+
+        now = datetime.now(timezone.utc)
+        # OAuth claims with mixed-case email (as might come from Google)
+        claims = IdentityClaims(
+            provider=AuthProvider.CLERK,
+            provider_user_id="clerk_google_456",
+            auth_method=AuthMethod.SOCIAL_OAUTH,
+            email="User@Gmail.com",
+            email_verified=True,
+            username=None,
+            first_name="Test",
+            last_name="User",
+            avatar_url=None,
+            session_id=None,
+            issued_at=now,
+            expires_at=None,
+            org_id=None,
+            org_slug=None,
+            org_role=None,
+            connection_id=None,
+            connection_type=None,
+            idp_id=None,
+            directory_id=None,
+            raw_attributes=None,
+            local_user_id=None,
+        )
+
+        mock_db = AsyncMock()
+        # Simulate a manually-created user (no ProviderLink)
+        existing_user = MagicMock()
+        existing_user.id = str(uuid4())
+        existing_user.email = "user@gmail.com"  # stored lowercase from manual signup
+        existing_user.first_name = "Manual"
+
+        # No existing provider link
+        mock_result1 = MagicMock()
+        mock_result1.scalar_one_or_none.return_value = None
+
+        # Email match found (case-insensitive via func.lower)
+        mock_result2 = MagicMock()
+        mock_result2.scalar_one_or_none.return_value = existing_user
+
+        mock_db.execute = AsyncMock(side_effect=[mock_result1, mock_result2])
+        mock_db.add = MagicMock()
+        mock_db.commit = AsyncMock()
+
+        user_id, created, updated = await sync_provider_user(mock_db, claims)
+
+        assert str(user_id) == existing_user.id
+        assert created is False  # Should NOT create a new user
+        mock_db.add.assert_called_once()  # Should add ProviderLink only
+
+    async def test_sync_empty_email_skips_match(self):
+        """Should skip email matching and create new user when email is empty."""
+        from app.identity.sync import sync_provider_user
+
+        now = datetime.now(timezone.utc)
+        claims = IdentityClaims(
+            provider=AuthProvider.CLERK,
+            provider_user_id="clerk_no_email",
+            auth_method=AuthMethod.SOCIAL_OAUTH,
+            email="",
+            email_verified=False,
+            username="noemailer",
+            first_name="No",
+            last_name="Email",
+            avatar_url=None,
+            session_id=None,
+            issued_at=now,
+            expires_at=None,
+            org_id=None,
+            org_slug=None,
+            org_role=None,
+            connection_id=None,
+            connection_type=None,
+            idp_id=None,
+            directory_id=None,
+            raw_attributes=None,
+            local_user_id=None,
+        )
+
+        mock_db = AsyncMock()
+
+        # No existing link
+        mock_result1 = MagicMock()
+        mock_result1.scalar_one_or_none.return_value = None
+
+        # Username check for _create_new_user (no existing username)
+        mock_result2 = MagicMock()
+        mock_result2.scalar_one_or_none.return_value = None
+
+        mock_db.execute = AsyncMock(side_effect=[mock_result1, mock_result2])
+        mock_db.add = MagicMock()
+        mock_db.flush = AsyncMock()
+        mock_db.commit = AsyncMock()
+
+        user_id, created, updated = await sync_provider_user(mock_db, claims)
+
+        assert user_id is not None
+        assert created is True
+        # Should only have 1 execute call for provider link check
+        # No email match query since email is empty
+        # Username check happens inside _create_new_user via _get_unique_username
+        # but the first execute is the provider link check
+        assert mock_db.execute.call_count >= 1
+
+    async def test_sync_integrity_error_falls_back_to_link(self):
+        """Should fall back to linking existing user when create fails with IntegrityError."""
+        from sqlalchemy.exc import IntegrityError
+
+        from app.identity.sync import sync_provider_user
+
+        now = datetime.now(timezone.utc)
+        claims = IdentityClaims(
+            provider=AuthProvider.CLERK,
+            provider_user_id="clerk_race_789",
+            auth_method=AuthMethod.SOCIAL_OAUTH,
+            email="race@example.com",
+            email_verified=True,
+            username=None,
+            first_name="Race",
+            last_name="Condition",
+            avatar_url=None,
+            session_id=None,
+            issued_at=now,
+            expires_at=None,
+            org_id=None,
+            org_slug=None,
+            org_role=None,
+            connection_id=None,
+            connection_type=None,
+            idp_id=None,
+            directory_id=None,
+            raw_attributes=None,
+            local_user_id=None,
+        )
+
+        mock_db = AsyncMock()
+        existing_user = MagicMock()
+        existing_user.id = str(uuid4())
+        existing_user.first_name = "Existing"
+
+        # No existing link
+        mock_result1 = MagicMock()
+        mock_result1.scalar_one_or_none.return_value = None
+
+        # No email match on first check (race condition: user created between check and insert)
+        mock_result2 = MagicMock()
+        mock_result2.scalar_one_or_none.return_value = None
+
+        # Username check
+        mock_result3 = MagicMock()
+        mock_result3.scalar_one_or_none.return_value = None
+
+        # After rollback, email match finds the user
+        mock_result4 = MagicMock()
+        mock_result4.scalar_one_or_none.return_value = existing_user
+
+        mock_db.execute = AsyncMock(
+            side_effect=[mock_result1, mock_result2, mock_result3, mock_result4]
+        )
+        mock_db.add = MagicMock()
+        mock_db.flush = AsyncMock(side_effect=IntegrityError("", {}, Exception("duplicate key")))
+        mock_db.rollback = AsyncMock()
+        mock_db.commit = AsyncMock()
+
+        user_id, created, updated = await sync_provider_user(mock_db, claims)
+
+        assert str(user_id) == existing_user.id
+        assert created is False  # Fell back to linking, not creating
+        mock_db.rollback.assert_called_once()
+
     async def test_sync_provider_user_create_new(self):
         """Should create new user when no match found"""
         from app.identity.sync import sync_provider_user

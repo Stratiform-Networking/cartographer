@@ -171,9 +171,11 @@ onMounted(async () => {
     } else {
       throw new Error('No active session after OAuth callback');
     }
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('[OAuth] Callback error:', e);
-    error.value = e.message || 'Failed to complete sign in. Please try again.';
+    const message =
+      e instanceof Error ? e.message : 'Failed to complete sign in. Please try again.';
+    error.value = message;
     statusTitle.value = 'Sign In Failed';
     hasStartedProcessing = false;
   }

@@ -343,8 +343,8 @@ class TestAgentSyncHelpers:
 
         assert existing_node["hostname"] == "original-name"
 
-    def test_update_existing_device_preserves_existing_mac(self):
-        """Should not overwrite existing MAC address"""
+    def test_update_existing_device_updates_changed_mac(self):
+        """Should update MAC when incoming MAC differs from existing"""
         from app.routers.networks import _update_existing_device
         from app.schemas.agent_sync import SyncDevice
 
@@ -352,7 +352,7 @@ class TestAgentSyncHelpers:
             "id": "node-1",
             "ip": "192.168.1.10",
             "hostname": None,
-            "mac": "AA:BB:CC:DD:EE:FF",
+            "mac": "aa:bb:cc:dd:ee:ff",
         }
 
         device = SyncDevice(ip="192.168.1.10", mac="11:22:33:44:55:66")
@@ -360,7 +360,26 @@ class TestAgentSyncHelpers:
 
         _update_existing_device(existing_node, device, now)
 
-        assert existing_node["mac"] == "AA:BB:CC:DD:EE:FF"
+        assert existing_node["mac"] == "11:22:33:44:55:66"
+
+    def test_update_existing_device_preserves_identical_mac(self):
+        """Should not change MAC when incoming MAC is the same (normalized)"""
+        from app.routers.networks import _update_existing_device
+        from app.schemas.agent_sync import SyncDevice
+
+        existing_node = {
+            "id": "node-1",
+            "ip": "192.168.1.10",
+            "hostname": None,
+            "mac": "aa:bb:cc:dd:ee:ff",
+        }
+
+        device = SyncDevice(ip="192.168.1.10", mac="AA:BB:CC:DD:EE:FF")
+        now = "2024-12-01T12:00:00Z"
+
+        _update_existing_device(existing_node, device, now)
+
+        assert existing_node["mac"] == "aa:bb:cc:dd:ee:ff"
 
     def test_update_existing_device_without_response_time(self):
         """Should handle missing response time"""
@@ -2085,3 +2104,51 @@ class TestProcessDeviceSync:
         assert existing["ip"] == "192.168.1.99"
         assert "192.168.1.50" not in nodes_by_ip
         assert nodes_by_ip["192.168.1.99"] == existing
+
+    def test_same_ip_different_mac_updates_mac(self):
+        """Should update MAC when device keeps same IP but has new MAC."""
+        from app.routers.networks import _process_device_sync
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(ip="192.168.1.50", mac="11:22:33:44:55:66")
+        existing = {
+            "id": "d1",
+            "ip": "192.168.1.50",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "role": "client",
+        }
+        groups = {"Clients": {"id": "group:clients", "children": []}}
+        nodes_by_ip = {"192.168.1.50": existing}
+        nodes_by_mac = {"aa:bb:cc:dd:ee:ff": existing}
+
+        added, updated = _process_device_sync(
+            device, None, groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
+        )
+
+        assert added == 0
+        assert updated == 1
+        assert existing["mac"] == "11:22:33:44:55:66"
+        assert nodes_by_mac["11:22:33:44:55:66"] is existing
+
+    def test_same_ip_different_mac_cleans_stale_mac_index(self):
+        """Old MAC should be removed from index when MAC changes."""
+        from app.routers.networks import _process_device_sync
+        from app.schemas.agent_sync import SyncDevice
+
+        device = SyncDevice(ip="192.168.1.50", mac="11:22:33:44:55:66")
+        existing = {
+            "id": "d1",
+            "ip": "192.168.1.50",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "role": "client",
+        }
+        groups = {"Clients": {"id": "group:clients", "children": []}}
+        nodes_by_ip = {"192.168.1.50": existing}
+        nodes_by_mac = {"aa:bb:cc:dd:ee:ff": existing}
+
+        _process_device_sync(
+            device, None, groups, nodes_by_ip, nodes_by_mac, "2024-01-01T00:00:00Z"
+        )
+
+        assert "aa:bb:cc:dd:ee:ff" not in nodes_by_mac
+        assert "11:22:33:44:55:66" in nodes_by_mac

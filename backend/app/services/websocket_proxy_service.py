@@ -12,9 +12,13 @@ Features:
 """
 
 import asyncio
+import logging
 
 import websockets
 from fastapi import WebSocket, WebSocketDisconnect
+from websockets.exceptions import ConnectionClosed
+
+logger = logging.getLogger(__name__)
 
 
 async def forward_to_client(
@@ -31,9 +35,10 @@ async def forward_to_client(
     try:
         async for message in upstream_ws:
             await client_ws.send_text(message)
-    except Exception:
-        # Connection closed or error - let the main handler deal with cleanup
-        pass
+    except ConnectionClosed:
+        pass  # Normal disconnect
+    except Exception as e:
+        logger.warning(f"WebSocket upstream->client error: {e}")
 
 
 async def forward_to_upstream(
@@ -51,9 +56,10 @@ async def forward_to_upstream(
         while True:
             data = await client_ws.receive_text()
             await upstream_ws.send(data)
-    except Exception:
-        # Connection closed or error - let the main handler deal with cleanup
-        pass
+    except WebSocketDisconnect:
+        pass  # Normal disconnect
+    except Exception as e:
+        logger.warning(f"WebSocket client->upstream error: {e}")
 
 
 async def proxy_websocket(
@@ -88,10 +94,9 @@ async def proxy_websocket(
                 return_exceptions=True,
             )
     except WebSocketDisconnect:
-        # Client disconnected - normal operation
-        pass
-    except Exception:
-        # Connection error or other issue - close gracefully
+        pass  # Client disconnected - normal operation
+    except Exception as e:
+        logger.warning(f"WebSocket proxy connection error for {upstream_url}: {e}")
         try:
             await client_ws.close()
         except Exception:

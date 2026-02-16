@@ -614,6 +614,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import * as assistantApi from '../api/assistant';
 import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { apiUrl } from '../config';
 
 // Props for network context
@@ -988,9 +989,8 @@ marked.setOptions({
 });
 
 function formatMessage(content: string): string {
-  // Use marked to parse markdown
   const html = marked.parse(content, { async: false }) as string;
-  return html;
+  return DOMPurify.sanitize(html);
 }
 
 async function sendMessage(content: string) {

@@ -1110,7 +1110,7 @@ def _update_existing_device(existing_node: dict, device, now: str) -> None:
     if device.hostname and not existing_node.get("hostname"):
         existing_node["hostname"] = device.hostname
     normalized_mac = _normalize_mac(device.mac)
-    if normalized_mac and not existing_node.get("mac"):
+    if normalized_mac and existing_node.get("mac") != normalized_mac:
         existing_node["mac"] = normalized_mac
     # Update vendor info if not already set
     if device.vendor and not existing_node.get("vendor"):
@@ -1197,6 +1197,30 @@ def _map_device_type_to_role(device_type: str) -> str:
     return mapping.get(device_type, "client")
 
 
+def _find_by_mac(device, nodes_by_ip: dict, nodes_by_mac: dict) -> dict | None:
+    """Try to find an existing node by MAC when IP lookup missed (DHCP churn)."""
+    device_mac = _normalize_mac(device.mac)
+    if not device_mac:
+        return None
+    existing = nodes_by_mac.get(device_mac)
+    if not existing:
+        return None
+    old_ip = existing.get("ip")
+    if old_ip and old_ip != device.ip:
+        nodes_by_ip.pop(old_ip, None)
+    existing["ip"] = device.ip
+    return existing
+
+
+def _update_mac_index(existing: dict, old_mac: str | None, nodes_by_mac: dict) -> None:
+    """Update the MAC index after a device update, removing stale entries."""
+    new_mac = _normalize_mac(existing.get("mac"))
+    if new_mac:
+        nodes_by_mac[new_mac] = existing
+    if old_mac and old_mac != new_mac:
+        nodes_by_mac.pop(old_mac, None)
+
+
 def _process_device_sync(
     device,
     gateway_ip: str | None,
@@ -1218,42 +1242,27 @@ def _process_device_sync(
     Returns:
         Tuple of (devices_added, devices_updated) counts
     """
-    # Skip gateway device (already handled as root)
     if gateway_ip and device.ip == gateway_ip:
         return 0, 0
 
     role = _classify_device_role(device)
-    target_group_name = _get_group_for_role(role)
-    existing = nodes_by_ip.get(device.ip)
-
-    # If IP changed (DHCP churn), match by MAC to avoid duplicate nodes.
-    if not existing:
-        device_mac = _normalize_mac(device.mac)
-        if device_mac:
-            existing = nodes_by_mac.get(device_mac)
-            if existing:
-                old_ip = existing.get("ip")
-                if old_ip and old_ip != device.ip:
-                    nodes_by_ip.pop(old_ip, None)
-                existing["ip"] = device.ip
+    existing = nodes_by_ip.get(device.ip) or _find_by_mac(device, nodes_by_ip, nodes_by_mac)
 
     if existing:
+        old_mac = _normalize_mac(existing.get("mac"))
         _update_existing_device(existing, device, now)
         if existing.get("role") == "client" and role != "client":
             existing["role"] = role
         nodes_by_ip[device.ip] = existing
-        existing_mac = _normalize_mac(existing.get("mac"))
-        if existing_mac:
-            nodes_by_mac[existing_mac] = existing
+        _update_mac_index(existing, old_mac, nodes_by_mac)
         return 0, 1
 
+    target_group_name = _get_group_for_role(role)
     target_group = groups.get(target_group_name, groups["Clients"])
     new_node = _create_new_device_node(device, target_group["id"], now, role)
     target_group["children"].append(new_node)
     nodes_by_ip[device.ip] = new_node
-    device_mac = _normalize_mac(new_node.get("mac"))
-    if device_mac:
-        nodes_by_mac[device_mac] = new_node
+    _update_mac_index(new_node, None, nodes_by_mac)
     return 1, 0
 
 

@@ -9,7 +9,8 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db_models import ProviderLink, User, UserRole
@@ -25,7 +26,7 @@ def _update_user_profile(user: User, claims: IdentityClaims) -> bool:
     if claims.last_name:
         user.last_name = claims.last_name
     if claims.email:
-        user.email = claims.email
+        user.email = claims.email.strip().lower()
     user.is_verified = claims.email_verified
     user.updated_at = datetime.now(timezone.utc)
     return True
@@ -106,7 +107,7 @@ async def _create_new_user(
     new_user = User(
         id=str(uuid4()),
         username=username,
-        email=claims.email.lower(),
+        email=claims.email.strip().lower(),
         first_name=claims.first_name or "",
         last_name=claims.last_name or "",
         hashed_password="",  # No password for external auth
@@ -166,18 +167,46 @@ async def sync_provider_user(
     if link:
         return await _handle_existing_link(db, link, claims, update_profile)
 
-    # No link found - try to match by email
-    result = await db.execute(select(User).where(User.email == claims.email.lower()))
-    user = result.scalar_one_or_none()
+    # No link found - try to match by email (case-insensitive, strip whitespace)
+    email_normalized = claims.email.strip().lower() if claims.email else ""
 
-    if user:
-        return await _handle_email_match(db, user, claims, update_profile)
+    if email_normalized:
+        result = await db.execute(select(User).where(func.lower(User.email) == email_normalized))
+        user = result.scalar_one_or_none()
+
+        if user:
+            logger.info(
+                f"Auto-linking provider {claims.provider.value} to existing user "
+                f"{user.id} by email match ({email_normalized})"
+            )
+            return await _handle_email_match(db, user, claims, update_profile)
+    else:
+        logger.warning(
+            f"Empty email in claims for provider {claims.provider.value} "
+            f"(provider_user_id={claims.provider_user_id}), skipping email match"
+        )
 
     # No user found - create if allowed
     if not create_if_missing:
         return None, False, False
 
-    return await _create_new_user(db, claims)
+    try:
+        return await _create_new_user(db, claims)
+    except IntegrityError:
+        await db.rollback()
+        # Email or username collision - attempt to link to existing user
+        logger.warning(
+            f"IntegrityError creating user for {email_normalized}, "
+            f"attempting to link to existing user instead"
+        )
+        if email_normalized:
+            result = await db.execute(
+                select(User).where(func.lower(User.email) == email_normalized)
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                return await _handle_email_match(db, user, claims, update_profile)
+        raise
 
 
 async def deactivate_provider_user(

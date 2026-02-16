@@ -4,7 +4,7 @@
  * All notification settings and management API calls.
  */
 
-import client from './client';
+import client, { toApiError } from './client';
 import type {
   NotificationPreferences,
   NotificationServiceStatus,
@@ -187,8 +187,37 @@ export async function getSilencedDevices(): Promise<string[]> {
   return response.data.devices;
 }
 
+function normalizeDeviceIps(deviceIps: string[]): string[] {
+  return Array.from(new Set(deviceIps.map((ip) => ip.trim()).filter((ip) => ip.length > 0)));
+}
+
 export async function setSilencedDevices(deviceIps: string[]): Promise<void> {
-  await client.post(`${API_BASE}/silenced-devices`, deviceIps);
+  const normalizedIps = normalizeDeviceIps(deviceIps);
+
+  try {
+    await client.post(`${API_BASE}/silenced-devices`, normalizedIps);
+    return;
+  } catch (error) {
+    const apiError = toApiError(error);
+
+    // Compatibility fallback for backend builds where this proxy route rejects body parsing.
+    if (apiError.status !== 422) {
+      throw error;
+    }
+  }
+
+  // Fallback path: sync via per-device endpoints.
+  const currentlySilenced = await getSilencedDevices();
+  const currentSet = new Set(currentlySilenced);
+  const targetSet = new Set(normalizedIps);
+
+  const toSilence = normalizedIps.filter((ip) => !currentSet.has(ip));
+  const toUnsilence = currentlySilenced.filter((ip) => !targetSet.has(ip));
+
+  await Promise.all([
+    ...toSilence.map((ip) => silenceDevice(ip)),
+    ...toUnsilence.map((ip) => unsilenceDevice(ip)),
+  ]);
 }
 
 export async function silenceDevice(deviceIp: string): Promise<void> {

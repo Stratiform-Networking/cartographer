@@ -3,6 +3,8 @@ Unit tests for usage tracking middleware.
 """
 
 import asyncio
+import base64
+import json
 from collections import deque
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,13 +16,24 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.testclient import TestClient
 
+import app.services.usage_middleware as usage_middleware
 from app.config import settings
 from app.services.usage_middleware import (
     EXCLUDED_PATHS,
     SERVICE_NAME,
     UsageRecord,
     UsageTrackingMiddleware,
+    _capture_posthog_api_event,
+    _initialize_posthog,
+    _is_service_bearer_token,
+    _is_user_generated_request,
 )
+
+
+def _build_token(payload: dict) -> str:
+    encoded_payload = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("utf-8")
+    encoded_payload = encoded_payload.rstrip("=")
+    return f"header.{encoded_payload}.signature"
 
 
 class TestUsageRecord:
@@ -518,6 +531,171 @@ class TestUsageTrackingMiddlewareShutdown:
         await middleware.shutdown()
 
         # Should not raise
+
+
+class TestPostHogHelpers:
+    """Tests for PostHog helper methods."""
+
+    def test_initialize_posthog_returns_true_when_already_initialized(self):
+        with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", True):
+            assert _initialize_posthog("key", "https://host", True) is True
+
+    def test_initialize_posthog_configures_client(self):
+        mock_posthog = MagicMock()
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                assert _initialize_posthog("key", "https://host", True) is True
+                assert mock_posthog.api_key == "key"
+                assert mock_posthog.host == "https://host"
+
+    def test_is_service_bearer_token_handles_invalid_values(self):
+        assert _is_service_bearer_token(None) is False
+        assert _is_service_bearer_token("invalid") is False
+        assert _is_service_bearer_token("Bearer not-a-jwt") is False
+        assert _is_service_bearer_token("Bearer a.b.c") is False
+
+    def test_is_service_bearer_token_detects_service_claims(self):
+        service_flag_token = _build_token({"service": True})
+        service_type_token = _build_token({"type": "service"})
+        user_token = _build_token({"service": False, "type": "user"})
+
+        assert _is_service_bearer_token(f"Bearer {service_flag_token}") is True
+        assert _is_service_bearer_token(f"Bearer {service_type_token}") is True
+        assert _is_service_bearer_token(f"Bearer {user_token}") is False
+
+    def test_is_user_generated_request_filters_internal_headers(self):
+        request = MagicMock()
+        request.headers = {"x-service-name": "metrics-service"}
+        assert _is_user_generated_request(request) is False
+
+    def test_is_user_generated_request_filters_service_tokens(self):
+        request = MagicMock()
+        request.headers = {"authorization": f"Bearer {_build_token({'service': True})}"}
+        assert _is_user_generated_request(request) is False
+
+    def test_is_user_generated_request_filters_probe_user_agents(self):
+        request = MagicMock()
+        request.headers = {"user-agent": "kube-probe/1.0"}
+        assert _is_user_generated_request(request) is False
+
+        request.headers = {"user-agent": "prometheus/2.0"}
+        assert _is_user_generated_request(request) is False
+
+    def test_is_user_generated_request_accepts_normal_user_traffic(self):
+        request = MagicMock()
+        request.headers = {"user-agent": "Mozilla/5.0"}
+        assert _is_user_generated_request(request) is True
+
+    def test_capture_posthog_api_event_calls_capture(self):
+        mock_posthog = MagicMock()
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                _capture_posthog_api_event(
+                    service_name="assistant-service",
+                    path="/api/assistant/chat",
+                    method="POST",
+                    status_code=200,
+                    response_time_ms=12.345,
+                    is_user_generated=True,
+                    error_type=None,
+                    posthog_api_key="key",
+                    posthog_host="https://host",
+                    posthog_enabled=True,
+                )
+
+        mock_posthog.capture.assert_called_once()
+        kwargs = mock_posthog.capture.call_args.kwargs
+        assert kwargs["distinct_id"] == "service:assistant-service"
+        assert kwargs["event"] == "api_request"
+        assert kwargs["properties"]["path"] == "/api/assistant/chat"
+        assert kwargs["properties"]["response_time_ms"] == 12.35
+
+    def test_capture_posthog_api_event_drops_non_user_non_error(self):
+        mock_posthog = MagicMock()
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                _capture_posthog_api_event(
+                    service_name="assistant-service",
+                    path="/api/assistant/chat",
+                    method="POST",
+                    status_code=200,
+                    response_time_ms=5.0,
+                    is_user_generated=False,
+                    error_type=None,
+                    posthog_api_key="key",
+                    posthog_host="https://host",
+                    posthog_enabled=True,
+                )
+
+        mock_posthog.capture.assert_not_called()
+
+    def test_capture_posthog_api_event_keeps_server_errors(self):
+        mock_posthog = MagicMock()
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                _capture_posthog_api_event(
+                    service_name="assistant-service",
+                    path="/api/assistant/chat",
+                    method="POST",
+                    status_code=500,
+                    response_time_ms=7.0,
+                    is_user_generated=False,
+                    error_type="RuntimeError",
+                    posthog_api_key="key",
+                    posthog_host="https://host",
+                    posthog_enabled=True,
+                )
+
+        mock_posthog.capture.assert_called_once()
+        kwargs = mock_posthog.capture.call_args.kwargs
+        assert kwargs["properties"]["request_source"] == "server"
+        assert kwargs["properties"]["error_type"] == "RuntimeError"
+
+    def test_initialize_posthog_handles_assignment_error(self):
+        class BrokenPostHog:
+            def __setattr__(self, _name, _value):
+                raise RuntimeError("boom")
+
+        with patch.object(usage_middleware, "posthog", BrokenPostHog()):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                assert _initialize_posthog("key", "https://host", True) is False
+
+    def test_capture_posthog_api_event_handles_capture_error(self):
+        mock_posthog = MagicMock()
+        mock_posthog.capture.side_effect = RuntimeError("boom")
+
+        with patch.object(usage_middleware, "posthog", mock_posthog):
+            with patch.object(usage_middleware, "_POSTHOG_INITIALIZED", False):
+                _capture_posthog_api_event(
+                    service_name="assistant-service",
+                    path="/api/assistant/chat",
+                    method="POST",
+                    status_code=500,
+                    response_time_ms=45.0,
+                    is_user_generated=True,
+                    error_type="RuntimeError",
+                    posthog_api_key="key",
+                    posthog_host="https://host",
+                    posthog_enabled=True,
+                )
+
+    async def test_flush_buffer_returns_early_when_batch_size_zero(self):
+        app = FastAPI()
+        middleware = UsageTrackingMiddleware(app)
+        middleware._buffer.append(
+            UsageRecord(
+                endpoint="/api/test",
+                method="GET",
+                status_code=200,
+                response_time_ms=1.0,
+                timestamp=datetime.utcnow(),
+            )
+        )
+
+        with patch.object(settings, "usage_batch_size", 0):
+            await middleware._flush_buffer()
+
+        assert len(middleware._buffer) == 1
 
 
 class TestUsageTrackingMiddlewareIntegration:

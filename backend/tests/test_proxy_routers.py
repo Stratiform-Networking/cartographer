@@ -1631,6 +1631,30 @@ class TestNotificationProxyRouter:
         call_kwargs = mock_http_pool.request.call_args[1]
         assert call_kwargs["method"] == "POST"
 
+    def test_set_silenced_devices_route_accepts_json_body(self, readwrite_user):
+        """Route should parse JSON body instead of rejecting with 422."""
+        from app.dependencies import require_write_access
+        from app.routers.notification_proxy import router as notification_router
+
+        app = FastAPI()
+        app.include_router(notification_router, prefix="/api")
+        app.dependency_overrides[require_write_access] = lambda: readwrite_user
+
+        with patch(
+            "app.routers.notification_proxy.proxy_notification_request", new_callable=AsyncMock
+        ) as mock_proxy:
+            mock_proxy.return_value = {"success": True}
+            client = TestClient(app)
+
+            response = client.post("/api/notifications/silenced-devices", json=["192.168.1.1"])
+
+            assert response.status_code == 200
+            mock_proxy.assert_awaited_once_with(
+                "POST",
+                "/silenced-devices",
+                json_body=["192.168.1.1"],
+            )
+
     async def test_silence_device(self, mock_http_pool, readwrite_user):
         """silence_device should POST (write access)"""
         from app.routers.notification_proxy import silence_device

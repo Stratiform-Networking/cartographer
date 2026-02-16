@@ -18,7 +18,7 @@ Performance optimizations:
 
 import json
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from ..dependencies import AuthenticatedUser, require_auth, require_owner, require_write_access
 from ..services.cache_service import CacheService, get_cache
@@ -233,7 +233,7 @@ async def get_silenced_devices(
 
 @router.post("/silenced-devices")
 async def set_silenced_devices(
-    request,
+    request: Request,
     user: AuthenticatedUser = Depends(require_write_access),
 ):
     """Set the full list of silenced devices. Requires write access."""

@@ -322,8 +322,8 @@
 
       <!-- Settings Group -->
       <div class="flex items-center gap-0.5">
-        <!-- Health Monitoring Button -->
-        <div class="relative">
+        <!-- Health Monitoring Button (hidden in cloud deployment) -->
+        <div v-if="!isCloudDeployment" class="relative">
           <button
             @click="showHealthSettings = !showHealthSettings"
             class="flex items-center justify-center w-8 h-8 rounded-md transition-colors"
@@ -361,7 +361,8 @@
           >
             <div
               v-if="showHealthSettings"
-              class="absolute right-0 top-full mt-2 w-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border border-slate-200/80 dark:border-slate-700/50 rounded-xl shadow-xl z-50 overflow-hidden"
+              ref="healthSettingsRef"
+              class="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/50 rounded-xl shadow-xl z-50 overflow-hidden"
             >
               <div
                 class="px-4 py-3 bg-slate-50 dark:bg-slate-950/50 border-b border-slate-200/80 dark:border-slate-700/50"
@@ -592,6 +593,7 @@ const isCloudDeployment = (import.meta.env.BASE_URL || '/').startsWith('/app');
 
 // Health monitoring settings
 const showHealthSettings = ref(false);
+const healthSettingsRef = ref<HTMLElement | null>(null);
 const showEmbedGenerator = ref(false);
 const healthConfig = reactive<MonitoringConfig>({
   enabled: true,
@@ -692,7 +694,12 @@ const formatTimestamp = (isoString: string) => formatShortTime(isoString);
 // Close health settings dropdown when clicking outside
 function handleClickOutside(event: MouseEvent) {
   const target = event.target as HTMLElement;
-  if (showHealthSettings.value && !target.closest('.relative')) {
+  if (
+    showHealthSettings.value &&
+    healthSettingsRef.value &&
+    !healthSettingsRef.value.contains(target) &&
+    !target.closest('[title="Health monitoring settings"]')
+  ) {
     showHealthSettings.value = false;
   }
 }

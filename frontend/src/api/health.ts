@@ -30,6 +30,13 @@ export interface MonitoringStatus {
   next_check: string | null;
 }
 
+export interface RegisterDevicesResponse {
+  message: string;
+  devices: string[];
+  network_id: string;
+  active_monitoring: boolean;
+}
+
 // Re-export types for convenience
 export type { GatewayTestIP, GatewayTestIPConfig, GatewayTestIPsResponse, SpeedTestResult };
 
@@ -38,8 +45,8 @@ export type { GatewayTestIP, GatewayTestIPConfig, GatewayTestIPsResponse, SpeedT
 export async function registerDevices(
   ips: string[],
   networkId: string
-): Promise<{ registered: number }> {
-  const response = await client.post<{ registered: number }>('/api/health/monitoring/devices', {
+): Promise<RegisterDevicesResponse> {
+  const response = await client.post<RegisterDevicesResponse>('/api/health/monitoring/devices', {
     ips,
     network_id: networkId,
   });

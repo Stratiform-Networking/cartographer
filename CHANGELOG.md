@@ -5,6 +5,109 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0](https://github.com/devartech/cartographer/compare/v0.34.0...v0.35.0) (2026-02-16)
+
+
+### ✨ Features
+
+* security patches pre-beta ([1dac291](https://github.com/devartech/cartographer/commit/1dac2919b7fdfbdb08878f509eba700e95cd71df))
+
+## [0.34.0](https://github.com/devartech/cartographer/compare/v0.33.3...v0.34.0) (2026-02-10)
+
+
+### ✨ Features
+
+* add manual + auto user syncing ([00fa237](https://github.com/devartech/cartographer/commit/00fa2371b8bc78825eaccc38d791a3280fc60a39))
+
+### [0.33.3](https://github.com/devartech/cartographer/compare/v0.33.2...v0.33.3) (2026-02-10)
+
+
+### 🐛 Bug Fixes
+
+* self-host passive monitoring modal ([c49d15a](https://github.com/devartech/cartographer/commit/c49d15a22451acfd6439c77d7fd28046b44c24f5))
+
+### [0.33.2](https://github.com/devartech/cartographer/compare/v0.33.1...v0.33.2) (2026-02-10)
+
+
+### 🐛 Bug Fixes
+
+* hide passive monitoring controls on cloud ([a1f0159](https://github.com/devartech/cartographer/commit/a1f01599420a907e31d4e31561257a31df3397e8))
+
+### [0.33.1](https://github.com/devartech/cartographer/compare/v0.33.0...v0.33.1) (2026-02-10)
+
+
+### 🐛 Bug Fixes
+
+* reduce network function complexity ([0689087](https://github.com/devartech/cartographer/commit/0689087f90cf16423fbe3fd2355ee83ad14edba2))
+
+## [0.33.0](https://github.com/devartech/cartographer/compare/v0.32.9...v0.33.0) (2026-02-10)
+
+
+### ✨ Features
+
+* add MAC to merge devices ([24f4896](https://github.com/devartech/cartographer/commit/24f4896d1f1da6f4bfba60bb6f89458f005a2a0c))
+
+### [0.32.9](https://github.com/devartech/cartographer/compare/v0.32.8...v0.32.9) (2026-02-09)
+
+
+### 🐛 Bug Fixes
+
+* user interaction ([6d54720](https://github.com/devartech/cartographer/commit/6d547209eb3a6a5af8366b36d59556a23cc70cf6))
+
+### [0.32.8](https://github.com/devartech/cartographer/compare/v0.32.7...v0.32.8) (2026-02-08)
+
+
+### 🐛 Bug Fixes
+
+* passive posthog event filtering ([f813b31](https://github.com/devartech/cartographer/commit/f813b316fc286d8c1f75356ba0caacf15e767958))
+
+### [0.32.7](https://github.com/devartech/cartographer/compare/v0.32.6...v0.32.7) (2026-02-08)
+
+
+### 🐛 Bug Fixes
+
+* 502 and 422 error with notifs and health ([f68efb5](https://github.com/devartech/cartographer/commit/f68efb5a63ccc2baa1a7c1f4f9806ecb6b516471))
+
+### [0.32.6](https://github.com/devartech/cartographer/compare/v0.32.5...v0.32.6) (2026-02-08)
+
+
+### 🐛 Bug Fixes
+
+* 400 bad-requests errors ([e90c193](https://github.com/devartech/cartographer/commit/e90c19392dd6c22536c719d293de813151e325a9))
+
+### [0.32.5](https://github.com/devartech/cartographer/compare/v0.32.4...v0.32.5) (2026-02-08)
+
+
+### 🐛 Bug Fixes
+
+* cloud session recording sync ([699d9f9](https://github.com/devartech/cartographer/commit/699d9f9deea167cb190994c89808a1adaa5554f0))
+
+### [0.32.4](https://github.com/devartech/cartographer/compare/v0.32.3...v0.32.4) (2026-02-08)
+
+
+### 🐛 Bug Fixes
+
+* remove codexism shim ([7786e7e](https://github.com/devartech/cartographer/commit/7786e7ed52cf747b2b8cd72487a1640657c4e0ab))
+
+### [0.32.3](https://github.com/devartech/cartographer/compare/v0.32.2...v0.32.3) (2026-02-08)
+
+
+### 📚 Documentation
+
+* update readme link ([5ac2b13](https://github.com/devartech/cartographer/commit/5ac2b1301b0d685978d8347fd1148d37e26ca6d5))
+
+
+### 🐛 Bug Fixes
+
+* session recording ([05b83b8](https://github.com/devartech/cartographer/commit/05b83b8e93c5adb3bc9b1b9d1ace4ebfb145f153))
+
+### [0.32.2](https://github.com/devartech/cartographer/compare/v0.32.1...v0.32.2) (2026-02-08)
+
+
+### 🐛 Bug Fixes
+
+* lockfile ([7ca5ff5](https://github.com/devartech/cartographer/commit/7ca5ff53d177bbd2709a0cf4f199ddb50d508407))
+
 ### [0.32.1](https://github.com/devartech/cartographer/compare/v0.32.0...v0.32.1) (2026-02-08)
 
 

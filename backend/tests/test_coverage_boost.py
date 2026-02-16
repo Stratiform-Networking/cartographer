@@ -183,9 +183,13 @@ class TestMetricsWebSocketForwarding:
 
     async def test_websocket_forward_to_client(self):
         """forward_to_client should handle exceptions"""
-        # Mock websockets module
+        from websockets.exceptions import ConnectionClosed
+
+        # Mock websockets module with proper exceptions submodule
+        mock_exceptions = MagicMock()
+        mock_exceptions.ConnectionClosed = ConnectionClosed
         mock_websockets = MagicMock()
-        sys.modules["websockets"] = mock_websockets
+        mock_websockets.exceptions = mock_exceptions
 
         from fastapi import WebSocket, WebSocketDisconnect
 
@@ -208,7 +212,10 @@ class TestMetricsWebSocketForwarding:
 
         mock_websockets.connect = MagicMock(return_value=mock_upstream)
 
-        with patch.dict("sys.modules", {"websockets": mock_websockets}):
+        with patch.dict(
+            "sys.modules",
+            {"websockets": mock_websockets, "websockets.exceptions": mock_exceptions},
+        ):
             from app.routers.metrics_proxy import websocket_proxy
 
             # Should not raise

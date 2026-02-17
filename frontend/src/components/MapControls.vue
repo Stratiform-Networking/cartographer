@@ -100,6 +100,59 @@
           <span>Scan</span>
         </button>
 
+        <!-- Remote Scan Button (cloud deployment only) -->
+        <button
+          v-else-if="isCloudDeployment && !remoteScanning"
+          @click="triggerRemoteScanAction"
+          class="group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:from-purple-400 hover:to-indigo-500 shadow-sm shadow-purple-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+          :disabled="!props.canEdit"
+          :title="props.canEdit ? 'Trigger scan on connected agents' : 'Write permission required'"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+            />
+          </svg>
+          <span>Remote Scan</span>
+        </button>
+
+        <!-- Remote Scan in progress (cloud deployment) -->
+        <div
+          v-else-if="isCloudDeployment && remoteScanning"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-purple-500 text-white shadow-sm shadow-purple-500/20"
+        >
+          <svg
+            class="animate-spin h-4 w-4"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="3"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          <span>Triggering Agents...</span>
+        </div>
+
         <!-- Scanning in progress (shown when loading, hidden in cloud deployment) -->
         <div v-else-if="!isCloudDeployment && loading" class="flex items-center gap-1">
           <div
@@ -581,6 +634,7 @@ const emit = defineEmits<{
 const loading = ref(false);
 const saving = ref(false);
 const message = ref('');
+const remoteScanning = ref(false);
 const { parseNetworkMap } = useNetworkData();
 const { exportLayout, importLayout } = useMapLayout();
 const { fetchConfig, updateConfig, fetchStatus } = useHealthMonitoring();
@@ -719,6 +773,27 @@ function cancelScan() {
   setTimeout(() => {
     message.value = '';
   }, 3000);
+}
+
+async function triggerRemoteScanAction() {
+  if (!props.networkId) return;
+  remoteScanning.value = true;
+  message.value = 'Triggering remote scan...';
+  try {
+    const result = await networksApi.triggerRemoteScan(props.networkId);
+    message.value = `Scan triggered on ${result.agents_triggered} agent${result.agents_triggered !== 1 ? 's' : ''}`;
+  } catch (error: unknown) {
+    const detail =
+      error && typeof error === 'object' && 'response' in error
+        ? (error as any).response?.data?.detail
+        : undefined;
+    message.value = detail || 'Failed to trigger remote scan';
+  } finally {
+    remoteScanning.value = false;
+    setTimeout(() => {
+      message.value = '';
+    }, 5000);
+  }
 }
 
 async function saveLayout() {

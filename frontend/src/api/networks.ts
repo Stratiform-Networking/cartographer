@@ -99,6 +99,20 @@ export async function removeNetworkPermission(networkId: string, userId: string)
   await client.delete(`/api/networks/${networkId}/permissions/${userId}`);
 }
 
+// ==================== Remote Scan (Cloud) ====================
+
+export interface TriggerRemoteScanResponse {
+  agents_triggered: number;
+}
+
+export async function triggerRemoteScan(networkId: string): Promise<TriggerRemoteScanResponse> {
+  const response = await client.post<TriggerRemoteScanResponse>(
+    '/api/agent/commands/scan-network',
+    { network_id: networkId }
+  );
+  return response.data;
+}
+
 // ==================== Network Limit ====================
 
 export interface NetworkLimitStatus {

@@ -6,9 +6,7 @@
 [![Nightly Capacity](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Meridian-Inc/cartographer/main/load-tests/badge.json)](https://github.com/Meridian-Inc/cartographer/actions/workflows/load-tests.yml)
 [![codecov](https://codecov.io/gh/Meridian-Inc/cartographer/graph/badge.svg)](https://codecov.io/gh/Meridian-Inc/cartographer)
 
-[![Network Map](https://raw.githubusercontent.com/Meridian-Inc/cartographer/refs/heads/main/assets/application.png)](https://cartographer.artzima.dev/embed/8gsm2mmYhfwvKhnGYTvJ6Spd)
-
-> 🖱️ **[Click the image to view the interactive map](https://cartographer.artzima.dev/embed/8gsm2mmYhfwvKhnGYTvJ6Spd)**
+![Network Map](https://raw.githubusercontent.com/Meridian-Inc/cartographer/refs/heads/main/assets/application.png)
 
 **See every device on your network at a glance.**
 

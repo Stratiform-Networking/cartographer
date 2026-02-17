@@ -4154,8 +4154,30 @@ function savePortChanges() {
   );
 
   if (portIndex >= 0) {
-    // Clear connection data if not active
-    if (editingPort.value.status !== 'active') {
+    // Normalize optional inputs from form controls
+    editingPort.value.connectedDeviceId = editingPort.value.connectedDeviceId || undefined;
+    editingPort.value.connectionLabel = editingPort.value.connectionLabel?.trim() || undefined;
+    editingPort.value.speed = editingPort.value.speed || undefined;
+    editingPort.value.negotiatedSpeed = editingPort.value.negotiatedSpeed || undefined;
+
+    if (!editingPort.value.connectedDeviceId) {
+      editingPort.value.connectedDeviceName = undefined;
+    }
+
+    // Keep status and connection details consistent:
+    // if link metadata exists, this is an active port even if it was still marked unused.
+    const hasLinkDetails = !!(
+      editingPort.value.connectedDeviceId ||
+      editingPort.value.connectionLabel ||
+      editingPort.value.speed ||
+      editingPort.value.negotiatedSpeed
+    );
+    if (hasLinkDetails && editingPort.value.status !== 'blocked') {
+      editingPort.value.status = 'active';
+    }
+
+    // Blocked ports cannot carry connection/speed metadata
+    if (editingPort.value.status === 'blocked') {
       editingPort.value.connectedDeviceId = undefined;
       editingPort.value.connectedDeviceName = undefined;
       editingPort.value.connectionLabel = undefined;

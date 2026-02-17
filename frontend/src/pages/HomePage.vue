@@ -156,6 +156,7 @@
 
         <!-- User Menu -->
         <UserMenu
+          :showNotificationsOption="!isCloudDeployment"
           @logout="onLogout"
           @manageUsers="showUserManagement = true"
           @notifications="showNotificationSettings = true"

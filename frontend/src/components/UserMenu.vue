@@ -106,8 +106,9 @@
               </div>
             </button>
 
-            <!-- Notifications (always shown - network or global) -->
+            <!-- Notifications -->
             <button
+              v-if="props.showNotificationsOption !== false"
               @click="onNotifications"
               class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors"
             >
@@ -457,6 +458,7 @@ import { getRoleLabel, getFullName } from '../types/auth';
 
 const props = defineProps<{
   showNotifications?: boolean;
+  showNotificationsOption?: boolean;
   // Network context props
   isNetworkContext?: boolean; // true when viewing a specific network
   isNetworkOwner?: boolean; // true if user owns the current network

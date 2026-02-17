@@ -5,6 +5,13 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.37.4](https://github.com/devartech/cartographer/compare/v0.37.3...v0.37.4) (2026-02-17)
+
+
+### 🐛 Bug Fixes
+
+* saving of LAN port status ([3674781](https://github.com/devartech/cartographer/commit/3674781e2ad2525af13449aed11ad19d0455340a))
+
 ### [0.37.3](https://github.com/devartech/cartographer/compare/v0.37.2...v0.37.3) (2026-02-17)
 
 

@@ -83,6 +83,7 @@
             </span>
           </button>
           <button
+            v-if="!isCloudAuth"
             @click="activeTab = 'global'"
             :class="[
               'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
@@ -139,7 +140,7 @@
 
           <template v-else-if="preferences">
             <!-- ==================== GLOBAL TAB ==================== -->
-            <template v-if="activeTab === 'global'">
+            <template v-if="activeTab === 'global' && !isCloudAuth">
               <!-- Global Email/Discord Enable -->
               <div class="space-y-4">
                 <h3
@@ -2305,7 +2306,7 @@ defineEmits<{
   (e: 'close'): void;
 }>();
 
-const { isOwner } = useAuth();
+const { isOwner, isCloudAuth } = useAuth();
 
 const {
   isLoading,

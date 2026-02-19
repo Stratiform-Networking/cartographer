@@ -85,6 +85,7 @@
             </span>
           </button>
           <button
+            v-if="!isCloudAuth"
             @click="activeTab = 'global'"
             :class="[
               'px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
@@ -157,7 +158,7 @@
             </template>
 
             <!-- Global Tab -->
-            <template v-if="activeTab === 'global'">
+            <template v-if="activeTab === 'global' && !isCloudAuth">
               <GlobalSettings
                 :preferences="globalPrefs"
                 :service-status="serviceStatus"
@@ -198,6 +199,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useUserNotifications } from '../composables/useUserNotifications';
+import { useAuth } from '../composables/useAuth';
 import NetworkSettings from './NotificationSettingsNetwork.vue';
 import GlobalSettings from './NotificationSettingsGlobal.vue';
 
@@ -208,6 +210,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
 }>();
+
+const { isCloudAuth } = useAuth();
 
 const activeTab = ref<'network' | 'global'>(props.networkId !== null ? 'network' : 'global');
 const {

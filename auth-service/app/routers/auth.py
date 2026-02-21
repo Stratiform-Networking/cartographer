@@ -26,6 +26,8 @@ from ..models import (
     NetworkLimitStatus,
     NetworkLimitUpdate,
     OwnerSetupRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     SessionInfo,
     SetupStatus,
     UserCreate,
@@ -301,6 +303,36 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
         expires_in=expires_in,
         user=auth_service._to_response(user),
     )
+
+
+@router.post(
+    "/password-reset/request",
+    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60))],
+)
+async def request_password_reset(request: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Request a password reset email.
+
+    Always returns the same message regardless of whether the email exists.
+    """
+    await auth_service.request_password_reset(db, request.email)
+    return {"message": "If an account with that email exists, a password reset link has been sent."}
+
+
+@router.post(
+    "/password-reset/confirm",
+    dependencies=[Depends(rate_limit(max_requests=10, window_seconds=60))],
+)
+async def confirm_password_reset(
+    request: PasswordResetConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset password using a one-time token."""
+    try:
+        await auth_service.confirm_password_reset(db, request.token, request.new_password)
+        return {"message": "Password has been reset successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/logout")

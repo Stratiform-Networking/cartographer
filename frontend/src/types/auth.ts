@@ -77,6 +77,15 @@ export interface ChangePasswordRequest {
   new_password: string;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetConfirmRequest {
+  token: string;
+  new_password: string;
+}
+
 export interface AuthState {
   token: string;
   user: User;

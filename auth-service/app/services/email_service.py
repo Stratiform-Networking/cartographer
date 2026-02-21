@@ -182,3 +182,99 @@ Cartographer - Network Mapping Tool
     except Exception as e:
         logger.error(f"Failed to send invitation email to {to_email}: {e}")
         return None
+
+
+def send_password_reset_email(
+    to_email: str,
+    reset_token: str,
+    expires_minutes: int = 60,
+) -> str | None:
+    """
+    Send a password reset email.
+
+    Returns the email ID if successful, None if failed or not configured.
+    """
+    if not is_email_configured():
+        logger.warning(f"Email not configured - password reset email for {to_email} not sent")
+        return None
+
+    resend = _get_resend()
+    if not resend:
+        return None
+
+    reset_url = f"{settings.application_url}/reset-password?token={reset_token}"
+
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset your Cartographer password</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0f172a; padding: 40px 16px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 560px; background: #ffffff; border-radius: 14px; overflow: hidden;">
+                    <tr>
+                        <td style="padding: 28px 28px 20px; background: linear-gradient(135deg, #0fb685 0%, #0994ae 100%); color: #ffffff;">
+                            <h1 style="margin: 0; font-size: 24px;">Cartographer</h1>
+                            <p style="margin: 8px 0 0; opacity: 0.92;">Password reset request</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 28px;">
+                            <p style="margin: 0 0 14px; color: #0f172a; font-size: 16px;">
+                                We received a request to reset your password.
+                            </p>
+                            <p style="margin: 0 0 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+                                Click the button below to choose a new password. This link expires in <strong>{expires_minutes} minutes</strong>.
+                            </p>
+                            <p style="margin: 0 0 18px;">
+                                <a href="{reset_url}" style="display: inline-block; padding: 12px 24px; border-radius: 10px; text-decoration: none; color: #ffffff; background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%); font-weight: 600;">
+                                    Reset Password
+                                </a>
+                            </p>
+                            <p style="margin: 0 0 10px; color: #64748b; font-size: 12px; line-height: 1.5;">
+                                If you did not request this, you can ignore this email.
+                            </p>
+                            <p style="margin: 0; color: #94a3b8; font-size: 12px; word-break: break-all;">
+                                {reset_url}
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+"""
+
+    text_content = f"""
+Reset your Cartographer password
+
+We received a request to reset your password.
+Use the link below to set a new password (expires in {expires_minutes} minutes):
+{reset_url}
+
+If you did not request this, you can ignore this email.
+"""
+
+    try:
+        params = {
+            "from": settings.email_from,
+            "to": [to_email],
+            "subject": "Reset your Cartographer password",
+            "html": html_content,
+            "text": text_content,
+        }
+
+        result = resend.Emails.send(params)
+        email_id = result.get("id") if isinstance(result, dict) else getattr(result, "id", None)
+        logger.info(f"Password reset email sent to {to_email} (ID: {email_id})")
+        return email_id
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {to_email}: {e}")
+        return None

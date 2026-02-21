@@ -6,7 +6,12 @@ import os
 from unittest.mock import MagicMock, patch
 
 from app.config import settings
-from app.services.email_service import _get_resend, is_email_configured, send_invitation_email
+from app.services.email_service import (
+    _get_resend,
+    is_email_configured,
+    send_invitation_email,
+    send_password_reset_email,
+)
 
 
 class TestIsEmailConfigured:
@@ -232,3 +237,51 @@ class TestSendInvitationEmail:
                 )
 
                 assert result == "email-456"
+
+
+class TestSendPasswordResetEmail:
+    """Tests for send_password_reset_email function."""
+
+    def test_returns_none_when_not_configured(self):
+        with patch.object(settings, "resend_api_key", ""):
+            result = send_password_reset_email(
+                to_email="test@test.com",
+                reset_token="token-123",
+                expires_minutes=60,
+            )
+            assert result is None
+
+    def test_sends_password_reset_email_successfully(self):
+        from app.services import email_service
+
+        mock_resend = MagicMock()
+        mock_resend.Emails.send.return_value = {"id": "email-reset-123"}
+
+        with patch.object(settings, "resend_api_key", "test-key"):
+            with patch.object(email_service, "_get_resend", return_value=mock_resend):
+                result = send_password_reset_email(
+                    to_email="test@test.com",
+                    reset_token="token-abc",
+                    expires_minutes=45,
+                )
+
+                assert result == "email-reset-123"
+                call_args = mock_resend.Emails.send.call_args[0][0]
+                assert "/reset-password?token=token-abc" in call_args["html"]
+                assert "45 minutes" in call_args["text"]
+
+    def test_handles_password_reset_send_error(self):
+        from app.services import email_service
+
+        mock_resend = MagicMock()
+        mock_resend.Emails.send.side_effect = Exception("API Error")
+
+        with patch.object(settings, "resend_api_key", "test-key"):
+            with patch.object(email_service, "_get_resend", return_value=mock_resend):
+                result = send_password_reset_email(
+                    to_email="test@test.com",
+                    reset_token="token-xyz",
+                    expires_minutes=60,
+                )
+
+                assert result is None

@@ -16,7 +16,7 @@ from alembic import context
 
 # Import Base and models to ensure they are registered
 from app.database import Base
-from app.db_models import User, Invite
+from app.db_models import Invite, PasswordResetToken, User
 
 # this is the Alembic Config object
 config = context.config

@@ -2369,3 +2369,115 @@ class TestCreateInviteEmailPaths:
 
             # Should still create invite but email_sent should be False
             assert email_sent is False
+
+
+class TestPasswordResetFlows:
+    """Tests for password reset request/confirm service methods."""
+
+    @pytest.mark.asyncio
+    async def test_request_password_reset_creates_hashed_token_and_sends_email(self):
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.username = "testuser"
+        mock_user.email = "test@example.com"
+
+        empty_tokens_result = MagicMock()
+        empty_tokens_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = empty_tokens_result
+
+        with (
+            patch.object(service, "get_user_by_email", new_callable=AsyncMock) as mock_get_user,
+            patch("app.services.email_service.is_email_configured", return_value=True),
+            patch(
+                "app.services.email_service.send_password_reset_email",
+                return_value="email-123",
+            ) as mock_send_email,
+        ):
+            mock_get_user.return_value = mock_user
+
+            result = await service.request_password_reset(mock_db, "test@example.com")
+
+            assert result is True
+            mock_db.add.assert_called_once()
+            token_row = mock_db.add.call_args[0][0]
+            assert token_row.user_id == mock_user.id
+            assert len(token_row.token_hash) == 64
+            assert token_row.token_hash != "email-123"
+            mock_send_email.assert_called_once()
+            await_count = mock_db.commit.await_count
+            assert await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_request_password_reset_is_noop_for_unknown_email(self):
+        service = AuthService()
+        mock_db = AsyncMock()
+
+        with patch.object(service, "get_user_by_email", new_callable=AsyncMock) as mock_get_user:
+            mock_get_user.return_value = None
+
+            result = await service.request_password_reset(mock_db, "missing@example.com")
+
+            assert result is True
+            assert not mock_db.execute.await_count
+
+    @pytest.mark.asyncio
+    async def test_confirm_password_reset_updates_password_and_invalidates_active_tokens(self):
+        service = AuthService()
+        mock_db = AsyncMock()
+
+        raw_token = "raw-reset-token"
+        token_hash = service._hash_password_reset_token(raw_token)
+
+        reset_token = MagicMock()
+        reset_token.user_id = "user-123"
+        reset_token.token_hash = token_hash
+        reset_token.used_at = None
+        reset_token.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        other_token = MagicMock()
+        other_token.used_at = None
+
+        reset_result = MagicMock()
+        reset_result.scalar_one_or_none.return_value = reset_token
+        active_tokens_result = MagicMock()
+        active_tokens_result.scalars.return_value.all.return_value = [reset_token, other_token]
+        mock_db.execute = AsyncMock(side_effect=[reset_result, active_tokens_result])
+
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.username = "testuser"
+        mock_user.is_active = True
+        mock_user.hashed_password = "old-hash"
+
+        with (
+            patch.object(service, "get_user", new_callable=AsyncMock) as mock_get_user,
+            patch(
+                "app.services.auth_service.hash_password_async", new_callable=AsyncMock
+            ) as mock_hash,
+        ):
+            mock_get_user.return_value = mock_user
+            mock_hash.return_value = "new-hash"
+
+            result = await service.confirm_password_reset(mock_db, raw_token, "newpassword123")
+
+            assert result is True
+            assert mock_user.hashed_password == "new-hash"
+            assert reset_token.used_at is not None
+            assert other_token.used_at is not None
+            assert mock_db.commit.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_confirm_password_reset_rejects_invalid_or_expired_token(self):
+        service = AuthService()
+        mock_db = AsyncMock()
+
+        missing_result = MagicMock()
+        missing_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = missing_result
+
+        with pytest.raises(ValueError, match="Invalid or expired reset token"):
+            await service.confirm_password_reset(mock_db, "invalid", "newpassword123")

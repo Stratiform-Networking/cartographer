@@ -15,6 +15,8 @@ import type {
   UserUpdateRequest,
   SessionInfo,
   ChangePasswordRequest,
+  PasswordResetRequest,
+  PasswordResetConfirmRequest,
   Invite,
   InviteCreateRequest,
   InviteTokenInfo,
@@ -90,6 +92,14 @@ export async function deleteUser(userId: string): Promise<void> {
 
 export async function changePassword(request: ChangePasswordRequest): Promise<void> {
   await client.post('/api/auth/me/change-password', request);
+}
+
+export async function requestPasswordReset(request: PasswordResetRequest): Promise<void> {
+  await client.post('/api/auth/password-reset/request', request);
+}
+
+export async function confirmPasswordReset(request: PasswordResetConfirmRequest): Promise<void> {
+  await client.post('/api/auth/password-reset/confirm', request);
 }
 
 // ==================== Invitation Management ====================

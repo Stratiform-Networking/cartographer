@@ -46,6 +46,7 @@ class Settings(BaseSettings):
 
     # Invitation Settings
     invite_expiration_hours: int = 72
+    password_reset_expiration_minutes: int = 60
 
     # Email Configuration (Resend)
     resend_api_key: str = ""

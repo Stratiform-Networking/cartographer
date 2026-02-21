@@ -4,6 +4,7 @@ import NetworkPage from './pages/NetworkPage.vue';
 import EmbedPage from './pages/EmbedPage.vue';
 import AcceptInvitePage from './pages/AcceptInvitePage.vue';
 import OAuthCallbackPage from './pages/OAuthCallbackPage.vue';
+import ResetPasswordPage from './pages/ResetPasswordPage.vue';
 
 const routes = [
   {
@@ -27,6 +28,11 @@ const routes = [
     path: '/accept-invite',
     name: 'accept-invite',
     component: AcceptInvitePage,
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: ResetPasswordPage,
   },
   {
     path: '/oauth-callback',

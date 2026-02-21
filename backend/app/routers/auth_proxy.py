@@ -111,6 +111,20 @@ async def register(request: Request):
     return await proxy_auth_request("POST", "/register", request, body)
 
 
+@router.post("/auth/password-reset/request")
+async def request_password_reset(request: Request):
+    """Public password reset request endpoint."""
+    body = await request.json()
+    return await proxy_auth_request("POST", "/password-reset/request", request, body)
+
+
+@router.post("/auth/password-reset/confirm")
+async def confirm_password_reset(request: Request):
+    """Public password reset confirm endpoint."""
+    body = await request.json()
+    return await proxy_auth_request("POST", "/password-reset/confirm", request, body)
+
+
 # ==================== User Management Endpoints ====================
 # Creating and deleting users requires owner role
 # Listing and viewing requires authentication (auth service further restricts visibility)

@@ -4,6 +4,7 @@ Handles user authentication and management.
 """
 
 import asyncio
+import hashlib
 import logging
 import secrets
 import uuid
@@ -17,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..db_models import Invite, InviteStatus, User, UserRole
+from ..db_models import Invite, InviteStatus, PasswordResetToken, User, UserRole
 from ..models import (
     InviteCreate,
     InviteResponse,
@@ -473,6 +474,102 @@ class AuthService:
         logger.info(f"Password changed for user: {user.username}")
         return True
 
+    async def request_password_reset(self, db: AsyncSession, email: str) -> bool:
+        """
+        Request a password reset email.
+
+        Always returns success semantics so callers don't leak account existence.
+        """
+        email_normalized = email.strip().lower()
+        user = await self.get_user_by_email(db, email_normalized, include_inactive=False)
+        if not user:
+            logger.info("Password reset requested for unknown email: %s", email_normalized)
+            return True
+
+        now = datetime.now(timezone.utc)
+        raw_token = self._generate_password_reset_token()
+        token_hash = self._hash_password_reset_token(raw_token)
+        expires_at = now + timedelta(minutes=settings.password_reset_expiration_minutes)
+
+        # Invalidate older active reset tokens so only the latest link is usable.
+        existing_tokens_result = await db.execute(
+            select(PasswordResetToken).where(
+                and_(
+                    PasswordResetToken.user_id == user.id,
+                    PasswordResetToken.used_at.is_(None),
+                    PasswordResetToken.expires_at > now,
+                )
+            )
+        )
+        for token in existing_tokens_result.scalars().all():
+            token.used_at = now
+
+        reset_token = PasswordResetToken(
+            id=str(uuid.uuid4()),
+            user_id=user.id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+        db.add(reset_token)
+        await db.commit()
+
+        try:
+            from .email_service import is_email_configured, send_password_reset_email
+
+            if is_email_configured():
+                email_id = send_password_reset_email(
+                    to_email=user.email,
+                    reset_token=raw_token,
+                    expires_minutes=settings.password_reset_expiration_minutes,
+                )
+                if not email_id:
+                    logger.warning("Password reset email send failed for user: %s", user.username)
+            else:
+                logger.warning(
+                    "Email not configured - password reset email not sent for %s", user.email
+                )
+        except Exception as e:
+            logger.error(f"Failed to send password reset email: {e}")
+
+        logger.info("Password reset requested for user: %s", user.username)
+        return True
+
+    async def confirm_password_reset(self, db: AsyncSession, token: str, new_password: str) -> bool:
+        """Confirm password reset with a one-time token."""
+        token_hash = self._hash_password_reset_token(token)
+        now = datetime.now(timezone.utc)
+
+        reset_result = await db.execute(
+            select(PasswordResetToken).where(PasswordResetToken.token_hash == token_hash)
+        )
+        reset_token = reset_result.scalar_one_or_none()
+
+        if not reset_token or reset_token.used_at is not None or reset_token.expires_at <= now:
+            raise ValueError("Invalid or expired reset token")
+
+        user = await self.get_user(db, reset_token.user_id)
+        if not user or not user.is_active:
+            raise ValueError("Invalid or expired reset token")
+
+        user.hashed_password = await hash_password_async(new_password)
+
+        # Invalidate all currently active reset tokens for this user.
+        tokens_result = await db.execute(
+            select(PasswordResetToken).where(
+                and_(
+                    PasswordResetToken.user_id == user.id,
+                    PasswordResetToken.used_at.is_(None),
+                    PasswordResetToken.expires_at > now,
+                )
+            )
+        )
+        for token_row in tokens_result.scalars().all():
+            token_row.used_at = now
+
+        await db.commit()
+        logger.info("Password reset completed for user: %s", user.username)
+        return True
+
     # ==================== Helpers ====================
 
     def _to_response(self, user: User) -> UserResponse:
@@ -507,6 +604,14 @@ class AuthService:
     def _generate_invite_token(self) -> str:
         """Generate a secure random token for invitations."""
         return secrets.token_urlsafe(32)
+
+    def _generate_password_reset_token(self) -> str:
+        """Generate a secure random token for password resets."""
+        return secrets.token_urlsafe(48)
+
+    def _hash_password_reset_token(self, token: str) -> str:
+        """Hash a raw password reset token for database storage."""
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
     async def create_invite(
         self, db: AsyncSession, request: InviteCreate, invited_by: User

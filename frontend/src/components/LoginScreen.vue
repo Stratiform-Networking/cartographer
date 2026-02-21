@@ -135,6 +135,15 @@
             </div>
           </div>
 
+          <div class="text-right -mt-1">
+            <router-link
+              to="/reset-password"
+              class="text-sm text-cyan-600 dark:text-cyan-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors"
+            >
+              Forgot password?
+            </router-link>
+          </div>
+
           <!-- Error Message -->
           <Transition
             enter-active-class="transition duration-200"

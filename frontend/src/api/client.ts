@@ -64,7 +64,8 @@ client.interceptors.response.use(
       const isAuthEndpoint =
         url.includes('/api/auth/login') ||
         url.includes('/api/auth/setup') ||
-        url.includes('/api/auth/verify');
+        url.includes('/api/auth/verify') ||
+        url.includes('/api/auth/password-reset/');
 
       if (!isAuthEndpoint && onUnauthorized) {
         console.warn('[API Client] Received 401, triggering unauthorized callback');

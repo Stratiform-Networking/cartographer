@@ -392,6 +392,36 @@ class TestAuthProxyRouter:
         assert call_kwargs["method"] == "POST"
         assert "/login" in call_kwargs["path"]
 
+    async def test_request_password_reset(self, mock_http_pool):
+        """request_password_reset should POST without auth"""
+        from app.routers.auth_proxy import request_password_reset
+
+        mock_request = MagicMock()
+        mock_request.headers = {}
+        mock_request.json = AsyncMock(return_value={"email": "user@test.com"})
+
+        await request_password_reset(request=mock_request)
+
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert call_kwargs["method"] == "POST"
+        assert "/password-reset/request" in call_kwargs["path"]
+
+    async def test_confirm_password_reset(self, mock_http_pool):
+        """confirm_password_reset should POST without auth"""
+        from app.routers.auth_proxy import confirm_password_reset
+
+        mock_request = MagicMock()
+        mock_request.headers = {}
+        mock_request.json = AsyncMock(
+            return_value={"token": "reset-token", "new_password": "newpassword123"}
+        )
+
+        await confirm_password_reset(request=mock_request)
+
+        call_kwargs = mock_http_pool.request.call_args[1]
+        assert call_kwargs["method"] == "POST"
+        assert "/password-reset/confirm" in call_kwargs["path"]
+
     async def test_logout(self, mock_http_pool, owner_user):
         """logout should POST (requires auth)"""
         from app.routers.auth_proxy import logout

@@ -3,7 +3,7 @@ Unit tests for auth router endpoints.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -224,6 +224,48 @@ class TestAuthenticationEndpoints:
             )
 
             assert response.status_code == 401
+
+    def test_request_password_reset_generic_success(self, client):
+        """Should always return generic success message for reset request."""
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.request_password_reset = AsyncMock(return_value=True)
+
+            response = client.post(
+                "/api/auth/password-reset/request",
+                json={"email": "owner@test.com"},
+            )
+
+            assert response.status_code == 200
+            assert "If an account with that email exists" in response.json()["message"]
+            mock_service.request_password_reset.assert_awaited_once_with(ANY, "owner@test.com")
+
+    def test_confirm_password_reset_success(self, client):
+        """Should reset password with a valid reset token."""
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.confirm_password_reset = AsyncMock(return_value=True)
+
+            response = client.post(
+                "/api/auth/password-reset/confirm",
+                json={"token": "valid-reset-token", "new_password": "newpassword123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["message"] == "Password has been reset successfully"
+
+    def test_confirm_password_reset_invalid_token(self, client):
+        """Should return 400 for invalid/expired reset tokens."""
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.confirm_password_reset = AsyncMock(
+                side_effect=ValueError("Invalid or expired reset token")
+            )
+
+            response = client.post(
+                "/api/auth/password-reset/confirm",
+                json={"token": "invalid-token", "new_password": "newpassword123"},
+            )
+
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Invalid or expired reset token"
 
     def test_logout(self, client, mock_owner):
         """Should logout user"""

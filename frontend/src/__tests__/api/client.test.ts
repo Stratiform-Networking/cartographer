@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios, { AxiosError } from 'axios';
-import { extractErrorMessage, toApiError, setOnUnauthorized } from '../../api/client';
+import client, { extractErrorMessage, toApiError, setOnUnauthorized } from '../../api/client';
 
 // Helper to create mock axios errors
 function createAxiosError(
@@ -102,6 +102,39 @@ describe('api/client', () => {
       // Should not throw - just updates internal state
       expect(callback1).not.toHaveBeenCalled();
       expect(callback2).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('401 interceptor behavior', () => {
+    function getResponseErrorHandler() {
+      const handlers = (client.interceptors.response as any).handlers;
+      return handlers[handlers.length - 1].rejected as (error: AxiosError) => Promise<never>;
+    }
+
+    it('does not trigger unauthorized callback for password reset endpoints', async () => {
+      const callback = vi.fn();
+      setOnUnauthorized(callback);
+
+      const handler = getResponseErrorHandler();
+      const error = createAxiosError(401, 'Unauthorized');
+      error.config = { url: '/api/auth/password-reset/request' } as AxiosError['config'];
+
+      await handler(error).catch(() => {});
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('triggers unauthorized callback for protected non-auth endpoints', async () => {
+      const callback = vi.fn();
+      setOnUnauthorized(callback);
+
+      const handler = getResponseErrorHandler();
+      const error = createAxiosError(401, 'Unauthorized');
+      error.config = { url: '/api/networks' } as AxiosError['config'];
+
+      await handler(error).catch(() => {});
+
+      expect(callback).toHaveBeenCalledTimes(1);
     });
   });
 });

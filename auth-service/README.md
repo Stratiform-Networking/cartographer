@@ -25,6 +25,8 @@ User authentication and authorization microservice for the Cartographer network 
 - `POST /api/auth/logout` - Logout (client-side token discard)
 - `GET /api/auth/session` - Get current session info
 - `POST /api/auth/verify` - Verify token validity
+- `POST /api/auth/password-reset/request` - Request password reset email (public)
+- `POST /api/auth/password-reset/confirm` - Reset password with token (public)
 
 ### User Management (Owner only)
 - `GET /api/auth/users` - List all users
@@ -61,6 +63,7 @@ User authentication and authorization microservice for the Cartographer network 
 | `EMAIL_FROM` | `Cartographer <noreply@cartographer.app>` | Sender email address |
 | `APPLICATION_URL` | `http://localhost:5173` | Public URL for invitation links |
 | `INVITE_EXPIRATION_HOURS` | `72` | Invitation expiration time in hours |
+| `PASSWORD_RESET_EXPIRATION_MINUTES` | `60` | Password reset token expiration in minutes |
 
 ### Email Configuration
 

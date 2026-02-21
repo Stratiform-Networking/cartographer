@@ -7,6 +7,7 @@ Uses Redis for persistent storage and real-time aggregation.
 
 import logging
 from datetime import datetime
+from inspect import isawaitable
 
 from ..models import EndpointUsage, EndpointUsageRecord, ServiceUsageSummary, UsageStatsResponse
 from .redis_publisher import redis_publisher
@@ -331,16 +332,22 @@ class UsageTracker:
             if service:
                 # Reset specific service
                 if redis:
+
+                    async def queue_delete(key: str) -> None:
+                        result = pipe.delete(key)
+                        if isawaitable(result):
+                            await result
+
                     # Get all endpoint keys for this service
                     # Note: Redis client uses decode_responses=True, so keys are already strings
                     endpoint_keys = await redis.smembers(f"{USAGE_KEY_PREFIX}{service}:endpoints")
 
                     pipe = redis.pipeline()
                     for key in endpoint_keys:
-                        pipe.delete(key)
+                        await queue_delete(key)
 
-                    pipe.delete(f"{USAGE_KEY_PREFIX}{service}:endpoints")
-                    pipe.delete(f"{USAGE_KEY_PREFIX}{service}:summary")
+                    await queue_delete(f"{USAGE_KEY_PREFIX}{service}:endpoints")
+                    await queue_delete(f"{USAGE_KEY_PREFIX}{service}:summary")
                     pipe.srem(USAGE_SERVICE_KEY, service)
 
                     await pipe.execute()
@@ -350,6 +357,12 @@ class UsageTracker:
             else:
                 # Reset all stats
                 if redis:
+
+                    async def queue_delete(key: str) -> None:
+                        result = pipe.delete(key)
+                        if isawaitable(result):
+                            await result
+
                     # Get all services
                     # Note: Redis client uses decode_responses=True, so keys are already strings
                     services = await redis.smembers(USAGE_SERVICE_KEY)
@@ -361,13 +374,13 @@ class UsageTracker:
                         )
 
                         for key in endpoint_keys:
-                            pipe.delete(key)
+                            await queue_delete(key)
 
-                        pipe.delete(f"{USAGE_KEY_PREFIX}{svc_name}:endpoints")
-                        pipe.delete(f"{USAGE_KEY_PREFIX}{svc_name}:summary")
+                        await queue_delete(f"{USAGE_KEY_PREFIX}{svc_name}:endpoints")
+                        await queue_delete(f"{USAGE_KEY_PREFIX}{svc_name}:summary")
 
-                    pipe.delete(USAGE_SERVICE_KEY)
-                    pipe.delete(USAGE_META_KEY)
+                    await queue_delete(USAGE_SERVICE_KEY)
+                    await queue_delete(USAGE_META_KEY)
 
                     await pipe.execute()
 

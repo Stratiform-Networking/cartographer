@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import reload_env_overrides, settings
 from app.main import app, create_app
 
 
@@ -259,7 +260,36 @@ class TestConfigValidation:
         ):
             from app.config import Settings
 
-            # Should not raise
-            settings = Settings()
-            assert settings.env == "production"
-            assert settings.cors_origins == "https://example.com"
+            validated_settings = Settings()
+            assert validated_settings.env == "production"
+            assert validated_settings.cors_origins == "https://example.com"
+
+
+class TestReloadEnv:
+    """Tests for internal env hot-reload paths."""
+
+    def test_reload_env_overrides_updates_known_fields(self):
+        """Should update known config fields and ignore unknown keys."""
+        with patch.object(settings, "metrics_service_url", "http://before"):
+            updated = reload_env_overrides(
+                {"metrics_service_url": "http://after", "unknown_field": "x"}
+            )
+
+            assert "metrics_service_url" in updated
+            assert settings.metrics_service_url == "http://after"
+
+    def test_reload_env_endpoint(self):
+        """Should return updated fields for internal reload endpoint."""
+        with patch("app.main.lifespan"):
+            test_app = create_app()
+            client = TestClient(test_app)
+
+            with patch("app.main.reload_env_overrides", return_value=["metrics_service_url"]) as m:
+                response = client.post(
+                    "/_internal/reload-env",
+                    json={"metrics_service_url": "http://core-metrics:8003"},
+                )
+
+            assert response.status_code == 200
+            assert response.json() == {"status": "ok", "updated": ["metrics_service_url"]}
+            m.assert_called_once_with({"metrics_service_url": "http://core-metrics:8003"})

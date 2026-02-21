@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
+from app.config import reload_env_overrides, settings
 
 
 class TestCreateApp:
@@ -233,3 +233,34 @@ class TestAppInstance:
         from app.main import app
 
         assert app is not None
+
+
+class TestReloadEnv:
+    """Tests for internal env hot-reload paths."""
+
+    def test_reload_env_overrides_updates_known_fields(self):
+        """Should update known config fields and ignore unknown keys."""
+        with patch.object(settings, "application_url", "http://before"):
+            updated = reload_env_overrides(
+                {"application_url": "http://after", "unknown_field": "x"}
+            )
+
+            assert "application_url" in updated
+            assert settings.application_url == "http://after"
+
+    def test_reload_env_endpoint(self):
+        """Should return updated fields for internal reload endpoint."""
+        from app.main import create_app
+
+        app = create_app()
+        client = TestClient(app, raise_server_exceptions=False)
+
+        with patch("app.main.reload_env_overrides", return_value=["application_url"]) as m:
+            response = client.post(
+                "/_internal/reload-env",
+                json={"application_url": "https://prod.example.com/app"},
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "updated": ["application_url"]}
+        m.assert_called_once_with({"application_url": "https://prod.example.com/app"})

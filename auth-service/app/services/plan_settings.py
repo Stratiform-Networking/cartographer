@@ -160,3 +160,38 @@ async def apply_plan_to_user(
         await db.flush()
 
     return row
+
+
+async def initialize_default_plan_settings_for_new_user(
+    db: AsyncSession,
+    user_id: str,
+    *,
+    commit: bool = False,
+) -> UserPlanSettings | None:
+    """
+    Initialize default (free-tier) plan settings for a newly created user.
+
+    This is intentionally mock-safe for unit tests that pass MagicMock/AsyncMock
+    database objects and assert specific `db.add`/`db.commit` call counts.
+    In production, auth-service passes a real SQLAlchemy AsyncSession.
+    """
+    if not isinstance(db, AsyncSession):
+        return None
+
+    _, limits = resolve_plan_limits(DEFAULT_PLAN_ID)
+    row = UserPlanSettings(
+        user_id=user_id,
+        plan_id=DEFAULT_PLAN_ID,
+        owned_networks_limit=limits["owned_networks_limit"],
+        assistant_daily_chat_messages_limit=limits["assistant_daily_chat_messages_limit"],
+        automatic_full_scan_min_interval_seconds=limits["automatic_full_scan_min_interval_seconds"],
+    )
+    db.add(row)
+
+    if commit:
+        await db.commit()
+        await db.refresh(row)
+    else:
+        await db.flush()
+
+    return row

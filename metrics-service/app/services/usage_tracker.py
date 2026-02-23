@@ -316,6 +316,53 @@ class UsageTracker:
 
         return response
 
+    async def _queue_pipe_delete(self, pipe, key: str) -> None:
+        """Queue a delete on a Redis pipeline for clients that may return awaitables."""
+        result = pipe.delete(key)
+        if isawaitable(result):
+            await result
+
+    async def _reset_service_stats_in_redis(self, redis, pipe, service: str) -> None:
+        """Queue deletion of all Redis keys for a single service."""
+        # Note: Redis client uses decode_responses=True, so keys are already strings
+        endpoint_keys = await redis.smembers(f"{USAGE_KEY_PREFIX}{service}:endpoints")
+
+        for key in endpoint_keys:
+            await self._queue_pipe_delete(pipe, key)
+
+        await self._queue_pipe_delete(pipe, f"{USAGE_KEY_PREFIX}{service}:endpoints")
+        await self._queue_pipe_delete(pipe, f"{USAGE_KEY_PREFIX}{service}:summary")
+
+    async def _reset_all_stats_in_redis(self, redis) -> None:
+        """Delete all usage stats from Redis."""
+        # Note: Redis client uses decode_responses=True, so keys are already strings
+        services = await redis.smembers(USAGE_SERVICE_KEY)
+        pipe = redis.pipeline()
+
+        for svc_name in services:
+            await self._reset_service_stats_in_redis(redis, pipe, svc_name)
+
+        await self._queue_pipe_delete(pipe, USAGE_SERVICE_KEY)
+        await self._queue_pipe_delete(pipe, USAGE_META_KEY)
+        await pipe.execute()
+
+    async def _reset_single_service_in_redis(self, redis, service: str) -> None:
+        """Delete usage stats for a single service from Redis."""
+        pipe = redis.pipeline()
+        await self._reset_service_stats_in_redis(redis, pipe, service)
+        pipe.srem(USAGE_SERVICE_KEY, service)
+        await pipe.execute()
+
+    def _reset_local_service_stats(self, service: str) -> None:
+        """Delete local cache for a single service."""
+        self._local_cache.pop(service, None)
+
+    def _reset_all_local_stats(self) -> None:
+        """Clear local usage stats and reset timestamps."""
+        self._local_cache = {}
+        self._collection_started = None
+        self._last_updated = None
+
     async def reset_stats(self, service: str | None = None) -> bool:
         """
         Reset usage statistics.
@@ -330,63 +377,13 @@ class UsageTracker:
             redis = redis_publisher._redis
 
             if service:
-                # Reset specific service
                 if redis:
-
-                    async def queue_delete(key: str) -> None:
-                        result = pipe.delete(key)
-                        if isawaitable(result):
-                            await result
-
-                    # Get all endpoint keys for this service
-                    # Note: Redis client uses decode_responses=True, so keys are already strings
-                    endpoint_keys = await redis.smembers(f"{USAGE_KEY_PREFIX}{service}:endpoints")
-
-                    pipe = redis.pipeline()
-                    for key in endpoint_keys:
-                        await queue_delete(key)
-
-                    await queue_delete(f"{USAGE_KEY_PREFIX}{service}:endpoints")
-                    await queue_delete(f"{USAGE_KEY_PREFIX}{service}:summary")
-                    pipe.srem(USAGE_SERVICE_KEY, service)
-
-                    await pipe.execute()
-
-                if service in self._local_cache:
-                    del self._local_cache[service]
+                    await self._reset_single_service_in_redis(redis, service)
+                self._reset_local_service_stats(service)
             else:
-                # Reset all stats
                 if redis:
-
-                    async def queue_delete(key: str) -> None:
-                        result = pipe.delete(key)
-                        if isawaitable(result):
-                            await result
-
-                    # Get all services
-                    # Note: Redis client uses decode_responses=True, so keys are already strings
-                    services = await redis.smembers(USAGE_SERVICE_KEY)
-
-                    pipe = redis.pipeline()
-                    for svc_name in services:
-                        endpoint_keys = await redis.smembers(
-                            f"{USAGE_KEY_PREFIX}{svc_name}:endpoints"
-                        )
-
-                        for key in endpoint_keys:
-                            await queue_delete(key)
-
-                        await queue_delete(f"{USAGE_KEY_PREFIX}{svc_name}:endpoints")
-                        await queue_delete(f"{USAGE_KEY_PREFIX}{svc_name}:summary")
-
-                    await queue_delete(USAGE_SERVICE_KEY)
-                    await queue_delete(USAGE_META_KEY)
-
-                    await pipe.execute()
-
-                self._local_cache = {}
-                self._collection_started = None
-                self._last_updated = None
+                    await self._reset_all_stats_in_redis(redis)
+                self._reset_all_local_stats()
 
             logger.info(
                 f"Reset usage stats for {'service ' + service if service else 'all services'}"

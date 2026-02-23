@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime, timedelta
 
+import httpx
 from fastapi import HTTPException
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -55,6 +56,27 @@ return v
 def is_role_exempt(user_role: str) -> bool:
     """Check if a user role is exempt from rate limiting."""
     return user_role.lower() in settings.rate_limit_exempt_roles
+
+
+async def _get_plan_default_limit(user_id: str, fallback_limit: int) -> int:
+    """Fetch the user's plan-derived assistant message limit from auth-service."""
+    if not settings.auth_service_url:
+        return fallback_limit
+
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            response = await client.get(
+                f"{settings.auth_service_url}/api/auth/internal/users/{user_id}/plan-settings"
+            )
+        if response.status_code != 200:
+            return fallback_limit
+
+        data = response.json()
+        plan_limit = data.get("assistant_daily_chat_messages_limit")
+        return int(plan_limit) if plan_limit is not None else fallback_limit
+    except Exception as exc:
+        logger.debug("[RateLimit] Failed to fetch plan settings for %s: %s", user_id, exc)
+        return fallback_limit
 
 
 async def _create_new_user_limit(session, user_id: str, is_exempt: bool, default_limit: int) -> int:
@@ -123,10 +145,11 @@ async def get_user_limit(user_id: str, default_limit: int, user_role: str | None
     from ..database import AsyncSessionLocal
     from ..db_models import UserRateLimit
 
+    plan_default_limit = await _get_plan_default_limit(user_id, default_limit)
     is_exempt = user_role and is_role_exempt(user_role)
 
     if AsyncSessionLocal is None:
-        return UNLIMITED_LIMIT if is_exempt else default_limit
+        return UNLIMITED_LIMIT if is_exempt else plan_default_limit
 
     try:
         async with AsyncSessionLocal() as session:
@@ -136,15 +159,15 @@ async def get_user_limit(user_id: str, default_limit: int, user_role: str | None
             user_limit = result.scalar_one_or_none()
 
             if user_limit is None:
-                return await _create_new_user_limit(session, user_id, is_exempt, default_limit)
+                return await _create_new_user_limit(session, user_id, is_exempt, plan_default_limit)
 
             return await _handle_exemption_change(
-                session, user_limit, user_id, user_role, is_exempt, default_limit
+                session, user_limit, user_id, user_role, is_exempt, plan_default_limit
             )
 
     except Exception as e:
         logger.error(f"[RateLimit] Error getting user limit: {e}")
-        return UNLIMITED_LIMIT if is_exempt else default_limit
+        return UNLIMITED_LIMIT if is_exempt else plan_default_limit
 
 
 async def check_rate_limit(

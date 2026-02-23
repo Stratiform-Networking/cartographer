@@ -18,6 +18,7 @@ svix==1.37.0  # Clerk webhook verification
 sqlalchemy[asyncio]==2.0.36
 asyncpg>=0.30.0
 alembic==1.14.0
+PyYAML>=6.0.2
 
 # Testing
 pytest==8.3.3

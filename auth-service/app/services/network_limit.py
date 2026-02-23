@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..db_models import UserLimit
+from .plan_settings import get_user_plan_settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,18 @@ UNLIMITED_LIMIT = -1
 def is_role_exempt(user_role: str) -> bool:
     """Check if a user role is exempt from network limits."""
     return user_role.lower() in settings.network_limit_exempt_roles_set
+
+
+async def _get_default_network_limit(db: AsyncSession, user_id: str) -> int:
+    """Get the user's plan-derived network limit, falling back to env default."""
+    try:
+        plan_settings = await get_user_plan_settings(db, user_id, create_if_missing=False)
+        if plan_settings is None:
+            return settings.network_limit_per_user
+        return plan_settings.owned_networks_limit
+    except Exception as exc:
+        logger.debug("[NetworkLimit] Falling back to env default for %s: %s", user_id, exc)
+        return settings.network_limit_per_user
 
 
 async def get_user_network_limit(
@@ -41,7 +54,6 @@ async def get_user_network_limit(
         -1 for unlimited, or a positive number for the limit
     """
     is_exempt = user_role and is_role_exempt(user_role)
-
     result = await db.execute(select(UserLimit).where(UserLimit.user_id == user_id))
     user_limit = result.scalar_one_or_none()
 
@@ -67,7 +79,7 @@ async def get_user_network_limit(
                 if user_limit is None:
                     raise
         else:
-            return settings.network_limit_per_user
+            return await _get_default_network_limit(db, user_id)
 
     # Handle exemption status changes
     if is_exempt and not user_limit.is_role_exempt:
@@ -82,7 +94,7 @@ async def get_user_network_limit(
         user_limit.is_role_exempt = False
         await db.commit()
         logger.info(f"[NetworkLimit] User {user_id} lost exemption (role: {user_role})")
-        return settings.network_limit_per_user
+        return await _get_default_network_limit(db, user_id)
 
     if is_exempt:
         return UNLIMITED_LIMIT
@@ -90,7 +102,7 @@ async def get_user_network_limit(
     return (
         user_limit.network_limit
         if user_limit.network_limit is not None
-        else settings.network_limit_per_user
+        else await _get_default_network_limit(db, user_id)
     )
 
 

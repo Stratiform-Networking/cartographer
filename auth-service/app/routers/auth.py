@@ -31,6 +31,8 @@ from ..models import (
     SessionInfo,
     SetupStatus,
     UserCreate,
+    UserPlanSettingsResponse,
+    UserPlanSettingsUpdate,
     UserPreferences,
     UserPreferencesUpdate,
     UserResponse,
@@ -38,6 +40,7 @@ from ..models import (
 )
 from ..rate_limit import get_client_ip, rate_limit
 from ..services.auth_service import auth_service
+from ..services.plan_settings import apply_plan_to_user, get_user_plan_settings
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +175,58 @@ async def get_user_internal(user_id: str, db: AsyncSession = Depends(get_db)):
         "first_name": user.first_name,
         "last_name": user.last_name,
     }
+
+
+@router.get("/internal/users/{user_id}/plan-settings", response_model=UserPlanSettingsResponse)
+async def get_user_plan_settings_internal(user_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get (or initialize) a user's centralized plan-derived settings.
+
+    Internal service use for cloud/assistant/core services.
+    """
+    user = await auth_service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    plan_settings = await get_user_plan_settings(db, user_id, create_if_missing=True)
+    if not plan_settings:
+        raise HTTPException(status_code=500, detail="Failed to resolve user plan settings")
+
+    return UserPlanSettingsResponse(
+        user_id=plan_settings.user_id,
+        plan_id=plan_settings.plan_id,
+        owned_networks_limit=plan_settings.owned_networks_limit,
+        assistant_daily_chat_messages_limit=plan_settings.assistant_daily_chat_messages_limit,
+        automatic_full_scan_min_interval_seconds=plan_settings.automatic_full_scan_min_interval_seconds,
+    )
+
+
+@router.put("/internal/users/{user_id}/plan-settings", response_model=UserPlanSettingsResponse)
+async def set_user_plan_settings_internal(
+    user_id: str,
+    request: UserPlanSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Apply a subscription tier to a user and refresh their plan-derived settings.
+
+    Internal endpoint used by future billing/subscription hooks.
+    """
+    user = await auth_service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    plan_settings = await apply_plan_to_user(
+        db, user_id=user_id, plan_id=request.plan_id, commit=True
+    )
+
+    return UserPlanSettingsResponse(
+        user_id=plan_settings.user_id,
+        plan_id=plan_settings.plan_id,
+        owned_networks_limit=plan_settings.owned_networks_limit,
+        assistant_daily_chat_messages_limit=plan_settings.assistant_daily_chat_messages_limit,
+        automatic_full_scan_min_interval_seconds=plan_settings.automatic_full_scan_min_interval_seconds,
+    )
 
 
 # ==================== Clerk OAuth Endpoint (Cloud) ====================

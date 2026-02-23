@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db_models import ProviderLink, User, UserRole
+from ..services.plan_settings import apply_plan_to_user
 from .claims import AuthProvider, IdentityClaims
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,7 @@ async def _create_new_user(
         provider_user_id=claims.provider_user_id,
     )
     db.add(new_link)
+    await apply_plan_to_user(db, new_user.id, None, commit=False)
 
     await db.commit()
     logger.info(f"Created user {new_user.id} with provider link for {claims.provider.value}")

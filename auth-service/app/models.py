@@ -303,6 +303,27 @@ class NetworkLimitUpdate(BaseModel):
         return v
 
 
+class UserPlanSettingsResponse(BaseModel):
+    """Current plan-derived settings for a user."""
+
+    user_id: str
+    plan_id: str
+    owned_networks_limit: int
+    assistant_daily_chat_messages_limit: int
+    automatic_full_scan_min_interval_seconds: int
+
+
+class UserPlanSettingsUpdate(BaseModel):
+    """Update a user's current plan and refresh plan-derived settings."""
+
+    plan_id: str = Field(..., min_length=1, max_length=50)
+
+    @field_validator("plan_id")
+    @classmethod
+    def validate_plan_id(cls, v: str) -> str:
+        return v.strip().lower()
+
+
 # ==================== Internal Database Models ====================
 
 

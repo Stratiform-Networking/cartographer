@@ -31,6 +31,7 @@ from ..models import (
     UserResponse,
     UserUpdate,
 )
+from .plan_settings import apply_plan_to_user
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,7 @@ class AuthService:
         )
 
         db.add(user)
+        await apply_plan_to_user(db, user.id, None, commit=False)
         try:
             await db.commit()
         except IntegrityError as e:
@@ -167,6 +169,7 @@ class AuthService:
         )
 
         db.add(user)
+        await apply_plan_to_user(db, user.id, None, commit=False)
         try:
             await db.commit()
         except IntegrityError as e:
@@ -217,6 +220,7 @@ class AuthService:
         )
 
         db.add(user)
+        await apply_plan_to_user(db, user.id, None, commit=False)
         try:
             await db.commit()
         except IntegrityError as e:
@@ -750,6 +754,7 @@ class AuthService:
         )
 
         db.add(user)
+        await apply_plan_to_user(db, user.id, None, commit=False)
 
         invite.status = InviteStatus.ACCEPTED
         invite.accepted_at = now

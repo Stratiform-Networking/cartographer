@@ -192,6 +192,36 @@ class UserLimit(Base):
     )
 
 
+class UserPlanSettings(Base):
+    """
+    Per-user plan-derived values (centralized plan snapshot).
+
+    This stores the current plan's values that are consumed by different
+    services so the plan state is not scattered across service-specific tables.
+    """
+
+    __tablename__ = "user_plan_settings"
+
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    plan_id: Mapped[str] = mapped_column(String(50), nullable=False, default="free")
+
+    # Supported plan limits currently implemented in code.
+    owned_networks_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    assistant_daily_chat_messages_limit: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5
+    )
+    automatic_full_scan_min_interval_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=7200
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class PasswordResetToken(Base):
     """Password reset tokens for one-time, time-limited password reset flows."""
 

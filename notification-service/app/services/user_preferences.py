@@ -25,11 +25,14 @@ from ..models.database import (
 )
 
 logger = logging.getLogger(__name__)
+DEVICE_ADD_REMOVE_DEFAULTS_MARKER = "__device_add_remove_defaults_v1"
+DEVICE_ADD_REMOVE_DEFAULT_TYPES = [
+    NotificationType.DEVICE_ADDED.value,
+    NotificationType.DEVICE_REMOVED.value,
+]
 
 # Default notification types for new users
 DEFAULT_ENABLED_TYPES = [
-    NotificationType.DEVICE_ADDED,
-    NotificationType.DEVICE_REMOVED,
     NotificationType.DEVICE_OFFLINE,
     NotificationType.DEVICE_ONLINE,
     NotificationType.DEVICE_DEGRADED,
@@ -42,6 +45,8 @@ DEFAULT_ENABLED_TYPES = [
     NotificationType.SYSTEM_STATUS,
     NotificationType.MASS_OUTAGE,
     NotificationType.MASS_RECOVERY,
+    NotificationType.DEVICE_ADDED,
+    NotificationType.DEVICE_REMOVED,
 ]
 
 
@@ -55,13 +60,44 @@ class UserPreferencesService:
         """
         type_priorities = prefs.type_priorities or {}
         # Remove any keys starting with __ (internal markers)
-        internal_keys = [k for k in type_priorities if k.startswith("__")]
+        internal_keys = [
+            k
+            for k in type_priorities
+            if k.startswith("__") and k != DEVICE_ADD_REMOVE_DEFAULTS_MARKER
+        ]
         if internal_keys:
             prefs.type_priorities = {
-                k: v for k, v in type_priorities.items() if not k.startswith("__")
+                k: v
+                for k, v in type_priorities.items()
+                if not (k.startswith("__") and k != DEVICE_ADD_REMOVE_DEFAULTS_MARKER)
             }
             return True
         return False
+
+    def _migrate_device_add_remove_enabled_types(
+        self, prefs: "UserNetworkNotificationPrefs"
+    ) -> bool:
+        """
+        One-time migration for existing users:
+        append device_added/device_removed to enabled_types and persist a hidden marker.
+        """
+        type_priorities = dict(prefs.type_priorities or {})
+        if type_priorities.get(DEVICE_ADD_REMOVE_DEFAULTS_MARKER):
+            return False
+
+        enabled_types = list(prefs.enabled_types or [])
+        changed = False
+        for event_type in DEVICE_ADD_REMOVE_DEFAULT_TYPES:
+            if event_type not in enabled_types:
+                enabled_types.append(event_type)  # append so they appear at the bottom
+                changed = True
+
+        if changed:
+            prefs.enabled_types = enabled_types
+
+        type_priorities[DEVICE_ADD_REMOVE_DEFAULTS_MARKER] = "1"
+        prefs.type_priorities = type_priorities
+        return True
 
     async def get_network_preferences(
         self,
@@ -109,6 +145,13 @@ class UserPreferencesService:
         # Apply one-time migration for new notification types
         needs_commit = False
         for prefs in prefs_list:
+            if self._migrate_device_add_remove_enabled_types(prefs):
+                logger.info(
+                    "Enabled device add/remove defaults for existing user %s in network %s",
+                    prefs.user_id,
+                    network_id,
+                )
+                needs_commit = True
             if self._clean_type_priorities(prefs):
                 logger.info(
                     f"Cleaned type_priorities for user {prefs.user_id} in network {network_id}"
@@ -173,10 +216,21 @@ class UserPreferencesService:
             db.add(prefs)
             await db.commit()
             await db.refresh(prefs)
-        elif self._clean_type_priorities(prefs):
-            logger.info(f"Cleaned type_priorities for user {user_id} in network {network_id}")
-            await db.commit()
-            await db.refresh(prefs)
+        else:
+            needs_commit = False
+            if self._migrate_device_add_remove_enabled_types(prefs):
+                logger.info(
+                    "Enabled device add/remove defaults for existing user %s in network %s",
+                    user_id,
+                    network_id,
+                )
+                needs_commit = True
+            if self._clean_type_priorities(prefs):
+                logger.info(f"Cleaned type_priorities for user {user_id} in network {network_id}")
+                needs_commit = True
+            if needs_commit:
+                await db.commit()
+                await db.refresh(prefs)
 
         return prefs
 
@@ -189,11 +243,22 @@ class UserPreferencesService:
     ) -> UserNetworkNotificationPrefs:
         """Update user's network notification preferences"""
         prefs = await self.get_or_create_network_preferences(db, user_id, network_id)
+        existing_internal_markers = {
+            k: v
+            for k, v in (prefs.type_priorities or {}).items()
+            if isinstance(k, str) and k.startswith("__")
+        }
 
         # Update fields
         for key, value in update_data.items():
             if hasattr(prefs, key) and value is not None:
                 setattr(prefs, key, value)
+
+        if "type_priorities" in update_data and existing_internal_markers:
+            merged_type_priorities = dict(prefs.type_priorities or {})
+            for key, value in existing_internal_markers.items():
+                merged_type_priorities.setdefault(key, value)
+            prefs.type_priorities = merged_type_priorities
 
         prefs.updated_at = datetime.utcnow()
         await db.commit()

@@ -21,6 +21,34 @@ class TestUserPreferencesService:
 
         assert NotificationType.DEVICE_ADDED in DEFAULT_ENABLED_TYPES
         assert NotificationType.DEVICE_REMOVED in DEFAULT_ENABLED_TYPES
+        assert DEFAULT_ENABLED_TYPES[-2] == NotificationType.DEVICE_ADDED
+        assert DEFAULT_ENABLED_TYPES[-1] == NotificationType.DEVICE_REMOVED
+
+    @pytest.mark.asyncio
+    async def test_existing_prefs_backfill_device_add_remove_once(self):
+        """Existing users should get new types appended and marked as migrated."""
+        from app.services.user_preferences import (
+            DEVICE_ADD_REMOVE_DEFAULTS_MARKER,
+            UserPreferencesService,
+        )
+
+        service = UserPreferencesService()
+        mock_db = AsyncMock()
+        mock_prefs = MagicMock()
+        mock_prefs.user_id = "user-123"
+        mock_prefs.network_id = "net-123"
+        mock_prefs.enabled_types = ["device_offline", "device_online"]
+        mock_prefs.type_priorities = {}
+
+        with patch.object(service, "get_network_preferences", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_prefs
+
+            prefs = await service.get_or_create_network_preferences(mock_db, "user-123", "net-123")
+
+            assert prefs.enabled_types[-2:] == ["device_added", "device_removed"]
+            assert prefs.type_priorities[DEVICE_ADD_REMOVE_DEFAULTS_MARKER] == "1"
+            mock_db.commit.assert_called_once()
+            mock_db.refresh.assert_called_once_with(mock_prefs)
 
     @pytest.mark.asyncio
     async def test_get_network_preferences_not_found(self):

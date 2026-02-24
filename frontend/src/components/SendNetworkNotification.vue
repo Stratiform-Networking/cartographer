@@ -107,14 +107,14 @@
                   <option value="system_status">System Status</option>
                   <option value="security_alert">Security Alert</option>
                   <option value="isp_issue">ISP Issue</option>
-                  <option value="device_added">Device Added</option>
-                  <option value="device_removed">Device Removed</option>
                   <option value="device_offline">Device Offline</option>
                   <option value="device_online">Device Online</option>
                   <option value="device_degraded">Device Degraded</option>
                   <option value="anomaly_detected">Anomaly Detected</option>
                   <option value="high_latency">High Latency</option>
                   <option value="packet_loss">Packet Loss</option>
+                  <option value="device_added">Device Added</option>
+                  <option value="device_removed">Device Removed</option>
                 </select>
               </div>
               <div>
@@ -570,14 +570,14 @@
                   <option value="system_status">System Status</option>
                   <option value="security_alert">Security Alert</option>
                   <option value="isp_issue">ISP Issue</option>
-                  <option value="device_added">Device Added</option>
-                  <option value="device_removed">Device Removed</option>
                   <option value="device_offline">Device Offline</option>
                   <option value="device_online">Device Online</option>
                   <option value="device_degraded">Device Degraded</option>
                   <option value="anomaly_detected">Anomaly</option>
                   <option value="high_latency">High Latency</option>
                   <option value="packet_loss">Packet Loss</option>
+                  <option value="device_added">Device Added</option>
+                  <option value="device_removed">Device Removed</option>
                 </select>
               </div>
               <div>

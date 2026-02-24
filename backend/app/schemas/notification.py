@@ -29,8 +29,6 @@ class NotificationPreferencesCreate(BaseModel):
 
     enabled_types: list[str] = Field(
         default_factory=lambda: [
-            "device_added",
-            "device_removed",
             "device_offline",
             "device_online",
             "device_degraded",
@@ -40,6 +38,8 @@ class NotificationPreferencesCreate(BaseModel):
             "security_alert",
             "cartographer_down",
             "cartographer_up",
+            "device_added",
+            "device_removed",
         ]
     )
     minimum_priority: str = "medium"  # low, medium, high, critical

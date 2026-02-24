@@ -145,6 +145,8 @@ class TestNotificationPreferences:
         assert NotificationType.DEVICE_REMOVED in prefs.enabled_notification_types
         assert NotificationType.DEVICE_OFFLINE in prefs.enabled_notification_types
         assert NotificationType.CARTOGRAPHER_UP in prefs.enabled_notification_types
+        assert prefs.enabled_notification_types[-2] == NotificationType.DEVICE_ADDED
+        assert prefs.enabled_notification_types[-1] == NotificationType.DEVICE_REMOVED
 
     def test_default_priority_for_device_added_removed(self):
         """Device add/remove defaults should be high priority."""

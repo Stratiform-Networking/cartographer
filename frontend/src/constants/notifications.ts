@@ -15,18 +15,6 @@ export interface NotificationTypeInfo {
 }
 
 export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeInfo> = {
-  device_added: {
-    label: 'Device Added',
-    icon: '➕',
-    description: 'When a new discovered device is added to the network',
-    defaultPriority: 'high',
-  },
-  device_removed: {
-    label: 'Device Removed',
-    icon: '➖',
-    description: 'When a device is manually removed from the network map',
-    defaultPriority: 'high',
-  },
   device_offline: {
     label: 'Device Offline',
     icon: '🔴',
@@ -110,6 +98,18 @@ export const NOTIFICATION_TYPE_INFO: Record<NotificationType, NotificationTypeIn
     icon: '🔄',
     description: 'Multiple devices back online',
     defaultPriority: 'medium',
+  },
+  device_added: {
+    label: 'Device Added',
+    icon: '➕',
+    description: 'When a new discovered device is added to the network',
+    defaultPriority: 'high',
+  },
+  device_removed: {
+    label: 'Device Removed',
+    icon: '➖',
+    description: 'When a device is manually removed from the network map',
+    defaultPriority: 'high',
   },
 };
 

@@ -149,8 +149,6 @@ class NotificationPreferences(BaseModel):
         default_factory=lambda: [
             NotificationType.DEVICE_OFFLINE,
             NotificationType.DEVICE_ONLINE,
-            NotificationType.DEVICE_ADDED,
-            NotificationType.DEVICE_REMOVED,
             NotificationType.DEVICE_DEGRADED,
             NotificationType.ANOMALY_DETECTED,
             NotificationType.HIGH_LATENCY,
@@ -163,6 +161,8 @@ class NotificationPreferences(BaseModel):
             NotificationType.CARTOGRAPHER_UP,
             NotificationType.MASS_OUTAGE,
             NotificationType.MASS_RECOVERY,
+            NotificationType.DEVICE_ADDED,
+            NotificationType.DEVICE_REMOVED,
         ]
     )
 

@@ -5,6 +5,13 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0](https://github.com/devartech/cartographer/compare/v0.39.0...v0.40.0) (2026-02-24)
+
+
+### ✨ Features
+
+* add health polling intervals ([954e8d5](https://github.com/devartech/cartographer/commit/954e8d5e5b5df47998cd859703bbf8c5210bbcb6))
+
 ## [0.39.0](https://github.com/devartech/cartographer/compare/v0.38.2...v0.39.0) (2026-02-23)
 
 

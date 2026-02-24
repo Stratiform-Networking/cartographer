@@ -1,6 +1,6 @@
 """Add health poll interval to user_plan_settings.
 
-Revision ID: 009_add_health_poll_interval_to_user_plan_settings
+Revision ID: 009_add_health_poll_to_plan_sett
 Revises: 008_create_user_plan_settings
 Create Date: 2026-02-24
 """
@@ -12,7 +12,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = "009_add_health_poll_interval_to_user_plan_settings"
+revision: str = "009_add_health_poll_to_plan_sett"
 down_revision: Union[str, None] = "008_create_user_plan_settings"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

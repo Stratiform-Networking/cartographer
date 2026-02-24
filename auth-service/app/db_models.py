@@ -215,6 +215,7 @@ class UserPlanSettings(Base):
     automatic_full_scan_min_interval_seconds: Mapped[int] = mapped_column(
         Integer, nullable=False, default=7200
     )
+    health_poll_interval_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

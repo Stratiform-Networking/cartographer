@@ -196,6 +196,7 @@ class TestInternalPlanSettingsEndpoints:
         plan_row.owned_networks_limit = 1
         plan_row.assistant_daily_chat_messages_limit = 5
         plan_row.automatic_full_scan_min_interval_seconds = 7200
+        plan_row.health_poll_interval_seconds = 60
 
         with (
             patch("app.routers.auth.auth_service") as mock_service,
@@ -241,6 +242,7 @@ class TestInternalPlanSettingsEndpoints:
         plan_row.owned_networks_limit = 3
         plan_row.assistant_daily_chat_messages_limit = 50
         plan_row.automatic_full_scan_min_interval_seconds = 60
+        plan_row.health_poll_interval_seconds = 30
 
         with (
             patch("app.routers.auth.auth_service") as mock_service,

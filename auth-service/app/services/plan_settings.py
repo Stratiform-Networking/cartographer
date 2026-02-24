@@ -20,21 +20,25 @@ _FALLBACK_PLAN_LIMITS: dict[str, dict[str, int]] = {
         "owned_networks_limit": 1,
         "assistant_daily_chat_messages_limit": 5,
         "automatic_full_scan_min_interval_seconds": 7200,
+        "health_poll_interval_seconds": 60,
     },
     "pro": {
         "owned_networks_limit": 3,
         "assistant_daily_chat_messages_limit": 50,
         "automatic_full_scan_min_interval_seconds": 60,
+        "health_poll_interval_seconds": 30,
     },
     "proplus": {
         "owned_networks_limit": 20,
         "assistant_daily_chat_messages_limit": -1,
         "automatic_full_scan_min_interval_seconds": 30,
+        "health_poll_interval_seconds": 5,
     },
     "enterprise": {
         "owned_networks_limit": -1,
         "assistant_daily_chat_messages_limit": -1,
         "automatic_full_scan_min_interval_seconds": 30,
+        "health_poll_interval_seconds": 5,
     },
 }
 
@@ -87,6 +91,7 @@ def _load_all_plan_limits() -> dict[str, dict[str, int]]:
                 "automatic_full_scan_min_interval_seconds": int(
                     tier_limits["automatic_full_scan_min_interval_seconds"]
                 ),
+                "health_poll_interval_seconds": int(tier_limits["health_poll_interval_seconds"]),
             }
         except Exception as exc:
             logger.warning(
@@ -152,6 +157,7 @@ async def apply_plan_to_user(
     row.automatic_full_scan_min_interval_seconds = limits[
         "automatic_full_scan_min_interval_seconds"
     ]
+    row.health_poll_interval_seconds = limits["health_poll_interval_seconds"]
 
     if commit:
         await db.commit()
@@ -185,6 +191,7 @@ async def initialize_default_plan_settings_for_new_user(
         owned_networks_limit=limits["owned_networks_limit"],
         assistant_daily_chat_messages_limit=limits["assistant_daily_chat_messages_limit"],
         automatic_full_scan_min_interval_seconds=limits["automatic_full_scan_min_interval_seconds"],
+        health_poll_interval_seconds=limits["health_poll_interval_seconds"],
     )
     db.add(row)
 

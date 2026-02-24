@@ -198,6 +198,7 @@ async def get_user_plan_settings_internal(user_id: str, db: AsyncSession = Depen
         owned_networks_limit=plan_settings.owned_networks_limit,
         assistant_daily_chat_messages_limit=plan_settings.assistant_daily_chat_messages_limit,
         automatic_full_scan_min_interval_seconds=plan_settings.automatic_full_scan_min_interval_seconds,
+        health_poll_interval_seconds=plan_settings.health_poll_interval_seconds,
     )
 
 
@@ -226,6 +227,7 @@ async def set_user_plan_settings_internal(
         owned_networks_limit=plan_settings.owned_networks_limit,
         assistant_daily_chat_messages_limit=plan_settings.assistant_daily_chat_messages_limit,
         automatic_full_scan_min_interval_seconds=plan_settings.automatic_full_scan_min_interval_seconds,
+        health_poll_interval_seconds=plan_settings.health_poll_interval_seconds,
     )
 
 

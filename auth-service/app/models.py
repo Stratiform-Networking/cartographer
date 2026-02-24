@@ -311,6 +311,7 @@ class UserPlanSettingsResponse(BaseModel):
     owned_networks_limit: int
     assistant_daily_chat_messages_limit: int
     automatic_full_scan_min_interval_seconds: int
+    health_poll_interval_seconds: int
 
 
 class UserPlanSettingsUpdate(BaseModel):

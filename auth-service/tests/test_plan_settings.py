@@ -51,6 +51,7 @@ class TestPlanConfigLoading:
                         "  owned_networks_limit: 7",
                         "  assistant_daily_chat_messages_limit: 123",
                         "  automatic_full_scan_min_interval_seconds: 42",
+                        "  health_poll_interval_seconds: 9",
                     ]
                 ),
                 encoding="utf-8",
@@ -73,6 +74,7 @@ class TestPlanConfigLoading:
         assert loaded["pro"]["owned_networks_limit"] == 7
         assert loaded["pro"]["assistant_daily_chat_messages_limit"] == 123
         assert loaded["pro"]["automatic_full_scan_min_interval_seconds"] == 42
+        assert loaded["pro"]["health_poll_interval_seconds"] == 9
         # Partial file should not overwrite fallback/defaults for enterprise
         assert loaded["enterprise"]["assistant_daily_chat_messages_limit"] == -1
 
@@ -85,6 +87,7 @@ class TestPlanConfigLoading:
                     "owned_networks_limit": 1,
                     "assistant_daily_chat_messages_limit": 5,
                     "automatic_full_scan_min_interval_seconds": 7200,
+                    "health_poll_interval_seconds": 60,
                 }
             },
         ):
@@ -142,6 +145,7 @@ class TestPlanSettingsPersistence:
             "owned_networks_limit": 3,
             "assistant_daily_chat_messages_limit": 50,
             "automatic_full_scan_min_interval_seconds": 60,
+            "health_poll_interval_seconds": 30,
         }
         with patch.object(plan_settings, "resolve_plan_limits", return_value=("pro", limits)):
             row = await plan_settings.apply_plan_to_user(db, "user-1", "pro", commit=True)
@@ -166,6 +170,7 @@ class TestPlanSettingsPersistence:
             "owned_networks_limit": 20,
             "assistant_daily_chat_messages_limit": -1,
             "automatic_full_scan_min_interval_seconds": 30,
+            "health_poll_interval_seconds": 5,
         }
         with patch.object(plan_settings, "resolve_plan_limits", return_value=("proplus", limits)):
             row = await plan_settings.apply_plan_to_user(db, "user-2", "proplus", commit=False)
@@ -198,6 +203,7 @@ class TestPlanSettingsPersistence:
             "owned_networks_limit": 1,
             "assistant_daily_chat_messages_limit": 5,
             "automatic_full_scan_min_interval_seconds": 7200,
+            "health_poll_interval_seconds": 60,
         }
 
         with (
@@ -228,6 +234,7 @@ class TestPlanSettingsPersistence:
             "owned_networks_limit": 1,
             "assistant_daily_chat_messages_limit": 5,
             "automatic_full_scan_min_interval_seconds": 7200,
+            "health_poll_interval_seconds": 60,
         }
 
         with (

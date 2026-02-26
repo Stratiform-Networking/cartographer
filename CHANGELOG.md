@@ -5,6 +5,25 @@ All notable changes to Cartographer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.41.3](https://github.com/devartech/cartographer/compare/v0.37.7...v0.41.3) (2026-02-26)
+
+
+### ✨ Features
+
+* add device added and device removed notifications ([fe30b32](https://github.com/devartech/cartographer/commit/fe30b32e6a7a24f097c69d9ec9a18e78d6c80d6d))
+* add health polling intervals ([954e8d5](https://github.com/devartech/cartographer/commit/954e8d5e5b5df47998cd859703bbf8c5210bbcb6))
+* add password reset ([c035570](https://github.com/devartech/cartographer/commit/c0355703e5a29cd1d594925e7579c29b844c0551))
+* consolidate plan values ([5ffe4cd](https://github.com/devartech/cartographer/commit/5ffe4cdbac7b87d381b5002a7510521f8c388a11))
+
+
+### 🐛 Bug Fixes
+
+* force rebuild ([f39756d](https://github.com/devartech/cartographer/commit/f39756dde9e4f97586e2ef9501a486176ee3d810))
+* hot reload all backend services ([457bb3c](https://github.com/devartech/cartographer/commit/457bb3caf88e692e9cebc662ced04794bfebc555))
+* migration name length ([ad2a828](https://github.com/devartech/cartographer/commit/ad2a828ff0a68bec724f4b45958b27b5330ce3eb))
+* ordering + backfill of new types ([09d059a](https://github.com/devartech/cartographer/commit/09d059ab0090b35d8b8fba95739dfddd3d864ebe))
+* update to new org name ([0964d15](https://github.com/devartech/cartographer/commit/0964d157f7f72a3791cd2f1a051220ddd394e1a4))
+
 ### [0.41.2](https://github.com/devartech/cartographer/compare/v0.41.1...v0.41.2) (2026-02-24)
 
 

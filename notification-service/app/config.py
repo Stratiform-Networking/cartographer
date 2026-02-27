@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     disable_docs: bool = False
 
     # PostHog analytics
-    posthog_api_key: str = "phc_wva5vQhVaZRCEUh691CYejTmZK60EdyqkRFToNIBVl2"
+    posthog_api_key: str = ""  # To be set via environment variable
     posthog_host: str = "https://us.i.posthog.com"
     posthog_enabled: bool = True
 

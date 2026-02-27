@@ -584,6 +584,7 @@ class AuthService:
             first_name=user.first_name,
             last_name=user.last_name,
             email=user.email,
+            avatar_url=user.avatar_url,
             role=user.role,
             created_at=user.created_at,
             updated_at=user.updated_at,

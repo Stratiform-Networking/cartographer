@@ -8,9 +8,16 @@
     >
       <!-- Avatar -->
       <div
-        class="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm"
+        class="w-7 h-7 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xs font-semibold shadow-sm overflow-hidden"
       >
-        {{ userInitial }}
+        <img
+          v-if="userAvatarUrl"
+          :src="userAvatarUrl"
+          alt="Profile avatar"
+          class="w-full h-full object-cover"
+          @error="onAvatarError"
+        />
+        <span v-else>{{ userInitials }}</span>
       </div>
       <div class="flex flex-col items-start">
         <span
@@ -57,9 +64,16 @@
           >
             <div class="flex items-center gap-3">
               <div
-                class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-base font-semibold shadow-sm"
+                class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-base font-semibold shadow-sm overflow-hidden"
               >
-                {{ userInitial }}
+                <img
+                  v-if="userAvatarUrl"
+                  :src="userAvatarUrl"
+                  alt="Profile avatar"
+                  class="w-full h-full object-cover"
+                  @error="onAvatarError"
+                />
+                <span v-else>{{ userInitials }}</span>
               </div>
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-semibold text-slate-900 dark:text-white truncate">
@@ -452,7 +466,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { getRoleLabel, getFullName } from '../types/auth';
 
@@ -513,6 +527,7 @@ const isSubmitting = ref(false);
 const isSigningOut = ref(false);
 const passwordError = ref<string | null>(null);
 const buttonRect = ref<DOMRect | null>(null);
+const avatarImageErrored = ref(false);
 
 function toggleMenu() {
   if (!isOpen.value && userButton.value) {
@@ -543,8 +558,25 @@ const displayName = computed(() => {
   return 'User';
 });
 
-const userInitial = computed(() => {
-  return user.value?.first_name?.charAt(0).toUpperCase() || 'U';
+const userAvatarUrl = computed(() => {
+  const avatar = user.value?.avatar_url?.trim();
+  if (!avatar || avatarImageErrored.value) {
+    return null;
+  }
+  return avatar;
+});
+
+const userInitials = computed(() => {
+  const firstInitial = user.value?.first_name?.trim().charAt(0).toUpperCase() || '';
+  const lastInitial = user.value?.last_name?.trim().charAt(0).toUpperCase() || '';
+  const initialsFromName = `${firstInitial}${lastInitial}`.slice(0, 2);
+
+  if (initialsFromName) {
+    return initialsFromName;
+  }
+
+  const fallback = user.value?.username || user.value?.email || 'A';
+  return fallback.slice(0, 2).toUpperCase();
 });
 
 const roleLabel = computed(() => {
@@ -569,6 +601,17 @@ function closeOnClickOutside(e: MouseEvent) {
     isOpen.value = false;
   }
 }
+
+function onAvatarError() {
+  avatarImageErrored.value = true;
+}
+
+watch(
+  () => user.value?.avatar_url,
+  () => {
+    avatarImageErrored.value = false;
+  }
+);
 
 onMounted(() => {
   document.addEventListener('click', closeOnClickOutside);

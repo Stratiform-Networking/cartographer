@@ -584,7 +584,7 @@ class TestUserSync:
             username="testuser",
             first_name="Updated",
             last_name="Name",
-            avatar_url=None,
+            avatar_url="https://example.com/clerk-avatar.jpg",
             session_id=None,
             issued_at=now,
             expires_at=None,
@@ -623,6 +623,7 @@ class TestUserSync:
         assert user_id is not None
         assert created is False
         assert updated is True
+        assert mock_user.avatar_url == "https://example.com/clerk-avatar.jpg"
 
     async def test_sync_provider_user_no_link_email_match(self):
         """Should create link when user exists with matching email"""
@@ -867,7 +868,7 @@ class TestUserSync:
             username=None,  # Will be derived from email
             first_name="New",
             last_name="User",
-            avatar_url=None,
+            avatar_url="https://example.com/new-avatar.jpg",
             session_id=None,
             issued_at=now,
             expires_at=None,
@@ -908,6 +909,8 @@ class TestUserSync:
         assert created is True
         assert updated is False
         assert mock_db.add.call_count == 2  # User + ProviderLink
+        created_user = mock_db.add.call_args_list[0].args[0]
+        assert created_user.avatar_url == "https://example.com/new-avatar.jpg"
 
     async def test_sync_provider_user_no_create(self):
         """Should return None when user not found and create_if_missing=False"""

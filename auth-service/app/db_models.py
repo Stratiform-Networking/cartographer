@@ -51,6 +51,7 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Role for self-hosted permission management
     # Use values_callable to ensure SQLAlchemy uses lowercase enum values matching PostgreSQL

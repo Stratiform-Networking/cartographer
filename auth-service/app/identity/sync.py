@@ -28,6 +28,7 @@ def _update_user_profile(user: User, claims: IdentityClaims) -> bool:
         user.last_name = claims.last_name
     if claims.email:
         user.email = claims.email.strip().lower()
+    user.avatar_url = claims.avatar_url
     user.is_verified = claims.email_verified
     user.updated_at = datetime.now(timezone.utc)
     return True
@@ -80,12 +81,7 @@ async def _handle_email_match(
 
     updated = False
     if update_profile:
-        if claims.first_name:
-            user.first_name = claims.first_name
-        if claims.last_name:
-            user.last_name = claims.last_name
-        user.is_verified = claims.email_verified
-        user.updated_at = datetime.now(timezone.utc)
+        _update_user_profile(user, claims)
         updated = True
 
     await db.commit()
@@ -111,6 +107,7 @@ async def _create_new_user(
         email=claims.email.strip().lower(),
         first_name=claims.first_name or "",
         last_name=claims.last_name or "",
+        avatar_url=claims.avatar_url,
         hashed_password="",  # No password for external auth
         role=UserRole.MEMBER,
         is_active=True,

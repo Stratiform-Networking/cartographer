@@ -204,6 +204,7 @@ class TestToResponse:
         mock_user.first_name = "Test"
         mock_user.last_name = "User"
         mock_user.email = "test@example.com"
+        mock_user.avatar_url = "https://example.com/avatar.jpg"
         mock_user.role = UserRole.MEMBER
         mock_user.created_at = datetime.now(timezone.utc)
         mock_user.updated_at = datetime.now(timezone.utc)
@@ -215,6 +216,7 @@ class TestToResponse:
         assert isinstance(response, UserResponse)
         assert response.id == mock_user.id
         assert response.username == mock_user.username
+        assert response.avatar_url == mock_user.avatar_url
 
 
 class TestGenerateInviteToken:

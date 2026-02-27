@@ -470,7 +470,7 @@ class TestRouterEdgeCases:
         # Simulate cache being populated while waiting for lock
         async def populate_cache():
             # This simulates another coroutine populating the cache
-            cache._cache["openai"] = (["cached-model"], datetime.utcnow())
+            cache._cache["openai:default"] = (["cached-model"], datetime.utcnow())
 
         async def test():
             # Pre-populate cache

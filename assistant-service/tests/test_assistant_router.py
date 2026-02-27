@@ -80,7 +80,7 @@ class TestModelCache:
     async def test_get_models_expired(self):
         """Should refresh expired cache"""
         cache = ModelCache(ttl_seconds=1)
-        cache._cache["openai"] = (["old-model"], datetime.utcnow() - timedelta(seconds=5))
+        cache._cache["openai:default"] = (["old-model"], datetime.utcnow() - timedelta(seconds=5))
 
         mock_provider = MagicMock()
         mock_provider.list_models = AsyncMock(return_value=["new-model"])

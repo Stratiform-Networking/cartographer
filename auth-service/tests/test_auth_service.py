@@ -2247,6 +2247,130 @@ class TestPreferences:
         assert existing_row.model == "gpt-4o-mini"
         mock_db.delete.assert_not_called()
 
+    def test_get_assistant_cipher_requires_env_key(self):
+        """Should reject BYOK encryption/decryption when env key is unset."""
+        service = AuthService()
+
+        with patch.object(settings, "assistant_keys_encryption_key", ""):
+            with pytest.raises(ValueError, match="ASSISTANT_KEYS_ENCRYPTION_KEY"):
+                service._get_assistant_cipher()
+
+    def test_decrypt_assistant_api_key_invalid_token_raises(self):
+        """Should raise a helpful error when ciphertext cannot be decrypted."""
+        service = AuthService()
+
+        with pytest.raises(ValueError, match="Failed to decrypt stored assistant provider key"):
+            service._decrypt_assistant_api_key("not-a-valid-fernet-token")
+
+    @pytest.mark.asyncio
+    async def test_migrate_legacy_assistant_preferences_skips_when_key_missing(self):
+        """Should not migrate legacy plaintext settings without encryption key."""
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.preferences = {
+            "assistant_provider_settings": {
+                "openai": {"api_key": "sk-openai-legacy", "model": "gpt-4o-mini"}
+            }
+        }
+
+        with patch.object(settings, "assistant_keys_encryption_key", ""):
+            await service._migrate_legacy_assistant_preferences_if_needed(mock_db, mock_user)
+
+        mock_db.commit.assert_not_called()
+        assert "assistant_provider_settings" in mock_user.preferences
+
+    @pytest.mark.asyncio
+    async def test_migrate_legacy_assistant_preferences_moves_plaintext_to_encrypted_rows(self):
+        """Should migrate legacy plaintext preferences into encrypted provider rows."""
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.preferences = {
+            "dark_mode": True,
+            "assistant_provider_settings": {
+                "openai": {"api_key": "sk-openai-migrate", "model": "gpt-4o-mini"},
+                "anthropic": {"api_key": "", "model": "claude-3-5-sonnet"},
+            },
+        }
+
+        empty_result = MagicMock()
+        empty_result.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=empty_result)
+
+        await service._migrate_legacy_assistant_preferences_if_needed(mock_db, mock_user)
+
+        mock_db.add.assert_called_once()
+        added_row = mock_db.add.call_args.args[0]
+        assert added_row.provider == "openai"
+        assert added_row.model == "gpt-4o-mini"
+        assert (
+            service._decrypt_assistant_api_key(added_row.encrypted_api_key) == "sk-openai-migrate"
+        )
+        assert mock_user.preferences == {"dark_mode": True}
+        mock_db.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_assistant_settings_deletes_existing_row_when_key_cleared(self):
+        """Should delete provider row when api_key is cleared."""
+        from app.models import UserAssistantSettingsUpdate
+
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.username = "testuser"
+        mock_user.preferences = None
+
+        existing_row = MagicMock()
+        existing_row.provider = "openai"
+        existing_row.encrypted_api_key = service._encrypt_assistant_api_key("old-openai-key")
+        existing_row.model = "gpt-old"
+
+        row_result = MagicMock()
+        row_result.scalars.return_value.all.return_value = [existing_row]
+        mock_db.execute = AsyncMock(side_effect=[row_result, row_result])
+
+        request = UserAssistantSettingsUpdate(openai={"api_key": "   "})
+        result = await service.update_assistant_settings(mock_db, mock_user, request)
+
+        mock_db.delete.assert_called_once_with(existing_row)
+        mock_db.commit.assert_called_once()
+        assert result.openai.has_api_key is False
+        assert result.openai.model is None
+
+    @pytest.mark.asyncio
+    async def test_update_assistant_settings_creates_row_for_new_provider_key(self):
+        """Should create a new provider row when adding a key for a provider."""
+        from app.models import UserAssistantSettingsUpdate
+
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.username = "testuser"
+        mock_user.preferences = None
+
+        empty_result = MagicMock()
+        empty_result.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(side_effect=[empty_result, empty_result])
+
+        request = UserAssistantSettingsUpdate(
+            gemini={"api_key": "gemini-user-key", "model": "gemini-2.0-pro"}
+        )
+        result = await service.update_assistant_settings(mock_db, mock_user, request)
+
+        mock_db.add.assert_called_once()
+        added_row = mock_db.add.call_args.args[0]
+        assert added_row.provider == "gemini"
+        assert added_row.model == "gemini-2.0-pro"
+        assert service._decrypt_assistant_api_key(added_row.encrypted_api_key) == "gemini-user-key"
+        mock_db.commit.assert_called_once()
+        assert result.gemini.has_api_key is True
+        assert result.gemini.model == "gemini-2.0-pro"
+
 
 class TestUpdateUserExtended:
     """Extended tests for update_user to cover additional fields"""

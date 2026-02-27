@@ -102,6 +102,31 @@ export interface AuthConfig {
   allow_registration: boolean;
 }
 
+export type AssistantProvider = 'openai' | 'anthropic' | 'gemini';
+
+export interface AssistantProviderSettings {
+  has_api_key: boolean;
+  api_key_masked?: string | null;
+  model?: string | null;
+}
+
+export interface AssistantProviderSettingsUpdate {
+  api_key?: string | null;
+  model?: string | null;
+}
+
+export interface UserAssistantSettings {
+  openai: AssistantProviderSettings;
+  anthropic: AssistantProviderSettings;
+  gemini: AssistantProviderSettings;
+}
+
+export interface UserAssistantSettingsUpdate {
+  openai?: AssistantProviderSettingsUpdate;
+  anthropic?: AssistantProviderSettingsUpdate;
+  gemini?: AssistantProviderSettingsUpdate;
+}
+
 // ==================== Invitation Types ====================
 
 export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';

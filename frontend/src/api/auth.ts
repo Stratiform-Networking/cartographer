@@ -22,6 +22,8 @@ import type {
   InviteTokenInfo,
   AcceptInviteRequest,
   AuthConfig,
+  UserAssistantSettings,
+  UserAssistantSettingsUpdate,
 } from '../types/auth';
 
 // ==================== Setup & Session ====================
@@ -147,5 +149,20 @@ export async function updatePreferences(
   preferences: Partial<UserPreferences>
 ): Promise<UserPreferences> {
   const response = await client.patch<UserPreferences>('/api/auth/me/preferences', preferences);
+  return response.data;
+}
+
+export async function getAssistantSettings(): Promise<UserAssistantSettings> {
+  const response = await client.get<UserAssistantSettings>('/api/auth/me/assistant-settings');
+  return response.data;
+}
+
+export async function updateAssistantSettings(
+  settings: UserAssistantSettingsUpdate
+): Promise<UserAssistantSettings> {
+  const response = await client.patch<UserAssistantSettings>(
+    '/api/auth/me/assistant-settings',
+    settings
+  );
   return response.data;
 }

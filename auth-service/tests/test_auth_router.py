@@ -235,6 +235,34 @@ class TestInternalPlanSettingsEndpoints:
             assert response.status_code == 500
             assert "Failed to resolve user plan settings" in response.json()["detail"]
 
+    def test_get_user_assistant_settings_internal_success(self, client, mock_user):
+        assistant_settings = {
+            "openai": {"api_key": "sk-openai", "model": "gpt-4o-mini"},
+            "anthropic": {"api_key": None, "model": None},
+            "gemini": {"api_key": None, "model": None},
+        }
+
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.get_user = AsyncMock(return_value=mock_user)
+            mock_service.get_assistant_settings_internal = AsyncMock(
+                return_value=assistant_settings
+            )
+
+            response = client.get(f"/api/auth/internal/users/{mock_user.id}/assistant-settings")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["openai"]["api_key"] == "sk-openai"
+
+    def test_get_user_assistant_settings_internal_not_found(self, client):
+        with patch("app.routers.auth.auth_service") as mock_service:
+            mock_service.get_user = AsyncMock(return_value=None)
+
+            response = client.get("/api/auth/internal/users/missing/assistant-settings")
+
+            assert response.status_code == 404
+            assert response.json()["detail"] == "User not found"
+
     def test_set_user_plan_settings_internal_success(self, client, mock_user):
         plan_row = MagicMock()
         plan_row.user_id = mock_user.id
@@ -1019,6 +1047,71 @@ class TestProfileEndpoints:
             )
 
             assert response.status_code == 200
+
+    def test_get_assistant_settings(self, client, mock_owner):
+        """Should get assistant BYOK settings."""
+        with patch("app.routers.auth.auth_service") as mock_service:
+            from app.models import TokenPayload
+
+            now = datetime.now(timezone.utc)
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_owner.id,
+                username=mock_owner.username,
+                role=mock_owner.role,
+                exp=now + timedelta(hours=1),
+                iat=now,
+            )
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
+            mock_service.get_assistant_settings = AsyncMock(
+                return_value={
+                    "openai": {"has_api_key": True, "api_key_masked": "sk-o...1234", "model": None},
+                    "anthropic": {"has_api_key": False, "api_key_masked": None, "model": None},
+                    "gemini": {"has_api_key": False, "api_key_masked": None, "model": None},
+                }
+            )
+
+            response = client.get(
+                "/api/auth/me/assistant-settings",
+                headers={"Authorization": "Bearer token123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["openai"]["has_api_key"] is True
+
+    def test_update_assistant_settings(self, client, mock_owner):
+        """Should update assistant BYOK settings."""
+        with patch("app.routers.auth.auth_service") as mock_service:
+            from app.models import TokenPayload
+
+            now = datetime.now(timezone.utc)
+            mock_service.verify_token.return_value = TokenPayload(
+                sub=mock_owner.id,
+                username=mock_owner.username,
+                role=mock_owner.role,
+                exp=now + timedelta(hours=1),
+                iat=now,
+            )
+            mock_service.get_user = AsyncMock(return_value=mock_owner)
+            mock_service.update_assistant_settings = AsyncMock(
+                return_value={
+                    "openai": {
+                        "has_api_key": True,
+                        "api_key_masked": "sk-o...1234",
+                        "model": "gpt-4o-mini",
+                    },
+                    "anthropic": {"has_api_key": False, "api_key_masked": None, "model": None},
+                    "gemini": {"has_api_key": False, "api_key_masked": None, "model": None},
+                }
+            )
+
+            response = client.patch(
+                "/api/auth/me/assistant-settings",
+                headers={"Authorization": "Bearer token123"},
+                json={"openai": {"api_key": "sk-openai", "model": "gpt-4o-mini"}},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["openai"]["model"] == "gpt-4o-mini"
 
 
 class TestInviteEndpoints:

@@ -18,6 +18,7 @@ from ..models import (
     AcceptInviteRequest,
     AuthConfig,
     ChangePasswordRequest,
+    InternalUserAssistantSettingsResponse,
     InviteCreate,
     InviteResponse,
     InviteTokenInfo,
@@ -30,6 +31,8 @@ from ..models import (
     PasswordResetRequest,
     SessionInfo,
     SetupStatus,
+    UserAssistantSettingsResponse,
+    UserAssistantSettingsUpdate,
     UserCreate,
     UserPlanSettingsResponse,
     UserPlanSettingsUpdate,
@@ -229,6 +232,23 @@ async def set_user_plan_settings_internal(
         automatic_full_scan_min_interval_seconds=plan_settings.automatic_full_scan_min_interval_seconds,
         health_poll_interval_seconds=plan_settings.health_poll_interval_seconds,
     )
+
+
+@router.get(
+    "/internal/users/{user_id}/assistant-settings",
+    response_model=InternalUserAssistantSettingsResponse,
+)
+async def get_user_assistant_settings_internal(user_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get a user's BYOK assistant settings for internal service use.
+
+    Returns raw provider API keys and model overrides for assistant-service.
+    """
+    user = await auth_service.get_user(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return await auth_service.get_assistant_settings_internal(db, user)
 
 
 # ==================== Clerk OAuth Endpoint (Cloud) ====================
@@ -566,6 +586,25 @@ async def update_preferences(
 ):
     """Update current user's preferences (partial update)."""
     return await auth_service.update_preferences(db, user, request)
+
+
+@router.get("/me/assistant-settings", response_model=UserAssistantSettingsResponse)
+async def get_assistant_settings(
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current user's assistant BYOK settings."""
+    return await auth_service.get_assistant_settings(db, user)
+
+
+@router.patch("/me/assistant-settings", response_model=UserAssistantSettingsResponse)
+async def update_assistant_settings(
+    request: UserAssistantSettingsUpdate,
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update current user's assistant BYOK settings (partial update)."""
+    return await auth_service.update_assistant_settings(db, user, request)
 
 
 # ==================== Network Limit Endpoints ====================

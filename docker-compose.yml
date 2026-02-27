@@ -154,6 +154,7 @@ services:
       - APPLICATION_URL=${APPLICATION_URL:-http://localhost:5173}
       - INVITE_EXPIRATION_HOURS=${INVITE_EXPIRATION_HOURS:-72}
       - PASSWORD_RESET_EXPIRATION_MINUTES=${PASSWORD_RESET_EXPIRATION_MINUTES:-60}
+      - ASSISTANT_KEYS_ENCRYPTION_KEY=${ASSISTANT_KEYS_ENCRYPTION_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/healthz"]

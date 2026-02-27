@@ -29,17 +29,22 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 @router.get("/config")
 async def get_config(
     request: Request,
+    refresh: bool = False,
     user: AuthenticatedUser = Depends(require_auth),
     cache: CacheService = Depends(get_cache),
 ):
     """Get assistant configuration. Requires authentication. Cached for 5 minutes."""
-    cache_key = "assistant:config"
+    cache_key = f"assistant:config:{user.user_id}"
 
     async def fetch_config():
-        response = await proxy_assistant_request("GET", "/config", request)
+        params = {"refresh": "true"} if refresh else None
+        response = await proxy_assistant_request("GET", "/config", request, params=params)
         if hasattr(response, "body"):
             return json.loads(response.body)
         return response
+
+    if refresh:
+        return await fetch_config()
 
     return await cache.get_or_compute(cache_key, fetch_config, ttl=300)
 
@@ -47,17 +52,22 @@ async def get_config(
 @router.get("/providers")
 async def list_providers(
     request: Request,
+    refresh: bool = False,
     user: AuthenticatedUser = Depends(require_auth),
     cache: CacheService = Depends(get_cache),
 ):
     """List available AI providers. Requires authentication. Cached for 5 minutes."""
-    cache_key = "assistant:providers"
+    cache_key = f"assistant:providers:{user.user_id}"
 
     async def fetch_providers():
-        response = await proxy_assistant_request("GET", "/providers", request)
+        params = {"refresh": "true"} if refresh else None
+        response = await proxy_assistant_request("GET", "/providers", request, params=params)
         if hasattr(response, "body"):
             return json.loads(response.body)
         return response
+
+    if refresh:
+        return await fetch_providers()
 
     return await cache.get_or_compute(cache_key, fetch_providers, ttl=300)
 
@@ -151,9 +161,14 @@ async def get_context_status(request: Request, user: AuthenticatedUser = Depends
 
 
 @router.get("/chat/limit")
-async def get_chat_limit(request: Request, user: AuthenticatedUser = Depends(require_auth)):
+async def get_chat_limit(
+    request: Request,
+    provider: str | None = None,
+    user: AuthenticatedUser = Depends(require_auth),
+):
     """Get current chat rate limit status. Requires authentication."""
-    return await proxy_assistant_request("GET", "/chat/limit", request)
+    params = {"provider": provider} if provider else None
+    return await proxy_assistant_request("GET", "/chat/limit", request, params=params)
 
 
 @router.post("/chat")

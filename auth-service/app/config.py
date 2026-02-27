@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # External Services
     metrics_service_url: str = "http://localhost:8003"
 
+    # Assistant BYOK key encryption
+    # Used to encrypt/decrypt provider keys stored in the database.
+    assistant_keys_encryption_key: str = ""
+
     # Usage Tracking
     usage_batch_size: int = 10
     usage_batch_interval_seconds: float = 5.0
@@ -137,6 +141,11 @@ class Settings(BaseSettings):
                 )
             if not self.jwt_secret:
                 logger.warning("JWT_SECRET is not set. " "Generate one with: openssl rand -hex 32")
+
+        if not self.assistant_keys_encryption_key:
+            logger.warning(
+                "ASSISTANT_KEYS_ENCRYPTION_KEY is not set. BYOK provider keys cannot be stored."
+            )
         return self
 
 

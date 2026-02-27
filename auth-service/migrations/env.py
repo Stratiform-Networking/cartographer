@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Import Base and models to ensure they are registered
+# Import Base and model module to ensure tables are registered
 from app.database import Base
-from app.db_models import Invite, PasswordResetToken, User, UserPlanSettings
+import app.db_models  # noqa: F401
 
 # this is the Alembic Config object
 config = context.config
@@ -76,7 +76,7 @@ async def run_async_migrations() -> None:
     """Run migrations in 'online' mode with async engine."""
     configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = get_database_url()
-    
+
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",

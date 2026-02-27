@@ -217,6 +217,7 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-Cartographer <noreply@cartographer.app>}
       - APPLICATION_URL=${APPLICATION_URL:-https://localhost}
       - INVITE_EXPIRATION_HOURS=${INVITE_EXPIRATION_HOURS:-72}
+      - ASSISTANT_KEYS_ENCRYPTION_KEY=${ASSISTANT_KEYS_ENCRYPTION_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/healthz"]

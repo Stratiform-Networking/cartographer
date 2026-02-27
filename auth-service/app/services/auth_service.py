@@ -4,6 +4,7 @@ Handles user authentication and management.
 """
 
 import asyncio
+import base64
 import hashlib
 import logging
 import secrets
@@ -12,19 +13,32 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from cryptography.fernet import Fernet, InvalidToken
 from passlib.context import CryptContext
 from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..db_models import Invite, InviteStatus, PasswordResetToken, User, UserRole
+from ..db_models import (
+    Invite,
+    InviteStatus,
+    PasswordResetToken,
+    User,
+    UserAssistantProviderKey,
+    UserRole,
+)
 from ..models import (
+    AssistantProviderSettings,
+    InternalAssistantProviderSettings,
+    InternalUserAssistantSettingsResponse,
     InviteCreate,
     InviteResponse,
     InviteTokenInfo,
     OwnerSetupRequest,
     TokenPayload,
+    UserAssistantSettingsResponse,
+    UserAssistantSettingsUpdate,
     UserCreate,
     UserPreferences,
     UserPreferencesUpdate,
@@ -40,6 +54,8 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds
 
 # Thread pool for CPU-bound password hashing operations
 _password_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pwd_hash_")
+ASSISTANT_PROVIDERS = ("openai", "anthropic", "gemini")
+LEGACY_ASSISTANT_PREF_KEY = "assistant_provider_settings"
 
 
 async def hash_password_async(password: str) -> str:
@@ -359,10 +375,207 @@ class AuthService:
 
     # ==================== Preferences ====================
 
+    @staticmethod
+    def _normalize_optional_string(value: str | None) -> str | None:
+        """Normalize optional string values, converting blank strings to None."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @staticmethod
+    def _mask_api_key(api_key: str) -> str:
+        """Mask API key values for public responses."""
+        if len(api_key) <= 8:
+            return "****"
+        return f"{api_key[:4]}...{api_key[-4:]}"
+
+    @staticmethod
+    def _fernet_key_from_secret(secret: str) -> bytes:
+        """
+        Build a stable Fernet key from the configured secret.
+
+        Supports either:
+        - a direct Fernet-compatible key string
+        - any arbitrary passphrase (derived via SHA-256)
+        """
+        normalized = secret.strip().encode("utf-8")
+        try:
+            # Use the secret directly if it's already a valid Fernet key.
+            Fernet(normalized)
+            return normalized
+        except Exception:
+            digest = hashlib.sha256(normalized).digest()
+            return base64.urlsafe_b64encode(digest)
+
+    def _get_assistant_cipher(self) -> Fernet:
+        """Get the Fernet cipher used for assistant key encryption/decryption."""
+        if not settings.assistant_keys_encryption_key:
+            raise ValueError(
+                "ASSISTANT_KEYS_ENCRYPTION_KEY must be set to store BYOK provider keys"
+            )
+
+        fernet_key = self._fernet_key_from_secret(settings.assistant_keys_encryption_key)
+        return Fernet(fernet_key)
+
+    def _encrypt_assistant_api_key(self, api_key: str) -> str:
+        """Encrypt a provider API key for at-rest storage."""
+        cipher = self._get_assistant_cipher()
+        return cipher.encrypt(api_key.encode("utf-8")).decode("utf-8")
+
+    def _decrypt_assistant_api_key(self, encrypted_api_key: str) -> str:
+        """Decrypt a provider API key from stored ciphertext."""
+        cipher = self._get_assistant_cipher()
+        try:
+            return cipher.decrypt(encrypted_api_key.encode("utf-8")).decode("utf-8")
+        except InvalidToken as exc:
+            raise ValueError(
+                "Failed to decrypt stored assistant provider key. "
+                "Check ASSISTANT_KEYS_ENCRYPTION_KEY."
+            ) from exc
+
+    async def _load_assistant_provider_rows(
+        self, db: AsyncSession, user_id: str
+    ) -> dict[str, UserAssistantProviderKey]:
+        """Load provider key rows keyed by provider name."""
+        result = await db.execute(
+            select(UserAssistantProviderKey).where(UserAssistantProviderKey.user_id == user_id)
+        )
+        rows = result.scalars().all()
+        return {row.provider: row for row in rows if row.provider in ASSISTANT_PROVIDERS}
+
+    async def _migrate_legacy_assistant_preferences_if_needed(
+        self, db: AsyncSession, user: User
+    ) -> None:
+        """
+        One-time migration from legacy plaintext preferences storage.
+
+        If legacy `assistant_provider_settings` are present in user.preferences,
+        move them into the encrypted provider key table and remove plaintext data.
+        """
+        preferences = user.preferences if isinstance(user.preferences, dict) else {}
+        legacy = preferences.get(LEGACY_ASSISTANT_PREF_KEY)
+        if not isinstance(legacy, dict):
+            return
+
+        try:
+            self._get_assistant_cipher()
+        except ValueError:
+            logger.warning(
+                "Cannot migrate legacy assistant provider settings for user %s; "
+                "ASSISTANT_KEYS_ENCRYPTION_KEY is not set.",
+                user.id,
+            )
+            return
+
+        existing_rows = await self._load_assistant_provider_rows(db, user.id)
+        created_or_updated = False
+
+        for provider in ASSISTANT_PROVIDERS:
+            legacy_provider = legacy.get(provider, {})
+            if not isinstance(legacy_provider, dict):
+                continue
+
+            api_key = self._normalize_optional_string(legacy_provider.get("api_key"))
+            model = self._normalize_optional_string(legacy_provider.get("model"))
+            if not api_key:
+                continue
+
+            row = existing_rows.get(provider)
+            if row is None:
+                row = UserAssistantProviderKey(
+                    user_id=user.id,
+                    provider=provider,
+                    encrypted_api_key=self._encrypt_assistant_api_key(api_key),
+                    model=model,
+                )
+                db.add(row)
+                created_or_updated = True
+
+        # Always remove legacy plaintext storage once migration runs.
+        preferences.pop(LEGACY_ASSISTANT_PREF_KEY, None)
+        user.preferences = preferences if preferences else None
+        await db.commit()
+
+        if created_or_updated:
+            logger.info("Migrated legacy assistant provider settings for user %s", user.id)
+
+    async def _load_assistant_provider_settings(
+        self, db: AsyncSession, user_id: str
+    ) -> dict[str, dict[str, str | None]]:
+        """Load and decrypt per-provider BYOK settings for a user."""
+        rows_by_provider = await self._load_assistant_provider_rows(db, user_id)
+        normalized: dict[str, dict[str, str | None]] = {
+            provider: {"api_key": None, "model": None} for provider in ASSISTANT_PROVIDERS
+        }
+
+        for provider, row in rows_by_provider.items():
+            api_key = self._decrypt_assistant_api_key(row.encrypted_api_key)
+            normalized[provider] = {
+                "api_key": self._normalize_optional_string(api_key),
+                "model": self._normalize_optional_string(row.model),
+            }
+
+        return normalized
+
+    def _build_public_assistant_settings(
+        self, normalized: dict[str, dict[str, str | None]]
+    ) -> UserAssistantSettingsResponse:
+        """Build public assistant settings response (without raw keys)."""
+
+        def _public_provider(provider: str) -> AssistantProviderSettings:
+            api_key = normalized.get(provider, {}).get("api_key")
+            return AssistantProviderSettings(
+                has_api_key=bool(api_key),
+                api_key_masked=self._mask_api_key(api_key) if api_key else None,
+                model=normalized.get(provider, {}).get("model"),
+            )
+
+        return UserAssistantSettingsResponse(
+            openai=_public_provider("openai"),
+            anthropic=_public_provider("anthropic"),
+            gemini=_public_provider("gemini"),
+        )
+
+    @staticmethod
+    def _build_internal_assistant_settings(
+        normalized: dict[str, dict[str, str | None]]
+    ) -> InternalUserAssistantSettingsResponse:
+        """Build internal assistant settings response (includes raw keys)."""
+
+        def _internal_provider(provider: str) -> InternalAssistantProviderSettings:
+            provider_data = normalized.get(provider, {})
+            return InternalAssistantProviderSettings(
+                api_key=provider_data.get("api_key"),
+                model=provider_data.get("model"),
+            )
+
+        return InternalUserAssistantSettingsResponse(
+            openai=_internal_provider("openai"),
+            anthropic=_internal_provider("anthropic"),
+            gemini=_internal_provider("gemini"),
+        )
+
     async def get_preferences(self, user: User) -> UserPreferences:
         """Get user preferences."""
         prefs = user.preferences or {}
         return UserPreferences(**prefs)
+
+    async def get_assistant_settings(
+        self, db: AsyncSession, user: User
+    ) -> UserAssistantSettingsResponse:
+        """Get user BYOK assistant settings (masked for public API responses)."""
+        await self._migrate_legacy_assistant_preferences_if_needed(db, user)
+        normalized = await self._load_assistant_provider_settings(db, user.id)
+        return self._build_public_assistant_settings(normalized)
+
+    async def get_assistant_settings_internal(
+        self, db: AsyncSession, user: User
+    ) -> InternalUserAssistantSettingsResponse:
+        """Get user BYOK assistant settings (raw keys for trusted internal services)."""
+        await self._migrate_legacy_assistant_preferences_if_needed(db, user)
+        normalized = await self._load_assistant_provider_settings(db, user.id)
+        return self._build_internal_assistant_settings(normalized)
 
     async def update_preferences(
         self, db: AsyncSession, user: User, request: UserPreferencesUpdate
@@ -392,6 +605,62 @@ class AuthService:
 
         logger.info(f"User preferences updated: {user.username}")
         return UserPreferences(**(user.preferences or {}))
+
+    async def update_assistant_settings(
+        self, db: AsyncSession, user: User, request: UserAssistantSettingsUpdate
+    ) -> UserAssistantSettingsResponse:
+        """Update BYOK assistant settings for one or more providers."""
+        await self._migrate_legacy_assistant_preferences_if_needed(db, user)
+        normalized = await self._load_assistant_provider_settings(db, user.id)
+        rows_by_provider = await self._load_assistant_provider_rows(db, user.id)
+        update_data = request.model_dump(exclude_unset=True)
+
+        for provider, provider_updates in update_data.items():
+            if provider not in ASSISTANT_PROVIDERS or not isinstance(provider_updates, dict):
+                continue
+
+            current_provider = normalized.get(provider, {"api_key": None, "model": None}).copy()
+            if "api_key" in provider_updates:
+                current_provider["api_key"] = self._normalize_optional_string(
+                    provider_updates.get("api_key")
+                )
+
+            if "model" in provider_updates:
+                current_provider["model"] = self._normalize_optional_string(
+                    provider_updates.get("model")
+                )
+
+            api_key = current_provider.get("api_key")
+            model = current_provider.get("model")
+            existing_row = rows_by_provider.get(provider)
+
+            # Model selection only applies when a provider key exists.
+            if not api_key:
+                if existing_row is not None:
+                    await db.delete(existing_row)
+                normalized[provider] = {"api_key": None, "model": None}
+                continue
+
+            if existing_row is None:
+                existing_row = UserAssistantProviderKey(
+                    user_id=user.id,
+                    provider=provider,
+                    encrypted_api_key=self._encrypt_assistant_api_key(api_key),
+                    model=model,
+                )
+                db.add(existing_row)
+                rows_by_provider[provider] = existing_row
+            else:
+                if "api_key" in provider_updates:
+                    existing_row.encrypted_api_key = self._encrypt_assistant_api_key(api_key)
+                existing_row.model = model
+
+            normalized[provider] = {"api_key": api_key, "model": model}
+
+        await db.commit()
+
+        logger.info("User assistant settings updated: %s", user.username)
+        return self._build_public_assistant_settings(normalized)
 
     # ==================== Authentication ====================
 

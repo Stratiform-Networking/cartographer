@@ -2164,6 +2164,89 @@ class TestPreferences:
         mock_db.commit.assert_called_once()
         assert mock_user.preferences is not None
 
+    @pytest.mark.asyncio
+    async def test_get_assistant_settings_masks_keys(self):
+        """Should return masked provider keys for public assistant settings."""
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+
+        row = MagicMock()
+        row.provider = "openai"
+        row.encrypted_api_key = service._encrypt_assistant_api_key("sk-openai-abcdef123456")
+        row.model = "gpt-4o-mini"
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [row]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await service.get_assistant_settings(mock_db, mock_user)
+
+        assert result.openai.has_api_key is True
+        assert result.openai.api_key_masked is not None
+        assert result.openai.model == "gpt-4o-mini"
+        assert result.anthropic.has_api_key is False
+
+    @pytest.mark.asyncio
+    async def test_get_assistant_settings_internal_includes_raw_keys(self):
+        """Should include raw keys in internal assistant settings payload."""
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+
+        row = MagicMock()
+        row.provider = "anthropic"
+        row.encrypted_api_key = service._encrypt_assistant_api_key("sk-ant-123")
+        row.model = "claude-sonnet"
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [row]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await service.get_assistant_settings_internal(mock_db, mock_user)
+
+        assert result.anthropic.api_key == "sk-ant-123"
+        assert result.anthropic.model == "claude-sonnet"
+        assert result.openai.api_key is None
+
+    @pytest.mark.asyncio
+    async def test_update_assistant_settings_sets_and_clears_keys(self):
+        """Should update and clear provider API keys in encrypted provider table."""
+        from app.models import UserAssistantSettingsUpdate
+
+        service = AuthService()
+        mock_db = AsyncMock()
+        mock_user = MagicMock()
+        mock_user.id = "user-123"
+        mock_user.username = "testuser"
+
+        existing_row = MagicMock()
+        existing_row.provider = "openai"
+        existing_row.encrypted_api_key = service._encrypt_assistant_api_key("old-key")
+        existing_row.model = "gpt-old"
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [existing_row]
+        mock_db.execute = AsyncMock(side_effect=[mock_result, mock_result])
+
+        request = UserAssistantSettingsUpdate(
+            openai={"api_key": "new-openai-key", "model": "gpt-4o-mini"},
+            anthropic={"api_key": ""},
+        )
+
+        result = await service.update_assistant_settings(mock_db, mock_user, request)
+
+        mock_db.commit.assert_called_once()
+        assert result.openai.has_api_key is True
+        assert result.openai.model == "gpt-4o-mini"
+        assert (
+            service._decrypt_assistant_api_key(existing_row.encrypted_api_key) == "new-openai-key"
+        )
+        assert existing_row.model == "gpt-4o-mini"
+        mock_db.delete.assert_not_called()
+
 
 class TestUpdateUserExtended:
     """Extended tests for update_user to cover additional fields"""

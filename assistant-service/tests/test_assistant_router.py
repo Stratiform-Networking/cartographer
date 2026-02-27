@@ -67,7 +67,7 @@ class TestModelCache:
     async def test_get_models_cached(self):
         """Should use cached models"""
         cache = ModelCache(ttl_seconds=300)
-        cache._cache["openai"] = (["cached-model"], datetime.utcnow())
+        cache._cache["openai:default"] = (["cached-model"], datetime.utcnow())
 
         mock_provider = MagicMock()
         mock_provider.list_models = AsyncMock(return_value=["new-model"])
@@ -92,13 +92,13 @@ class TestModelCache:
     def test_invalidate_specific(self):
         """Should invalidate specific provider"""
         cache = ModelCache()
-        cache._cache["openai"] = (["model"], datetime.utcnow())
-        cache._cache["anthropic"] = (["model"], datetime.utcnow())
+        cache._cache["openai:default"] = (["model"], datetime.utcnow())
+        cache._cache["anthropic:default"] = (["model"], datetime.utcnow())
 
         cache.invalidate(ModelProvider.OPENAI)
 
-        assert "openai" not in cache._cache
-        assert "anthropic" in cache._cache
+        assert "openai:default" not in cache._cache
+        assert "anthropic:default" in cache._cache
 
     def test_invalidate_all(self):
         """Should invalidate all providers"""
@@ -501,3 +501,45 @@ class TestContextRawEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "error" in data
+
+
+class TestChatLimitEndpoint:
+    """Tests for /chat/limit endpoint."""
+
+    def test_get_chat_limit_with_provider_byok_exempt(self, client):
+        """Should return unlimited when provider has user BYOK key."""
+        with (
+            patch("app.routers.assistant.get_user_assistant_settings") as mock_settings,
+            patch("app.routers.assistant.get_rate_limit_status") as mock_rate_status,
+        ):
+            mock_settings.return_value = {
+                "openai": {"api_key": "sk-openai", "model": "gpt-4o-mini"},
+                "anthropic": {"api_key": None, "model": None},
+                "gemini": {"api_key": None, "model": None},
+            }
+
+            response = client.get("/api/assistant/chat/limit?provider=openai")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_exempt"] is True
+        assert data["limit"] == -1
+        mock_rate_status.assert_not_called()
+
+    def test_get_chat_limit_without_provider_uses_rate_limit_status(self, client):
+        """Should use rate-limit service when no provider is specified."""
+        with patch("app.routers.assistant.get_rate_limit_status") as mock_rate_status:
+            mock_rate_status.return_value = {
+                "used": 2,
+                "limit": 5,
+                "remaining": 3,
+                "resets_in_seconds": 100,
+                "is_exempt": False,
+            }
+
+            response = client.get("/api/assistant/chat/limit")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_exempt"] is False
+        assert data["remaining"] == 3

@@ -9,10 +9,12 @@ import client from './client';
 // ==================== Types ====================
 
 export interface RateLimitStatus {
+  used: number;
   remaining: number;
   limit: number;
-  reset_at?: string;
+  resets_in_seconds?: number;
   is_limited: boolean;
+  is_exempt?: boolean;
 }
 
 export interface ProviderConfig {
@@ -62,13 +64,15 @@ export interface ChatResponse {
 
 // ==================== API Calls ====================
 
-export async function getRateLimitStatus(): Promise<RateLimitStatus> {
-  const response = await client.get<RateLimitStatus>('/api/assistant/chat/limit');
+export async function getRateLimitStatus(provider?: string): Promise<RateLimitStatus> {
+  const params = provider ? { provider } : {};
+  const response = await client.get<RateLimitStatus>('/api/assistant/chat/limit', { params });
   return response.data;
 }
 
-export async function getAssistantConfig(): Promise<AssistantConfig> {
-  const response = await client.get<AssistantConfig>('/api/assistant/config');
+export async function getAssistantConfig(refresh = false): Promise<AssistantConfig> {
+  const params = refresh ? { refresh: true } : {};
+  const response = await client.get<AssistantConfig>('/api/assistant/config', { params });
   return response.data;
 }
 

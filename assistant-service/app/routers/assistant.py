@@ -36,7 +36,8 @@ from ..providers import (
 )
 from ..providers.base import ChatMessage as ProviderChatMessage
 from ..services.metrics_context import metrics_context_service
-from ..services.rate_limit import get_rate_limit_status
+from ..services.rate_limit import check_rate_limit, get_rate_limit_status
+from ..services.user_settings import get_user_assistant_settings, provider_has_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +105,10 @@ class ModelCache:
         self._lock = asyncio.Lock()
 
     async def get_models(
-        self, provider: ModelProvider, provider_instance: BaseProvider
+        self, provider: ModelProvider, provider_instance: BaseProvider, scope: str = "default"
     ) -> list[str]:
         """Get models for a provider, using cache if available"""
-        cache_key = provider.value
+        cache_key = f"{provider.value}:{scope}"
         now = datetime.utcnow()
 
         # Check cache
@@ -130,10 +131,14 @@ class ModelCache:
             logger.info(f"Cached {len(models)} models for {provider.value}")
             return models
 
-    def invalidate(self, provider: ModelProvider | None = None):
+    def invalidate(self, provider: ModelProvider | None = None, scope: str | None = None):
         """Invalidate cache for a specific provider or all providers"""
-        if provider:
-            self._cache.pop(provider.value, None)
+        if provider and scope:
+            self._cache.pop(f"{provider.value}:{scope}", None)
+        elif provider:
+            for key in list(self._cache.keys()):
+                if key.startswith(f"{provider.value}:"):
+                    self._cache.pop(key, None)
         else:
             self._cache.clear()
 
@@ -142,34 +147,46 @@ class ModelCache:
 model_cache = ModelCache()
 
 
-async def _get_provider_status(provider_type: ModelProvider) -> ProviderStatus:
+async def _get_provider_status(
+    provider_type: ModelProvider,
+    user_provider_settings: dict[str, dict[str, str | None]],
+    cache_scope: str,
+) -> ProviderStatus:
     """Get the status of a single provider including availability and models."""
     try:
-        provider = get_provider(provider_type)
+        provider_pref = user_provider_settings.get(provider_type.value, {})
+        provider = get_provider(
+            provider_type,
+            ProviderConfig(
+                api_key=provider_pref.get("api_key"),
+                model=provider_pref.get("model"),
+            ),
+        )
         available = await provider.is_available()
+        preferred_model = provider_pref.get("model") or provider.default_model
 
         if not available:
             return ProviderStatus(
                 provider=provider_type,
                 available=False,
                 configured=False,
-                default_model=provider.default_model,
+                default_model=preferred_model,
             )
 
         models = []
         error_msg = None
         try:
-            models = await model_cache.get_models(provider_type, provider)
+            models = await model_cache.get_models(provider_type, provider, scope=cache_scope)
         except Exception as e:
             logger.warning(f"Failed to list models for {provider_type.value}: {e}")
             error_msg = f"Could not list models: {str(e)}"
-            models = [provider.default_model]
+            models = [preferred_model]
 
         return ProviderStatus(
             provider=provider_type,
             available=True,
             configured=True,
-            default_model=provider.default_model,
+            default_model=preferred_model,
             available_models=models,
             error=error_msg,
         )
@@ -226,21 +243,39 @@ def get_provider(
     return provider_class(config)
 
 
+def _build_provider_config(
+    request: ChatRequest,
+    user_provider_settings: dict[str, dict[str, str | None]],
+) -> ProviderConfig:
+    """Build provider config for a request, applying per-user BYOK overrides."""
+    provider_pref = user_provider_settings.get(request.provider.value, {})
+    return ProviderConfig(
+        api_key=provider_pref.get("api_key"),
+        model=request.model or provider_pref.get("model"),
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+    )
+
+
 # ==================== Configuration Endpoints ====================
 
 
 @router.get("/config", response_model=AssistantConfig)
-async def get_config(user: AuthenticatedUser = Depends(require_auth)):
+async def get_config(
+    refresh: bool = False,
+    user: AuthenticatedUser = Depends(require_auth),
+):
     """
     Get assistant configuration and provider status. Requires authentication.
 
     Implements caching with 5-minute TTL to avoid repeated provider checks.
     """
-    cache_key = "assistant:config"
+    cache_key = f"assistant:config:{user.user_id}"
     redis = await get_redis()
+    user_provider_settings = await get_user_assistant_settings(user.user_id, refresh=refresh)
 
     # Try cache first
-    if redis:
+    if redis and not refresh:
         try:
             cached = await redis.get(cache_key)
             if cached:
@@ -253,7 +288,10 @@ async def get_config(user: AuthenticatedUser = Depends(require_auth)):
 
     # Cache miss - compute result
     # Run all provider checks concurrently
-    tasks = [_get_provider_status(pt) for pt in ModelProvider]
+    tasks = [
+        _get_provider_status(pt, user_provider_settings, cache_scope=user.user_id)
+        for pt in ModelProvider
+    ]
     providers_status = await asyncio.gather(*tasks)
 
     # Determine default provider (first available)
@@ -302,22 +340,51 @@ async def _get_provider_info(provider_type: ModelProvider) -> dict:
 
 
 @router.get("/providers")
-async def list_providers(user: AuthenticatedUser = Depends(require_auth)):
+async def list_providers(
+    refresh: bool = False,
+    user: AuthenticatedUser = Depends(require_auth),
+):
     """
     List all providers and their availability. Requires authentication.
 
     Implements caching with 5-minute TTL to avoid repeated provider checks.
     """
-    cache_key = "providers:list"
+    cache_key = f"providers:list:{user.user_id}"
     redis = await get_redis()
+    user_provider_settings = await get_user_assistant_settings(user.user_id, refresh=refresh)
 
     # Try cache first
-    cached = await _cache_get(redis, cache_key)
+    cached = None if refresh else await _cache_get(redis, cache_key)
     if cached:
         return cached
 
     # Cache miss - compute result
-    result = [await _get_provider_info(provider_type) for provider_type in ModelProvider]
+    result = []
+    for provider_type in ModelProvider:
+        try:
+            provider_pref = user_provider_settings.get(provider_type.value, {})
+            provider = get_provider(
+                provider_type,
+                ProviderConfig(
+                    api_key=provider_pref.get("api_key"),
+                    model=provider_pref.get("model"),
+                ),
+            )
+            result.append(
+                {
+                    "provider": provider_type.value,
+                    "available": await provider.is_available(),
+                    "default_model": provider_pref.get("model") or provider.default_model,
+                }
+            )
+        except Exception as e:
+            result.append(
+                {
+                    "provider": provider_type.value,
+                    "available": False,
+                    "error": str(e),
+                }
+            )
     response = {"providers": result}
 
     # Cache the result (best effort)
@@ -337,7 +404,15 @@ async def list_models(
         refresh: If true, bypass cache and fetch fresh model list
     """
     try:
-        prov = get_provider(provider)
+        user_provider_settings = await get_user_assistant_settings(user.user_id, refresh=refresh)
+        provider_pref = user_provider_settings.get(provider.value, {})
+        prov = get_provider(
+            provider,
+            ProviderConfig(
+                api_key=provider_pref.get("api_key"),
+                model=provider_pref.get("model"),
+            ),
+        )
 
         if not await prov.is_available():
             raise HTTPException(
@@ -345,13 +420,13 @@ async def list_models(
             )
 
         if refresh:
-            model_cache.invalidate(provider)
+            model_cache.invalidate(provider, scope=user.user_id)
 
-        models = await model_cache.get_models(provider, prov)
+        models = await model_cache.get_models(provider, prov, scope=user.user_id)
         return {
             "provider": provider.value,
             "models": models,
-            "default": prov.default_model,
+            "default": provider_pref.get("model") or prov.default_model,
             "cached": not refresh,
         }
     except HTTPException:
@@ -363,14 +438,23 @@ async def list_models(
 @router.post("/models/refresh")
 async def refresh_all_models(user: AuthenticatedUser = Depends(require_auth)):
     """Refresh model lists for all providers. Requires authentication."""
-    model_cache.invalidate()
+    user_provider_settings = await get_user_assistant_settings(user.user_id, refresh=True)
+    for provider_type in ModelProvider:
+        model_cache.invalidate(provider_type, scope=user.user_id)
 
     results = {}
     for provider_type in ModelProvider:
         try:
-            prov = get_provider(provider_type)
+            provider_pref = user_provider_settings.get(provider_type.value, {})
+            prov = get_provider(
+                provider_type,
+                ProviderConfig(
+                    api_key=provider_pref.get("api_key"),
+                    model=provider_pref.get("model"),
+                ),
+            )
             if await prov.is_available():
-                models = await model_cache.get_models(provider_type, prov)
+                models = await model_cache.get_models(provider_type, prov, scope=user.user_id)
                 results[provider_type.value] = {
                     "success": True,
                     "count": len(models),
@@ -582,21 +666,32 @@ async def get_context_raw(
 
 # ==================== Chat Endpoints ====================
 
-# Create a rate-limited auth dependency for chat endpoints
+# Backwards-compatible alias used by tests; rate limit checks are applied inside handlers
+# to support BYOK provider exemptions.
 require_chat_auth = require_auth_with_rate_limit(settings.assistant_chat_limit_per_day, "chat")
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_chat_auth)):
+async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_auth)):
     """Non-streaming chat endpoint. Requires authentication and is rate-limited."""
-    # Get provider
-    provider_config = ProviderConfig(
-        model=request.model,
-        temperature=request.temperature,
-        max_tokens=request.max_tokens,
-    )
+    user_provider_settings = await get_user_assistant_settings(user.user_id)
+    has_user_provider_key = provider_has_user_key(user_provider_settings, request.provider.value)
+    provider_config = _build_provider_config(request, user_provider_settings)
 
     try:
+        if not has_user_provider_key:
+            try:
+                await check_rate_limit(
+                    user.user_id,
+                    "chat",
+                    settings.assistant_chat_limit_per_day,
+                    user_role=user.role.value,
+                )
+            except HTTPException:
+                raise
+            except Exception as rate_limit_error:
+                logger.warning("Rate limit check failed (continuing): %s", rate_limit_error)
+
         provider = get_provider(request.provider, provider_config)
 
         if not await provider.is_available():
@@ -630,7 +725,7 @@ async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_c
         return ChatResponse(
             message=response_text,
             provider=request.provider,
-            model=request.model or provider.default_model,
+            model=provider_config.model or provider.default_model,
         )
 
     except HTTPException:
@@ -641,19 +736,31 @@ async def chat(request: ChatRequest, user: AuthenticatedUser = Depends(require_c
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(require_chat_auth)):
+async def chat_stream(  # noqa: C901
+    request: ChatRequest, user: AuthenticatedUser = Depends(require_auth)
+):
     """
     Streaming chat endpoint. Requires authentication and is rate-limited.
     Returns Server-Sent Events (SSE) with response chunks.
     """
-    # Get provider
-    provider_config = ProviderConfig(
-        model=request.model,
-        temperature=request.temperature,
-        max_tokens=request.max_tokens,
-    )
+    user_provider_settings = await get_user_assistant_settings(user.user_id)
+    has_user_provider_key = provider_has_user_key(user_provider_settings, request.provider.value)
+    provider_config = _build_provider_config(request, user_provider_settings)
 
     try:
+        if not has_user_provider_key:
+            try:
+                await check_rate_limit(
+                    user.user_id,
+                    "chat",
+                    settings.assistant_chat_limit_per_day,
+                    user_role=user.role.value,
+                )
+            except HTTPException:
+                raise
+            except Exception as rate_limit_error:
+                logger.warning("Rate limit check failed (continuing): %s", rate_limit_error)
+
         provider = get_provider(request.provider, provider_config)
 
         if not await provider.is_available():
@@ -716,13 +823,31 @@ async def chat_stream(request: ChatRequest, user: AuthenticatedUser = Depends(re
 
 
 @router.get("/chat/limit")
-async def get_chat_limit_status(user: AuthenticatedUser = Depends(require_auth)):
+async def get_chat_limit_status(
+    provider: ModelProvider | None = Query(
+        default=None,
+        description="Optional provider to evaluate provider-specific BYOK exemption",
+    ),
+    user: AuthenticatedUser = Depends(require_auth),
+):
     """
     Get the current chat rate limit status for the authenticated user.
     Returns usage count, limit, remaining, time until reset, and exempt status.
 
     Users with roles in ASSISTANT_RATE_LIMIT_EXEMPT_ROLES have unlimited access.
     """
+    if provider is not None:
+        user_provider_settings = await get_user_assistant_settings(user.user_id)
+        if provider_has_user_key(user_provider_settings, provider.value):
+            return {
+                "used": 0,
+                "limit": -1,
+                "remaining": -1,
+                "resets_in_seconds": 0,
+                "is_limited": False,
+                "is_exempt": True,
+            }
+
     status = await get_rate_limit_status(
         user.user_id, "chat", settings.assistant_chat_limit_per_day, user_role=user.role.value
     )

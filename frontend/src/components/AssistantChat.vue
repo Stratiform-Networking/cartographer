@@ -50,27 +50,37 @@
           </svg>
           <h2 class="font-semibold text-slate-800 dark:text-slate-100">Network Assistant</h2>
         </div>
-        <!-- Close button -->
-        <button
-          @click="$emit('close')"
-          class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
-          title="Close assistant"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
+        <div class="flex items-center gap-1.5">
+          <button
+            v-if="isCloudDeployment"
+            @click="openByokSettings"
+            class="px-2.5 py-1 text-xs font-medium rounded-md border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 transition-colors"
+            title="Manage your AI provider keys"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+            AI Keys
+          </button>
+          <!-- Close button -->
+          <button
+            @click="emit('close')"
+            class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+            title="Close assistant"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
-      <!-- Model selection row (hidden in cloud deployment) -->
+      <!-- Model selection row -->
       <div
-        v-if="!isCloudDeployment"
+        v-if="showModelControls"
         class="flex items-center gap-2 px-4 py-2 bg-slate-100/50 dark:bg-slate-900/50 border-t border-slate-200/50 dark:border-slate-800/50"
       >
         <!-- Provider icon buttons -->
@@ -78,19 +88,19 @@
           <button
             v-for="p in allProviders"
             :key="p.provider"
-            @click="p.available && !rateLimited ? selectProvider(p.provider) : null"
-            @dblclick="p.available && !rateLimited ? setDefaultProvider(p.provider) : null"
-            :disabled="inputDisabled || !p.available"
+            @click="p.available ? selectProvider(p.provider) : null"
+            @dblclick="p.available ? setDefaultProvider(p.provider) : null"
+            :disabled="isStreaming || !p.available"
             class="p-1.5 rounded-md transition-all relative"
             :class="[
               selectedProvider === p.provider
                 ? 'bg-slate-200 dark:bg-slate-800 ring-2 ring-violet-500'
-                : p.available && !rateLimited
+                : p.available
                   ? 'hover:bg-slate-200 dark:hover:bg-slate-800'
                   : '',
-              inputDisabled || !p.available ? 'opacity-30 cursor-not-allowed' : '',
+              isStreaming || !p.available ? 'opacity-30 cursor-not-allowed' : '',
             ]"
-            :title="rateLimited ? 'Rate limited - try again tomorrow' : getProviderTitle(p)"
+            :title="getProviderTitle(p)"
           >
             <!-- Default provider indicator -->
             <span
@@ -195,9 +205,10 @@
         <!-- Model selector -->
         <select
           v-model="selectedModel"
+          @change="onModelSelectionChanged"
           class="text-xs bg-white dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-md px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none flex-1 min-w-0 transition-shadow"
-          :disabled="inputDisabled || !currentProviderModels.length"
-          :title="rateLimited ? 'Rate limited - try again tomorrow' : selectedModel"
+          :disabled="isStreaming || !currentProviderModels.length"
+          :title="selectedModel"
         >
           <option v-for="model in currentProviderModels" :key="model" :value="model">
             {{ formatModelName(model) }}
@@ -534,6 +545,116 @@
       </div>
     </div>
 
+    <!-- Cloud BYOK Settings Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showByokModal"
+          class="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 dark:bg-slate-950/90"
+        >
+          <div
+            class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-2xl"
+          >
+            <div
+              class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950/50"
+            >
+              <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                AI Provider Keys
+              </h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Keys are global for your account across all networks.
+              </p>
+            </div>
+
+            <div class="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div
+                v-for="provider in cloudByokProviders"
+                :key="provider"
+                class="rounded-xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50/70 dark:bg-slate-950/40"
+              >
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {{ providerLabels[provider] }}
+                  </span>
+                  <span
+                    class="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                    :class="
+                      assistantSettings[provider].has_api_key
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                        : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                    "
+                  >
+                    {{ assistantSettings[provider].has_api_key ? 'Key set' : 'Not set' }}
+                  </span>
+                </div>
+                <p
+                  v-if="assistantSettings[provider].api_key_masked"
+                  class="text-xs text-slate-500 dark:text-slate-400 mb-2"
+                >
+                  Current: {{ assistantSettings[provider].api_key_masked }}
+                </p>
+                <input
+                  v-model="byokDraft[provider]"
+                  @input="onByokInput(provider)"
+                  type="password"
+                  autocomplete="off"
+                  class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none"
+                  :placeholder="`Enter ${providerLabels[provider]} API key`"
+                />
+                <div class="flex items-center justify-between mt-2">
+                  <button
+                    @click="clearByokProvider(provider)"
+                    type="button"
+                    class="text-xs text-rose-600 dark:text-rose-400 hover:underline disabled:no-underline disabled:opacity-40"
+                    :disabled="!assistantSettings[provider].has_api_key && !clearByok[provider]"
+                  >
+                    Clear saved key
+                  </button>
+                  <span
+                    v-if="assistantSettings[provider].model"
+                    class="text-[11px] text-slate-500 dark:text-slate-400"
+                  >
+                    Model: {{ formatModelName(assistantSettings[provider].model || '') }}
+                  </span>
+                </div>
+              </div>
+
+              <p v-if="byokError" class="text-sm text-rose-600 dark:text-rose-400">
+                {{ byokError }}
+              </p>
+            </div>
+
+            <div
+              class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-2"
+            >
+              <button
+                @click="closeByokSettings"
+                type="button"
+                class="px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                @click="saveByokSettings"
+                type="button"
+                :disabled="savingByok"
+                class="px-3 py-2 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {{ savingByok ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- Input Area -->
     <div
       class="p-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-950/50"
@@ -613,6 +734,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import * as assistantApi from '../api/assistant';
+import * as authApi from '../api/auth';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { apiUrl } from '../config';
@@ -628,6 +750,8 @@ const emit = defineEmits(['close']);
 const isCloudDeployment = (import.meta.env.BASE_URL || '/').startsWith('/app');
 const CLOUD_PROVIDER = 'anthropic';
 const CLOUD_MODEL = 'claude-haiku-4-5-20251001';
+const cloudByokProviders = ['openai', 'anthropic', 'gemini'] as const;
+type CloudByokProvider = (typeof cloudByokProviders)[number];
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -639,6 +763,18 @@ interface Provider {
   available: boolean;
   default_model?: string;
   available_models?: string[];
+}
+
+interface AssistantProviderSettings {
+  has_api_key: boolean;
+  api_key_masked?: string | null;
+  model?: string | null;
+}
+
+interface AssistantSettings {
+  openai: AssistantProviderSettings;
+  anthropic: AssistantProviderSettings;
+  gemini: AssistantProviderSettings;
 }
 
 interface ContextSummary {
@@ -654,6 +790,14 @@ interface ContextStatus {
   snapshot_available: boolean;
   loading: boolean;
   ready: boolean;
+}
+
+function emptyAssistantSettings(): AssistantSettings {
+  return {
+    openai: { has_api_key: false, api_key_masked: null, model: null },
+    anthropic: { has_api_key: false, api_key_masked: null, model: null },
+    gemini: { has_api_key: false, api_key_masked: null, model: null },
+  };
 }
 
 const messages = ref<ChatMessage[]>([]);
@@ -674,6 +818,20 @@ const contextSummary = ref<ContextSummary | null>(null);
 const contextLoading = ref(true);
 const contextRefreshing = ref(false);
 const contextStatusPollInterval = ref<number | null>(null);
+const assistantSettings = ref<AssistantSettings>(emptyAssistantSettings());
+const showByokModal = ref(false);
+const savingByok = ref(false);
+const byokError = ref<string | null>(null);
+const byokDraft = ref<Record<CloudByokProvider, string>>({
+  openai: '',
+  anthropic: '',
+  gemini: '',
+});
+const clearByok = ref<Record<CloudByokProvider, boolean>>({
+  openai: false,
+  anthropic: false,
+  gemini: false,
+});
 
 // Rate limit state
 const rateLimited = ref(false);
@@ -688,6 +846,10 @@ const rateLimitInfo = ref<{
 
 // Computed: whether input should be disabled
 const inputDisabled = computed(() => isStreaming.value || rateLimited.value);
+const hasAnyByokKey = computed(() =>
+  cloudByokProviders.some((provider) => assistantSettings.value[provider]?.has_api_key)
+);
+const showModelControls = computed(() => !isCloudDeployment || hasAnyByokKey.value);
 
 // Computed property for current provider's models
 const currentProviderModels = computed(() => {
@@ -718,10 +880,90 @@ function getAuthToken(): string | null {
   return null;
 }
 
+function getErrorMessage(error: unknown, fallback: string): string {
+  const candidate = error as { response?: { data?: { detail?: string } }; message?: string };
+  return candidate.response?.data?.detail || candidate.message || fallback;
+}
+
+function isCloudByokProvider(provider: string): provider is CloudByokProvider {
+  return (cloudByokProviders as readonly string[]).includes(provider);
+}
+
+function resetByokDraft() {
+  byokDraft.value = { openai: '', anthropic: '', gemini: '' };
+  clearByok.value = { openai: false, anthropic: false, gemini: false };
+}
+
+async function fetchAssistantSettings() {
+  try {
+    assistantSettings.value = await authApi.getAssistantSettings();
+  } catch (err) {
+    console.error('Failed to fetch assistant settings:', err);
+    assistantSettings.value = emptyAssistantSettings();
+  }
+}
+
+function openByokSettings() {
+  byokError.value = null;
+  resetByokDraft();
+  showByokModal.value = true;
+}
+
+function closeByokSettings() {
+  showByokModal.value = false;
+  byokError.value = null;
+}
+
+function onByokInput(provider: CloudByokProvider) {
+  if (byokDraft.value[provider].trim()) {
+    clearByok.value[provider] = false;
+  }
+}
+
+function clearByokProvider(provider: CloudByokProvider) {
+  byokDraft.value[provider] = '';
+  clearByok.value[provider] = true;
+}
+
+async function saveByokSettings() {
+  byokError.value = null;
+  const payload: Record<string, { api_key: string | null }> = {};
+
+  for (const provider of cloudByokProviders) {
+    const key = byokDraft.value[provider].trim();
+    if (clearByok.value[provider]) {
+      payload[provider] = { api_key: null };
+    } else if (key) {
+      payload[provider] = { api_key: key };
+    }
+  }
+
+  if (Object.keys(payload).length === 0) {
+    closeByokSettings();
+    return;
+  }
+
+  savingByok.value = true;
+  try {
+    assistantSettings.value = await authApi.updateAssistantSettings(payload);
+    closeByokSettings();
+    await fetchProviders(true);
+    await checkRateLimitStatus();
+  } catch (err: unknown) {
+    console.error('Failed to save assistant settings:', err);
+    byokError.value = getErrorMessage(err, 'Failed to save settings.');
+  } finally {
+    savingByok.value = false;
+  }
+}
+
 // Check rate limit status proactively
 async function checkRateLimitStatus() {
+  const providerForLimit = showModelControls.value
+    ? selectedProvider.value || CLOUD_PROVIDER
+    : CLOUD_PROVIDER;
   try {
-    const data = await assistantApi.getRateLimitStatus();
+    const data = await assistantApi.getRateLimitStatus(providerForLimit);
 
     // Store the full rate limit info
     rateLimitInfo.value = {
@@ -779,7 +1021,9 @@ const suggestions = [
 // Fetch available providers on mount
 onMounted(async () => {
   loadDefaultProvider();
-  await Promise.all([fetchProviders(), fetchContext(), checkRateLimitStatus()]);
+  await fetchAssistantSettings();
+  await Promise.all([fetchProviders(), fetchContext()]);
+  await checkRateLimitStatus();
 });
 
 // Cleanup polling on unmount
@@ -787,17 +1031,22 @@ onUnmounted(() => {
   stopContextStatusPolling();
 });
 
-async function fetchProviders() {
-  // In cloud deployment, force Anthropic/Claude Haiku - skip provider discovery
-  if (isCloudDeployment) {
+async function fetchProviders(refresh = false) {
+  // In cloud deployment, keep default model unless user has at least one BYOK key.
+  if (isCloudDeployment && !hasAnyByokKey.value) {
     selectedProvider.value = CLOUD_PROVIDER;
     selectedModel.value = CLOUD_MODEL;
+    allProviders.value = [];
+    availableProviders.value = [];
     return;
   }
 
   try {
-    const config = await assistantApi.getAssistantConfig();
-    const providers = config.providers || [];
+    const config = await assistantApi.getAssistantConfig(refresh);
+    const allConfigProviders = config.providers || [];
+    const providers = isCloudDeployment
+      ? allConfigProviders.filter((p: Provider) => isCloudByokProvider(p.provider))
+      : allConfigProviders;
 
     // Store all providers for display
     allProviders.value = providers;
@@ -830,11 +1079,20 @@ async function fetchProviders() {
     }
   } catch (err) {
     console.error('Failed to fetch providers:', err);
-    // Default to OpenAI if we can't fetch
-    const defaultProvider = { provider: 'openai', available: true, default_model: 'gpt-4o-mini' };
-    allProviders.value = [defaultProvider];
-    availableProviders.value = [defaultProvider];
-    selectedModel.value = 'gpt-4o-mini';
+    if (!isCloudDeployment) {
+      // Default to OpenAI if we can't fetch in local mode
+      const defaultProvider = {
+        provider: 'openai',
+        available: true,
+        default_model: 'gpt-4o-mini',
+      };
+      allProviders.value = [defaultProvider];
+      availableProviders.value = [defaultProvider];
+      selectedModel.value = 'gpt-4o-mini';
+    } else {
+      selectedProvider.value = CLOUD_PROVIDER;
+      selectedModel.value = CLOUD_MODEL;
+    }
   }
 }
 
@@ -890,6 +1148,20 @@ function selectProvider(providerName: string) {
   if (isStreaming.value) return;
   selectedProvider.value = providerName;
   onProviderChange();
+}
+
+async function onModelSelectionChanged() {
+  if (!isCloudByokProvider(selectedProvider.value) || !selectedModel.value) {
+    return;
+  }
+
+  try {
+    assistantSettings.value = await authApi.updateAssistantSettings({
+      [selectedProvider.value]: { model: selectedModel.value },
+    });
+  } catch (err) {
+    console.error('Failed to save preferred model:', err);
+  }
 }
 
 function formatModelName(model: string): string {
@@ -1034,8 +1306,8 @@ async function handleSubmit() {
       },
       body: JSON.stringify({
         message,
-        provider: isCloudDeployment ? CLOUD_PROVIDER : selectedProvider.value,
-        model: isCloudDeployment ? CLOUD_MODEL : selectedModel.value || undefined,
+        provider: showModelControls.value ? selectedProvider.value : CLOUD_PROVIDER,
+        model: showModelControls.value ? selectedModel.value || undefined : CLOUD_MODEL,
         conversation_history: history,
         include_network_context: includeContext.value,
         network_id: props.networkId,
@@ -1091,7 +1363,7 @@ async function handleSubmit() {
             } else if (data.type === 'done') {
               // Streaming complete
             }
-          } catch (e) {
+          } catch {
             // Ignore JSON parse errors for incomplete chunks
           }
         }
@@ -1102,9 +1374,9 @@ async function handleSubmit() {
     if (currentStreamContent.value) {
       messages.value.push({ role: 'assistant', content: currentStreamContent.value });
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Chat error:', err);
-    error.value = err.message || 'Failed to get response';
+    error.value = getErrorMessage(err, 'Failed to get response');
   } finally {
     isStreaming.value = false;
     currentStreamContent.value = '';
@@ -1124,6 +1396,14 @@ function scrollToBottom() {
 
 // Auto-scroll when messages change
 watch(messages, scrollToBottom, { deep: true });
+
+watch(selectedProvider, () => {
+  checkRateLimitStatus();
+});
+
+watch(showModelControls, () => {
+  checkRateLimitStatus();
+});
 </script>
 
 <style scoped>

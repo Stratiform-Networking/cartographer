@@ -4,6 +4,7 @@ Pydantic models for request/response validation.
 
 import re
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -202,6 +203,74 @@ class UserPreferencesUpdate(BaseModel):
     """Request to update user preferences (partial update)."""
 
     dark_mode: bool | None = None
+
+
+class AssistantProvider(str, Enum):
+    """Supported BYOK providers for assistant usage."""
+
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
+
+
+class AssistantProviderSettings(BaseModel):
+    """Public assistant provider settings (no raw API key values)."""
+
+    has_api_key: bool = False
+    api_key_masked: str | None = None
+    model: str | None = None
+
+
+class AssistantProviderSettingsUpdate(BaseModel):
+    """Partial update for a single assistant provider."""
+
+    api_key: str | None = Field(
+        default=None,
+        max_length=5000,
+        description="Provider API key. Send null or empty string to clear.",
+    )
+    model: str | None = Field(
+        default=None,
+        max_length=255,
+        description="Preferred model ID. Send null or empty string to clear.",
+    )
+
+
+class UserAssistantSettingsResponse(BaseModel):
+    """Current BYOK settings for the authenticated user."""
+
+    openai: AssistantProviderSettings = Field(default_factory=AssistantProviderSettings)
+    anthropic: AssistantProviderSettings = Field(default_factory=AssistantProviderSettings)
+    gemini: AssistantProviderSettings = Field(default_factory=AssistantProviderSettings)
+
+
+class UserAssistantSettingsUpdate(BaseModel):
+    """Partial BYOK settings update for one or more providers."""
+
+    openai: AssistantProviderSettingsUpdate | None = None
+    anthropic: AssistantProviderSettingsUpdate | None = None
+    gemini: AssistantProviderSettingsUpdate | None = None
+
+
+class InternalAssistantProviderSettings(BaseModel):
+    """Internal provider settings including raw API key for trusted services."""
+
+    api_key: str | None = None
+    model: str | None = None
+
+
+class InternalUserAssistantSettingsResponse(BaseModel):
+    """Internal BYOK settings payload used by assistant-service."""
+
+    openai: InternalAssistantProviderSettings = Field(
+        default_factory=InternalAssistantProviderSettings
+    )
+    anthropic: InternalAssistantProviderSettings = Field(
+        default_factory=InternalAssistantProviderSettings
+    )
+    gemini: InternalAssistantProviderSettings = Field(
+        default_factory=InternalAssistantProviderSettings
+    )
 
 
 # ==================== Invitation Models ====================

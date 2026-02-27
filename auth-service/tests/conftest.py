@@ -11,6 +11,7 @@ import pytest
 os.environ["AUTH_DATA_DIR"] = "/tmp/test-auth-data"
 os.environ["JWT_SECRET"] = "test-secret-key-for-testing"
 os.environ["JWT_EXPIRATION_HOURS"] = "24"
+os.environ["ASSISTANT_KEYS_ENCRYPTION_KEY"] = "test-assistant-key-encryption-secret"
 os.environ["RESEND_API_KEY"] = ""  # Disable email in tests
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"  # Use SQLite for tests
 

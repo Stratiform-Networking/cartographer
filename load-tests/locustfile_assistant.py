@@ -12,14 +12,21 @@ Authentication:
     - LOADTEST_PASSWORD: Password for authentication (default: admin)
 """
 
-import os
 import random
 from locust import HttpUser, task, between, tag, events
+from common.assertions import expect_status
+from common.auth import (
+    get_auth_host,
+    get_auth_password,
+    get_auth_username,
+    login_with_locust_client,
+)
 
 
 # Authentication credentials from environment variables
-AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
+AUTH_USERNAME = get_auth_username()
+AUTH_PASSWORD = get_auth_password()
+AUTH_HOST = get_auth_host()
 
 # AI Providers available in the system
 PROVIDERS = ["openai", "anthropic", "gemini", "ollama"]
@@ -43,20 +50,13 @@ class AuthenticatedAssistantUser(HttpUser):
     
     def on_start(self):
         """Authenticate before running tests"""
-        with self.client.post(
-            "/api/auth/login",
-            json={
-                "username": AUTH_USERNAME,
-                "password": AUTH_PASSWORD
-            },
-            catch_response=True
-        ) as response:
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data.get("access_token")
-                response.success()
-            else:
-                response.success()  # Continue without auth
+        auth_result = login_with_locust_client(
+            self.client,
+            AUTH_USERNAME,
+            AUTH_PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
     
     def _auth_headers(self):
         """Get headers with authorization token"""
@@ -108,9 +108,7 @@ class AssistantServiceUser(AuthenticatedAssistantUser):
             name="/api/assistant/models/[provider]",
             catch_response=True
         ) as response:
-            # 503 is acceptable if provider not configured
-            if response.status_code in [200, 503]:
-                response.success()
+            expect_status(response, [200, 503], "list_models_for_provider")
     
     @task(2)
     @tag("providers", "write", "safe")
@@ -123,8 +121,7 @@ class AssistantServiceUser(AuthenticatedAssistantUser):
             catch_response=True,
             timeout=30
         ) as response:
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "refresh_all_models")
     
     # ==================== Context Endpoints ====================
     
@@ -151,8 +148,7 @@ class AssistantServiceUser(AuthenticatedAssistantUser):
             catch_response=True,
             timeout=15
         ) as response:
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "refresh_context")
     
     @task(2)
     @tag("context", "read", "safe")
@@ -219,8 +215,7 @@ class AssistantChatMockUser(AuthenticatedAssistantUser):
             catch_response=True,
             timeout=2  # Very short timeout - won't wait for AI
         ) as response:
-            # Any response is a success for infrastructure testing
-            response.success()
+            expect_status(response, [200, 422, 503], "chat_infrastructure_test")
     
     @task(5)
     @tag("mock-chat", "write", "safe")
@@ -243,9 +238,7 @@ class AssistantChatMockUser(AuthenticatedAssistantUser):
             catch_response=True,
             timeout=5
         ) as response:
-            # 422 (validation error) or 400 (bad request) expected
-            if response.status_code in [200, 400, 422, 500]:
-                response.success()
+            expect_status(response, [400, 422], "chat_validation_test")
     
     @task(3)
     @tag("mock-chat", "write", "safe")
@@ -272,8 +265,7 @@ class AssistantChatMockUser(AuthenticatedAssistantUser):
             timeout=2,  # Short timeout
             stream=True
         ) as response:
-            # Just verify we can connect, don't wait for full response
-            response.success()
+            expect_status(response, [200, 422, 503], "chat_stream_infrastructure_test")
     
     @task(2)
     @tag("mock-chat", "write", "safe")
@@ -297,9 +289,7 @@ class AssistantChatMockUser(AuthenticatedAssistantUser):
             catch_response=True,
             timeout=3
         ) as response:
-            # 503 (not configured) is the expected/desired response
-            if response.status_code in [200, 503, 500]:
-                response.success()
+            expect_status(response, [200, 503], "chat_with_unconfigured_provider")
 
 
 class AssistantEndpointStressUser(AuthenticatedAssistantUser):
@@ -351,5 +341,6 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*60}")
     print(f"  Assistant Service Load Test (MOCKED - No AI Costs)")
     print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Auth Host: {AUTH_HOST}")
     print(f"  Target: {environment.host}")
     print(f"{'='*60}\n")

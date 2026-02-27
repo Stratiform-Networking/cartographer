@@ -442,6 +442,7 @@ jobs:
               --host http://localhost:8000 \
               --html capacity_discovery_report.html \
               --headless \
+              --exit-code-on-error 1 \
               --only-summary \
               --stop-timeout 10 2>&1 | tee capacity_discovery_output.log
             
@@ -469,6 +470,7 @@ jobs:
         env:
           LOADTEST_USERNAME: loadtest_admin
           LOADTEST_PASSWORD: LoadTest123!
+          LOADTEST_AUTH_HOST: http://localhost:8002
           RAMP_INITIAL_USERS: ${{ github.event.inputs.ramp_initial_users || '10' }}
           RAMP_STEP: ${{ github.event.inputs.ramp_step || '10' }}
           RAMP_INTERVAL: ${{ github.event.inputs.ramp_interval || '30' }}
@@ -739,5 +741,4 @@ jobs:
             echo "- Checking for recent code changes" >> $GITHUB_STEP_SUMMARY
             echo "- Running manual tests with increased timeouts" >> $GITHUB_STEP_SUMMARY
           fi
-
 

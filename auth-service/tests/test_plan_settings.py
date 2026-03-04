@@ -29,7 +29,8 @@ class TestPlanConfigLoading:
 
     def test_tier_config_dir_points_to_subscription_tiers(self):
         path = plan_settings._tier_config_dir()
-        assert str(path).endswith("cartographer-cloud/backend/config/subscription_tiers")
+        assert path is not None
+        assert path.as_posix().endswith("cartographer-cloud/backend/config/subscription_tiers")
 
     def test_load_all_plan_limits_uses_fallback_when_directory_missing(self):
         missing = Path("/tmp/definitely-missing-subscription-tier-dir")

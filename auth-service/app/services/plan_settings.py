@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -48,9 +49,47 @@ def _normalize_plan_id(plan_id: str | None) -> str:
     return normalized or DEFAULT_PLAN_ID
 
 
-def _tier_config_dir() -> Path:
-    repo_root = Path(__file__).resolve().parents[4]
-    return repo_root / "cartographer-cloud" / "backend" / "config" / "subscription_tiers"
+def _tier_config_dir() -> Path | None:
+    """
+    Resolve subscription tier config directory if available.
+
+    In some deployments (e.g. auth-service image built from `auth-service/` only),
+    the cartographer-cloud repository path is not present in the container. In that
+    case we intentionally return None and fall back to built-in limits.
+    """
+    env_override = os.getenv("SUBSCRIPTION_TIER_CONFIG_DIR", "").strip()
+    if env_override:
+        path = Path(env_override)
+        return path if path.exists() else None
+
+    module_path = Path(__file__).resolve()
+    candidates = [
+        # Monorepo layout from repository root:
+        # <repo>/cartographer/auth-service/app/services/plan_settings.py
+        (
+            module_path.parents[4]
+            / "cartographer-cloud"
+            / "backend"
+            / "config"
+            / "subscription_tiers"
+            if len(module_path.parents) > 4
+            else None
+        ),
+        # Auth-service-only image layout:
+        # /app/app/services/plan_settings.py -> /app/app/config/subscription_tiers
+        (
+            module_path.parents[1] / "config" / "subscription_tiers"
+            if len(module_path.parents) > 1
+            else None
+        ),
+        # Alternative container path if mounted explicitly.
+        Path("/app/config/subscription_tiers"),
+    ]
+
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return candidate
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -58,9 +97,9 @@ def _load_all_plan_limits() -> dict[str, dict[str, int]]:
     limits_by_plan = dict(_FALLBACK_PLAN_LIMITS)
     config_dir = _tier_config_dir()
 
-    if not config_dir.exists():
+    if config_dir is None or not config_dir.exists():
         logger.warning(
-            "Subscription tier config directory not found at %s; using fallback plan limits",
+            "Subscription tier config directory unavailable (%s); using fallback plan limits",
             config_dir,
         )
         return limits_by_plan

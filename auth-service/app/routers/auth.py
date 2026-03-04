@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..database import get_db
-from ..db_models import Invite, User, UserRole
+from ..db_models import Invite, ProviderLink, User, UserRole
 from ..identity.factory import get_provider
 from ..identity.sync import sync_provider_user
 from ..models import (
@@ -160,6 +160,38 @@ async def get_all_users_internal(db: AsyncSession = Depends(get_db)):
     """
     users = await auth_service.get_all_user_ids(db)
     return [{"user_id": uid} for uid in users]
+
+
+@router.get("/internal/users/by-provider/{provider}/{provider_user_id}")
+async def get_user_by_provider_internal(
+    provider: str, provider_user_id: str, db: AsyncSession = Depends(get_db)
+):
+    """
+    Look up a local user by external provider link.
+
+    Used by the cloud backend to resolve Clerk user IDs from billing webhooks
+    to local user IDs for plan updates.
+    """
+
+    result = await db.execute(
+        select(ProviderLink).where(
+            ProviderLink.provider == provider,
+            ProviderLink.provider_user_id == provider_user_id,
+        )
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Provider link not found")
+
+    user = await auth_service.get_user(db, link.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "email": user.email,
+    }
 
 
 @router.get("/internal/users/{user_id}")

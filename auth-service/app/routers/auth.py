@@ -194,6 +194,32 @@ async def get_user_by_provider_internal(
     }
 
 
+@router.get("/internal/users/{user_id}/provider-link/{provider}")
+async def get_user_provider_link_internal(
+    user_id: str, provider: str, db: AsyncSession = Depends(get_db)
+):
+    """
+    Reverse provider lookup: given a local user ID, return their external provider link.
+
+    Used by the cloud backend to resolve a local user ID back to a Clerk user ID
+    for billing operations (e.g. subscription cancellation).
+    """
+    result = await db.execute(
+        select(ProviderLink).where(
+            ProviderLink.user_id == user_id,
+            ProviderLink.provider == provider,
+        )
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Provider link not found")
+
+    return {
+        "provider": link.provider,
+        "provider_user_id": link.provider_user_id,
+    }
+
+
 @router.get("/internal/users/{user_id}")
 async def get_user_internal(user_id: str, db: AsyncSession = Depends(get_db)):
     """

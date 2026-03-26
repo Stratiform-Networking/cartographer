@@ -6,7 +6,26 @@
 		<link rel="shortcut icon" type="image/png" href="/favicon.png" />
 		<link rel="apple-touch-icon" href="/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Cartographer</title>
+		<meta name="description" content="Self-hosted network mapping and monitoring platform. Visualize your network topology, monitor device health, and collaborate with your team." />
+		<meta property="og:title" content="Cartographer — Network Mapping & Monitoring" />
+		<meta property="og:description" content="Self-hosted network mapping and monitoring platform. Visualize your network topology, monitor device health, and collaborate with your team." />
+		<meta property="og:type" content="website" />
+		<meta name="twitter:card" content="summary" />
+		<meta name="twitter:title" content="Cartographer — Network Mapping & Monitoring" />
+		<meta name="twitter:description" content="Self-hosted network mapping and monitoring platform. Visualize your network topology, monitor device health, and collaborate with your team." />
+		<title>Cartographer — Network Mapping & Monitoring</title>
+		<script>
+			(function () {
+				try {
+					var s = localStorage.getItem('cartographer_darkMode');
+					if (
+						s === 'true' ||
+						(!s && window.matchMedia('(prefers-color-scheme: dark)').matches)
+					)
+						document.documentElement.classList.add('dark');
+				} catch (e) {}
+			})();
+		</script>
 	</head>
 	<body class="bg-slate-50">
 		<div id="app"></div>

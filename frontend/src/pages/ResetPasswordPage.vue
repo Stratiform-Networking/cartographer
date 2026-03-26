@@ -161,9 +161,23 @@
 
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue';
+import { useHead } from '@unhead/vue';
 import { useRoute } from 'vue-router';
 import { confirmPasswordReset, requestPasswordReset } from '../api/auth';
 import { extractErrorMessage } from '../api/client';
+
+useHead({
+  title: 'Reset Password — Cartographer',
+  meta: [
+    { name: 'description', content: 'Reset your Cartographer account password.' },
+    { property: 'og:title', content: 'Reset Password — Cartographer' },
+    {
+      property: 'og:description',
+      content: 'Reset your Cartographer account password.',
+    },
+    { property: 'og:type', content: 'website' },
+  ],
+});
 
 const route = useRoute();
 

@@ -161,6 +161,7 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue';
+import { useHead } from '@unhead/vue';
 import * as embedsApi from '../api/embeds';
 import type { TreeNode, DeviceMetrics } from '../types/network';
 import NetworkMapEmbed from '../components/NetworkMapEmbed.vue';
@@ -177,6 +178,30 @@ const showOwner = ref(false);
 const ownerDisplayName = ref<string | null>(null);
 const networkMapRef = ref<InstanceType<typeof NetworkMapEmbed> | null>(null);
 const isDark = ref(true);
+
+const embedTitle = computed(() =>
+  ownerDisplayName.value
+    ? `${ownerDisplayName.value}'s Network — Cartographer`
+    : 'Network Map — Cartographer'
+);
+useHead({
+  title: embedTitle,
+  meta: [
+    { name: 'description', content: 'Interactive network topology map powered by Cartographer.' },
+    { property: 'og:title', content: embedTitle },
+    {
+      property: 'og:description',
+      content: 'Interactive network topology map powered by Cartographer.',
+    },
+    { property: 'og:type', content: 'website' },
+    { name: 'twitter:card', content: 'summary' },
+    { name: 'twitter:title', content: embedTitle },
+    {
+      name: 'twitter:description',
+      content: 'Interactive network topology map powered by Cartographer.',
+    },
+  ],
+});
 
 // Embed-specific health monitoring (uses anonymized IDs in sensitive mode)
 const embedHealthMetrics = ref<Record<string, DeviceMetrics>>({});

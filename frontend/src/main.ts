@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import { createUnhead, headSymbol } from '@unhead/vue';
 import axios from 'axios';
 import App from './App.vue';
 import router from './router';
@@ -37,7 +38,9 @@ router.afterEach((to) => {
   });
 });
 
+const head = createUnhead();
 const app = createApp(App);
 app.use(createPinia());
+app.provide(headSymbol, head);
 app.use(router);
 app.mount('#app');

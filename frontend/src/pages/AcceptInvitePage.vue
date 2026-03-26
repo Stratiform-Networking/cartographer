@@ -325,10 +325,27 @@
 
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
+import { useHead } from '@unhead/vue';
 import { useRoute } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
 import type { InviteTokenInfo } from '../types/auth';
 import { getRoleLabel } from '../types/auth';
+
+useHead({
+  title: 'Accept Invitation — Cartographer',
+  meta: [
+    {
+      name: 'description',
+      content: 'Accept your invitation to join a Cartographer network and start collaborating.',
+    },
+    { property: 'og:title', content: 'Accept Invitation — Cartographer' },
+    {
+      property: 'og:description',
+      content: 'Accept your invitation to join a Cartographer network and start collaborating.',
+    },
+    { property: 'og:type', content: 'website' },
+  ],
+});
 
 const route = useRoute();
 const { verifyInviteToken, acceptInvite } = useAuth();

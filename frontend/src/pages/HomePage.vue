@@ -832,6 +832,7 @@
 
 <script lang="ts" setup>
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
+import { useHead } from '@unhead/vue';
 import { useAuth } from '../composables/useAuth';
 import { useNetworks, type Network } from '../composables/useNetworks';
 import { useDarkMode } from '../composables/useDarkMode';
@@ -843,6 +844,31 @@ import UserMenu from '../components/UserMenu.vue';
 import NotificationSettingsPanel from '../components/NotificationSettingsPanel.vue';
 import UserManagement from '../components/UserManagement.vue';
 import UpdateSettings from '../components/UpdateSettings.vue';
+
+useHead({
+  title: 'Cartographer — Network Mapping & Monitoring',
+  meta: [
+    {
+      name: 'description',
+      content:
+        'Self-hosted network mapping and monitoring platform. Visualize your network topology, monitor device health, and collaborate with your team.',
+    },
+    { property: 'og:title', content: 'Cartographer — Network Mapping & Monitoring' },
+    {
+      property: 'og:description',
+      content:
+        'Self-hosted network mapping and monitoring platform. Visualize your network topology, monitor device health, and collaborate with your team.',
+    },
+    { property: 'og:type', content: 'website' },
+    { name: 'twitter:card', content: 'summary' },
+    { name: 'twitter:title', content: 'Cartographer — Network Mapping & Monitoring' },
+    {
+      name: 'twitter:description',
+      content:
+        'Self-hosted network mapping and monitoring platform. Visualize your network topology, monitor device health, and collaborate with your team.',
+    },
+  ],
+});
 
 const { isAuthenticated, user, initAuthState, authConfig } = useAuth();
 const {

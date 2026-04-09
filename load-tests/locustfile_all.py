@@ -13,21 +13,26 @@ Run with:
     LOADTEST_USERNAME=myuser LOADTEST_PASSWORD=mypass locust -f locustfile_all.py --host=http://localhost:8000
 """
 
-import os
 import random
 import uuid
 import logging
 from locust import HttpUser, task, between, tag, events
-from faker import Faker
+from common.assertions import expect_status
+from common.auth import (
+    get_auth_host,
+    get_auth_password,
+    get_auth_username,
+    login_with_locust_client,
+)
 
-fake = Faker()
 logger = logging.getLogger(__name__)
 
 # ==================== Configuration ====================
 
 # Authentication credentials from environment variables
-AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
+AUTH_USERNAME = get_auth_username()
+AUTH_PASSWORD = get_auth_password()
+AUTH_HOST = get_auth_host()
 
 # Sample data for testing
 SAMPLE_IPS = [
@@ -60,30 +65,18 @@ class AuthenticatedUser(HttpUser):
     def _login(self):
         """Authenticate and store the access token"""
         logger.info(f"Attempting login with username: {AUTH_USERNAME}")
-        with self.client.post(
-            "/api/auth/login",
-            json={
-                "username": AUTH_USERNAME,
-                "password": AUTH_PASSWORD
-            },
-            catch_response=True
-        ) as response:
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data.get("access_token")
-                user_data = data.get("user", {})
-                self.user_id = user_data.get("id", str(uuid.uuid4()))
-                logger.info(f"Login successful for user: {user_data.get('username')}")
-                response.success()
-            else:
-                # Log warning but don't crash - continue without auth
-                logger.warning(f"Login failed with status {response.status_code} for user '{AUTH_USERNAME}' (password length: {len(AUTH_PASSWORD)})")
-                try:
-                    error_detail = response.json()
-                    logger.warning(f"Error response: {error_detail}")
-                except:
-                    logger.warning(f"Error response text: {response.text[:200]}")
-                response.success()  # Mark as success to not count as failure
+        auth_result = login_with_locust_client(
+            self.client,
+            AUTH_USERNAME,
+            AUTH_PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
+        self.user_id = auth_result.user_id or str(uuid.uuid4())
+        logger.info(
+            "Login successful for user: %s",
+            auth_result.username or AUTH_USERNAME,
+        )
     
     def _auth_headers(self):
         """Get headers with authorization token"""
@@ -144,8 +137,7 @@ class CartographerReadUser(AuthenticatedUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as r:
-            if r.status_code in [200, 401]:
-                r.success()
+            expect_status(r, [200], "auth_get_session")
     
     @task(3)
     @tag("auth", "read")
@@ -245,8 +237,7 @@ class CartographerReadUser(AuthenticatedUser):
             name="/api/metrics/usage/stats?service=[service]",
             catch_response=True
         ) as r:
-            if r.status_code in [200, 404]:
-                r.success()
+            expect_status(r, [200], "usage_get_stats_by_service")
 
 
 class CartographerWriteUser(AuthenticatedUser):
@@ -272,8 +263,7 @@ class CartographerWriteUser(AuthenticatedUser):
             catch_response=True,
             timeout=15
         ) as r:
-            if r.status_code in [200, 500]:
-                r.success()
+            expect_status(r, [200], "health_ping_device")
     
     @task(2)
     @tag("metrics", "write")
@@ -285,8 +275,7 @@ class CartographerWriteUser(AuthenticatedUser):
             catch_response=True,
             timeout=30
         ) as r:
-            if r.status_code in [200, 500]:
-                r.success()
+            expect_status(r, [200], "metrics_generate_snapshot")
     
     @task(2)
     @tag("assistant", "write")
@@ -298,8 +287,7 @@ class CartographerWriteUser(AuthenticatedUser):
             catch_response=True,
             timeout=15
         ) as r:
-            if r.status_code in [200, 500]:
-                r.success()
+            expect_status(r, [200], "assistant_refresh_context")
     
     @task(1)
     @tag("notifications", "write")
@@ -314,8 +302,7 @@ class CartographerWriteUser(AuthenticatedUser):
             },
             catch_response=True
         ) as r:
-            if r.status_code in [200, 400, 500]:
-                r.success()
+            expect_status(r, [200], "notifications_update_preferences")
 
 
 class CartographerHealthCheckUser(AuthenticatedUser):
@@ -344,8 +331,7 @@ class CartographerHealthCheckUser(AuthenticatedUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as r:
-            if r.status_code in [200, 500, 503]:
-                r.success()
+            expect_status(r, [200], "check_health_service")
     
     @task(3)
     @tag("system", "healthcheck")
@@ -356,8 +342,7 @@ class CartographerHealthCheckUser(AuthenticatedUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as r:
-            if r.status_code in [200, 500, 503]:
-                r.success()
+            expect_status(r, [200], "check_metrics_service")
     
     @task(3)
     @tag("system", "healthcheck")
@@ -374,8 +359,7 @@ class CartographerHealthCheckUser(AuthenticatedUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as r:
-            if r.status_code in [200, 500, 503]:
-                r.success()
+            expect_status(r, [200], "check_notifications_service")
     
     @task(2)
     @tag("system", "healthcheck")
@@ -386,8 +370,7 @@ class CartographerHealthCheckUser(AuthenticatedUser):
             headers=self._auth_headers(),
             catch_response=True
         ) as r:
-            if r.status_code in [200, 500, 503]:
-                r.success()
+            expect_status(r, [200], "check_assistant_service")
 
 
 # ==================== Event Hooks ====================
@@ -398,6 +381,7 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*60}")
     print(f"  Cartographer Load Test")
     print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Auth Host: {AUTH_HOST}")
     print(f"  Password length: {len(AUTH_PASSWORD)} chars")
     print(f"  Target: {environment.host}")
     print(f"{'='*60}\n")

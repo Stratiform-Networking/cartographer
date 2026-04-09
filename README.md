@@ -254,7 +254,7 @@ python run_load_tests.py -s all --web --username YOUR_USERNAME --password YOUR_P
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | Framework | [Locust](https://locust.io/) | Distributed load testing with Python |
-| HTTP Client | [HTTPX](https://www.python-httpx.org/) | Async HTTP requests |
+| HTTP Client | Locust `HttpSession` | Authenticated HTTP request execution and metrics collection |
 | Test Data | [Faker](https://faker.readthedocs.io/) | Generate realistic test data |
 
 ### Available Test Targets

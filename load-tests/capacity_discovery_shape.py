@@ -19,6 +19,7 @@ This answers: "What can my system handle right now?"
 import time
 from typing import Optional, Tuple
 from locust import LoadTestShape
+from capacity_window_metrics import rolling_window_metrics
 
 
 class CapacityDiscoveryShape(LoadTestShape):
@@ -37,6 +38,8 @@ class CapacityDiscoveryShape(LoadTestShape):
         RAMP_P95_THRESHOLD: P95 latency threshold in ms (default: 200)
         RAMP_ERROR_THRESHOLD: Error rate threshold (default: 0.01 = 1%)
         RAMP_SPAWN_RATE: User spawn rate per second (default: 5)
+        RAMP_WINDOW_SECONDS: Rolling metric window in seconds (default: RAMP_INTERVAL)
+        RAMP_MIN_SAMPLES: Minimum sample size before threshold checks (default: 100)
     """
 
     # Default configuration
@@ -47,6 +50,8 @@ class CapacityDiscoveryShape(LoadTestShape):
     p95_threshold = 200         # 200ms P95 latency threshold
     error_threshold = 0.01      # 1% error rate threshold
     spawn_rate = 5              # Spawn 5 users per second
+    window_seconds = 30         # Rolling window duration in seconds
+    min_samples = 100           # Minimum in-window sample size for checks
     
     # Internal state (use _test_start_time to avoid parent class conflicts)
     _test_start_time = None
@@ -55,6 +60,9 @@ class CapacityDiscoveryShape(LoadTestShape):
     stopped = False
     stop_reason = None
     knee_point = None
+    last_window_p95 = 0.0
+    last_window_error_rate = 0.0
+    last_window_sample_size = 0
     
     def __init__(self):
         super().__init__()
@@ -70,6 +78,8 @@ class CapacityDiscoveryShape(LoadTestShape):
         self.p95_threshold = float(os.getenv("RAMP_P95_THRESHOLD", self.p95_threshold))
         self.error_threshold = float(os.getenv("RAMP_ERROR_THRESHOLD", self.error_threshold))
         self.spawn_rate = int(os.getenv("RAMP_SPAWN_RATE", self.spawn_rate))
+        self.window_seconds = int(os.getenv("RAMP_WINDOW_SECONDS", self.ramp_interval))
+        self.min_samples = int(os.getenv("RAMP_MIN_SAMPLES", self.min_samples))
 
         print(f"\n{'='*70}")
         print(f"🔍 CAPACITY DISCOVERY LOAD TEST")
@@ -82,6 +92,8 @@ class CapacityDiscoveryShape(LoadTestShape):
         print(f"  Spawn Rate:        {self.spawn_rate}/s")
         print(f"  P95 Threshold:     {self.p95_threshold}ms")
         print(f"  Error Threshold:   {self.error_threshold*100:.1f}%")
+        print(f"  Rolling Window:    {self.window_seconds}s")
+        print(f"  Min Samples:       {self.min_samples}")
         print(f"{'='*70}")
         print(f"⚠️  NOTE: --run-time flag is IGNORED by this shape")
         print(f"⚠️  Test stops when: P95/error thresholds exceeded OR max duration reached")
@@ -106,7 +118,6 @@ class CapacityDiscoveryShape(LoadTestShape):
         # Initialize test start time on first tick (use our own variable)
         if self._test_start_time is None:
             self._test_start_time = time.time()
-            print(f"[DEBUG] Initialized _test_start_time at {self._test_start_time}")
 
         if self.stopped:
             return None
@@ -120,6 +131,11 @@ class CapacityDiscoveryShape(LoadTestShape):
             self.stop_reason = f"Max duration reached ({self.max_duration}s / {self.max_duration // 60}m)"
             self.knee_point = target_users  # System was still healthy at this load
             print(f"\n⏱️  MAX DURATION REACHED: {self.stop_reason}")
+            print(
+                f"   Last rolling window: p95={self.last_window_p95:.1f}ms, "
+                f"errors={self.last_window_error_rate*100:.2f}%, "
+                f"samples={self.last_window_sample_size}"
+            )
             print(f"🎯 System handled {self.knee_point} concurrent users without degradation")
             print(f"   (Test ended before finding capacity limit)\n")
             return None
@@ -155,33 +171,38 @@ class CapacityDiscoveryShape(LoadTestShape):
         Returns True if performance has degraded beyond thresholds.
         """
         try:
-            # Access Locust's statistics through the environment runner
-            if not self.runner or not self.runner.stats:
+            if not self.runner:
                 return False
-            
-            stats = self.runner.stats
-            if not stats.total or stats.total.num_requests == 0:
+
+            window_metrics = rolling_window_metrics.snapshot(self.window_seconds)
+            sample_size = int(window_metrics["sample_size"])
+            if sample_size < self.min_samples:
                 return False
-            
-            total_stats = stats.total
-            
-            # Check error rate
-            if total_stats.num_requests > 100:  # Only check after significant traffic
-                error_rate = total_stats.fail_ratio
-                if error_rate > self.error_threshold:
-                    self.stop_reason = f"Error rate {error_rate*100:.2f}% exceeded threshold {self.error_threshold*100:.1f}%"
-                    return True
-            
-            # Check average response time as a proxy for P95
-            if total_stats.num_requests > 100:
-                avg_response_time = total_stats.avg_response_time
-                # Use a heuristic: if avg exceeds 70% of threshold, performance is degrading
-                if avg_response_time > self.p95_threshold * 0.7:
-                    self.stop_reason = f"Avg response time {avg_response_time:.0f}ms approaching P95 threshold {self.p95_threshold}ms"
-                    return True
-            
+
+            window_p95 = float(window_metrics["p95_ms"])
+            window_error_rate = float(window_metrics["error_rate"])
+
+            self.last_window_p95 = window_p95
+            self.last_window_error_rate = window_error_rate
+            self.last_window_sample_size = sample_size
+
+            if window_error_rate > self.error_threshold:
+                self.stop_reason = (
+                    f"Rolling error rate {window_error_rate*100:.2f}% exceeded threshold "
+                    f"{self.error_threshold*100:.2f}% over {sample_size} requests "
+                    f"in the last {self.window_seconds}s"
+                )
+                return True
+
+            if window_p95 > self.p95_threshold:
+                self.stop_reason = (
+                    f"Rolling p95 {window_p95:.1f}ms exceeded threshold "
+                    f"{self.p95_threshold:.1f}ms over {sample_size} requests "
+                    f"in the last {self.window_seconds}s"
+                )
+                return True
+
             return False
-            
         except Exception as e:
             # If we can't get stats, continue ramping (don't stop the test)
             print(f"⚠️  Warning: Could not check metrics: {e}")
@@ -211,4 +232,3 @@ class HighCapacityDiscoveryShape(CapacityDiscoveryShape):
     """
     initial_users = 20
     ramp_step = 20
-

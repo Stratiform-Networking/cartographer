@@ -22,85 +22,61 @@ Environment Variables:
     RAMP_SPAWN_RATE: User spawn rate per second (default: 5)
 """
 
-import os
 import random
 from locust import HttpUser, task, tag, between, events
-from faker import Faker
+from common.assertions import expect_status
+from common.auth import (
+    get_auth_host,
+    get_auth_password,
+    get_auth_username,
+    login_with_locust_client,
+)
+from capacity_window_metrics import rolling_window_metrics
 
 # Import the capacity discovery shape
 from capacity_discovery_shape import CapacityDiscoveryShape
 
 
 # Authentication credentials from environment
-USERNAME = os.getenv("LOADTEST_USERNAME", "loadtest_admin")
-PASSWORD = os.getenv("LOADTEST_PASSWORD", "LoadTest123!")
-
-# Initialize faker for generating test data
-fake = Faker()
-
-# Global token storage for authenticated requests
-_auth_token = None
-
-
-def get_auth_token():
-    """Get cached auth token or return None if not authenticated yet."""
-    return _auth_token
-
-
-def set_auth_token(token):
-    """Set the global auth token."""
-    global _auth_token
-    _auth_token = token
+USERNAME = get_auth_username()
+PASSWORD = get_auth_password()
+AUTH_HOST = get_auth_host()
 
 
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
     """
-    Authenticate once at test start and cache the token.
-    All users will share this token.
+    Print test configuration and reset rolling metrics.
     """
+    rolling_window_metrics.reset()
     print("\n" + "="*70)
-    print("🔐 Authenticating for capacity discovery test...")
+    print("🔐 Capacity discovery test configuration")
     print("="*70)
-    
-    # Create a temporary HTTP client for authentication
-    import httpx
-    
-    base_url = environment.host
-    if not base_url:
-        print("⚠️  Warning: No host specified, authentication will be handled per-user")
-        print("="*70 + "\n")
+    print(f"Auth user: {USERNAME}")
+    print(f"Auth host: {AUTH_HOST}")
+    print(f"Target host: {environment.host}")
+    print("="*70 + "\n")
+
+
+@events.request.add_listener
+def on_request(
+    request_type,
+    name,
+    response_time,
+    response_length,
+    response,
+    context,
+    exception,
+    **kwargs,
+):
+    """Collect rolling-window request metrics for capacity decisions."""
+    if name == "/api/auth/login":
         return
-    
-    try:
-        # Use httpx for authentication instead of Locust's client
-        with httpx.Client(base_url=base_url, timeout=10.0) as client:
-            response = client.post(
-                "/api/auth/login",
-                json={"username": USERNAME, "password": PASSWORD}
-            )
-        
-        if response.status_code == 200:
-            data = response.json()
-            token = data.get("access_token")
-            if token:
-                set_auth_token(token)
-                print(f"✓ Authentication successful")
-                print(f"✓ Token cached for all virtual users")
-                print("="*70 + "\n")
-            else:
-                print(f"✗ No token in response")
-                print("="*70 + "\n")
-                raise Exception("Authentication failed: No token in response")
-        else:
-            print(f"✗ Authentication failed: HTTP {response.status_code}")
-            print(f"  Response: {response.text}")
-            print("="*70 + "\n")
-            raise Exception(f"Authentication failed: HTTP {response.status_code}")
-    except Exception as e:
-        print(f"✗ Authentication error: {e}")
-        print("="*70 + "\n")
-        raise
+
+    is_failure = exception is not None
+    if response is not None and getattr(response, "status_code", 0) >= 400:
+        is_failure = True
+    rolling_window_metrics.add(response_time_ms=response_time, is_failure=is_failure)
 
 
 @events.test_stop.add_listener
@@ -144,13 +120,22 @@ class CartographerCapacityUser(HttpUser):
     """
     
     wait_time = between(1, 3)  # Wait 1-3 seconds between tasks
+    access_token = None
+
+    def on_start(self):
+        auth_result = login_with_locust_client(
+            self.client,
+            USERNAME,
+            PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
     
     def _auth_headers(self):
-        """Get authorization headers with cached token."""
-        token = get_auth_token()
-        if not token:
+        """Get authorization headers with authenticated token."""
+        if not self.access_token:
             return {}
-        return {"Authorization": f"Bearer {token}"}
+        return {"Authorization": f"Bearer {self.access_token}"}
     
     # ============================================================================
     # AUTH SERVICE - High frequency, low latency
@@ -163,12 +148,11 @@ class CartographerCapacityUser(HttpUser):
         with self.client.post(
             "/api/auth/verify",
             headers=self._auth_headers(),
-            json={"token": get_auth_token()},
+            json={"token": self.access_token},
             name="/api/auth/verify",
             catch_response=True
         ) as r:
-            if r.status_code in [200, 401]:
-                r.success()
+            expect_status(r, [200], "auth_verify_token")
     
     @task(5)
     @tag("auth", "read")
@@ -180,8 +164,7 @@ class CartographerCapacityUser(HttpUser):
             name="/api/auth/session",
             catch_response=True
         ) as r:
-            if r.status_code in [200, 401]:
-                r.success()
+            expect_status(r, [200], "auth_get_session")
     
     # ============================================================================
     # HEALTH SERVICE - Medium frequency, low latency
@@ -323,8 +306,7 @@ class CartographerCapacityUser(HttpUser):
             name="/api/metrics/snapshot/generate",
             catch_response=True
         ) as r:
-            if r.status_code in [200, 201, 400, 500]:
-                r.success()
+            expect_status(r, [200], "metrics_generate_snapshot")
     
     @task(1)
     @tag("notifications", "write")
@@ -340,8 +322,7 @@ class CartographerCapacityUser(HttpUser):
             name="/api/notifications/global/preferences",
             catch_response=True
         ) as r:
-            if r.status_code in [200, 400, 500]:
-                r.success()
+            expect_status(r, [200], "notifications_update_preferences")
     
     # ============================================================================
     # HEALTH CHECK - Very high frequency, ultra-low latency
@@ -362,4 +343,3 @@ class LoadTestShape(CapacityDiscoveryShape):
     This class name (LoadTestShape) is what Locust looks for.
     """
     pass
-

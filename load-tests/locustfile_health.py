@@ -9,14 +9,21 @@ Authentication:
     - LOADTEST_PASSWORD: Password for authentication (default: admin)
 """
 
-import os
 import random
 from locust import HttpUser, task, between, tag, events
+from common.assertions import expect_status
+from common.auth import (
+    get_auth_host,
+    get_auth_password,
+    get_auth_username,
+    login_with_locust_client,
+)
 
 
 # Authentication credentials from environment variables
-AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
+AUTH_USERNAME = get_auth_username()
+AUTH_PASSWORD = get_auth_password()
+AUTH_HOST = get_auth_host()
 
 # Sample IPs for testing (using common private ranges)
 SAMPLE_IPS = [
@@ -44,22 +51,13 @@ class AuthenticatedHealthUser(HttpUser):
     
     def on_start(self):
         """Authenticate before running tests"""
-        # Health service is accessed via backend proxy, so login through auth endpoint
-        with self.client.post(
-            "/api/auth/login",
-            json={
-                "username": AUTH_USERNAME,
-                "password": AUTH_PASSWORD
-            },
-            catch_response=True
-        ) as response:
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data.get("access_token")
-                response.success()
-            else:
-                # Continue without auth - some endpoints might work directly
-                response.success()
+        auth_result = login_with_locust_client(
+            self.client,
+            AUTH_USERNAME,
+            AUTH_PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
     
     def _auth_headers(self):
         """Get headers with authorization token"""
@@ -101,9 +99,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             name="/api/health/cached/[ip]",
             catch_response=True
         ) as response:
-            # 404 is acceptable if no cached data exists
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "get_cached_metrics_single")
     
     @task(3)
     @tag("health-check", "write")
@@ -117,9 +113,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             catch_response=True,
             timeout=30
         ) as response:
-            # Allow various status codes since device might not exist
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "check_single_device")
     
     @task(2)
     @tag("health-check", "write")
@@ -138,8 +132,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             catch_response=True,
             timeout=60
         ) as response:
-            if response.status_code in [200, 400, 500]:
-                response.success()
+            expect_status(response, [200], "check_batch_devices")
     
     # ==================== Quick Tests ====================
     
@@ -155,8 +148,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             catch_response=True,
             timeout=15
         ) as response:
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "quick_ping")
     
     @task(2)
     @tag("quick-test", "read")
@@ -169,8 +161,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             name="/api/health/dns/[ip]",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "dns_lookup")
     
     # ==================== Monitoring Endpoints ====================
     
@@ -217,8 +208,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             name="/api/health/gateway/[ip]/test-ips",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "get_gateway_test_ips")
     
     @task(2)
     @tag("gateway", "read")
@@ -231,8 +221,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             name="/api/health/gateway/[ip]/test-ips/cached",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "get_cached_test_ip_metrics")
     
     # ==================== Speed Test Endpoints ====================
     
@@ -253,8 +242,7 @@ class HealthServiceUser(AuthenticatedHealthUser):
             name="/api/health/gateway/[ip]/speedtest",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "get_gateway_speed_test")
     
     # Note: Actual speed tests are NOT included as they take 30-60 seconds
     # and would severely impact load test performance
@@ -283,5 +271,6 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*60}")
     print(f"  Health Service Load Test")
     print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Auth Host: {AUTH_HOST}")
     print(f"  Target: {environment.host}")
     print(f"{'='*60}\n")

@@ -9,17 +9,23 @@ Authentication:
     - LOADTEST_PASSWORD: Password for authentication (default: admin)
 """
 
-import os
-import uuid
 import random
 from locust import HttpUser, task, between, tag, events
 from faker import Faker
+from common.assertions import expect_status
+from common.auth import (
+    get_auth_host,
+    get_auth_password,
+    get_auth_username,
+    login_with_locust_client,
+)
 
 fake = Faker()
 
 # Authentication credentials from environment variables
-AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
+AUTH_USERNAME = get_auth_username()
+AUTH_PASSWORD = get_auth_password()
+AUTH_HOST = get_auth_host()
 
 
 class AuthServiceUser(HttpUser):
@@ -40,22 +46,14 @@ class AuthServiceUser(HttpUser):
     
     def on_start(self):
         """Setup: Authenticate"""
-        with self.client.post(
-            "/api/auth/login",
-            json={
-                "username": AUTH_USERNAME,
-                "password": AUTH_PASSWORD
-            },
-            catch_response=True
-        ) as response:
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data.get("access_token")
-                user_data = data.get("user", {})
-                self.test_user_id = user_data.get("id")
-                response.success()
-            else:
-                response.success()  # Continue without auth
+        auth_result = login_with_locust_client(
+            self.client,
+            AUTH_USERNAME,
+            AUTH_PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
+        self.test_user_id = auth_result.user_id
     
     def _auth_headers(self):
         """Get authorization headers if logged in"""
@@ -84,9 +82,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/login (invalid)",
             catch_response=True
         ) as response:
-            # 401 is expected for invalid credentials
-            if response.status_code == 401:
-                response.success()
+            expect_status(response, [401], "failed_login")
     
     # ==================== Token Verification ====================
     
@@ -101,8 +97,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/verify",
             catch_response=True
         ) as response:
-            if response.status_code == 200:
-                response.success()
+            expect_status(response, [200], "verify_token")
     
     @task(8)
     @tag("auth", "read")
@@ -115,8 +110,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/session",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 401]:
-                response.success()
+            expect_status(response, [200], "get_session")
     
     # ==================== User Profile ====================
     
@@ -131,8 +125,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/me",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 401]:
-                response.success()
+            expect_status(response, [200], "get_current_profile")
     
     # ==================== User Management ====================
     
@@ -147,17 +140,16 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/users",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 401]:
-                response.success()
+            expect_status(response, [200, 403], "list_users")
     
     @task(2)
     @tag("users", "read")
     def get_user_by_id(self):
         """Get user by ID"""
         if not self.test_user_id:
-            user_id = str(uuid.uuid4())
-        else:
-            user_id = self.test_user_id
+            return
+
+        user_id = self.test_user_id
         
         headers = self._auth_headers()
         with self.client.get(
@@ -166,8 +158,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/users/[id]",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 401, 403, 404]:
-                response.success()
+            expect_status(response, [200, 403, 404], "get_user_by_id")
     
     # ==================== Invitation Endpoints ====================
     
@@ -182,8 +173,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/invites",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 401, 403]:
-                response.success()
+            expect_status(response, [200, 403], "list_invites")
     
     @task(2)
     @tag("invites", "read")
@@ -195,9 +185,7 @@ class AuthServiceUser(HttpUser):
             name="/api/auth/invite/verify/[token]",
             catch_response=True
         ) as response:
-            # 404 is expected for invalid tokens
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "verify_invite_token")
     
     # ==================== Healthcheck ====================
     
@@ -223,20 +211,13 @@ class AuthServiceOwnerUser(HttpUser):
     
     def on_start(self):
         """Setup: Authenticate as owner"""
-        with self.client.post(
-            "/api/auth/login",
-            json={
-                "username": AUTH_USERNAME,
-                "password": AUTH_PASSWORD
-            },
-            catch_response=True
-        ) as response:
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data.get("access_token")
-                response.success()
-            else:
-                response.success()  # Continue without auth
+        auth_result = login_with_locust_client(
+            self.client,
+            AUTH_USERNAME,
+            AUTH_PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
     
     def _auth_headers(self):
         if self.access_token:
@@ -247,9 +228,6 @@ class AuthServiceOwnerUser(HttpUser):
     @tag("users", "write")
     def create_and_delete_user(self):
         """Create and immediately delete a test user"""
-        if not self.access_token:
-            return
-        
         headers = self._auth_headers()
         username = f"loadtest_{fake.user_name()}_{random.randint(1000, 9999)}"
         
@@ -267,12 +245,10 @@ class AuthServiceOwnerUser(HttpUser):
             name="/api/auth/users (create)",
             catch_response=True
         )
-        
-        if create_response.status_code == 200:
-            create_response.success()
+        if expect_status(create_response, [200], "create_and_delete_user.create"):
             user_data = create_response.json()
             user_id = user_data.get("id")
-            
+
             if user_id:
                 delete_response = self.client.delete(
                     f"/api/auth/users/{user_id}",
@@ -280,19 +256,12 @@ class AuthServiceOwnerUser(HttpUser):
                     name="/api/auth/users/[id] (delete)",
                     catch_response=True
                 )
-                if delete_response.status_code in [200, 404]:
-                    delete_response.success()
-        else:
-            if create_response.status_code in [400, 401, 403]:
-                create_response.success()
+                expect_status(delete_response, [200, 404], "create_and_delete_user.delete")
     
     @task(1)
     @tag("invites", "write")
     def create_and_revoke_invite(self):
         """Create and immediately revoke an invitation"""
-        if not self.access_token:
-            return
-        
         headers = self._auth_headers()
         email = fake.email()
         
@@ -306,12 +275,10 @@ class AuthServiceOwnerUser(HttpUser):
             name="/api/auth/invites (create)",
             catch_response=True
         )
-        
-        if create_response.status_code == 200:
-            create_response.success()
+        if expect_status(create_response, [200], "create_and_revoke_invite.create"):
             invite_data = create_response.json()
             invite_id = invite_data.get("id")
-            
+
             if invite_id:
                 revoke_response = self.client.delete(
                     f"/api/auth/invites/{invite_id}",
@@ -319,11 +286,7 @@ class AuthServiceOwnerUser(HttpUser):
                     name="/api/auth/invites/[id] (revoke)",
                     catch_response=True
                 )
-                if revoke_response.status_code in [200, 400, 404]:
-                    revoke_response.success()
-        else:
-            if create_response.status_code in [400, 401, 403]:
-                create_response.success()
+                expect_status(revoke_response, [200, 404], "create_and_revoke_invite.revoke")
 
 
 # ==================== Event Hooks ====================
@@ -333,5 +296,6 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*60}")
     print(f"  Auth Service Load Test")
     print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Auth Host: {AUTH_HOST}")
     print(f"  Target: {environment.host}")
     print(f"{'='*60}\n")

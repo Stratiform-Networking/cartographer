@@ -8,6 +8,7 @@ It can run tests against individual services or all services at once.
 IMPORTANT: All endpoints require authentication. Provide credentials via:
     --username and --password arguments, OR
     LOADTEST_USERNAME and LOADTEST_PASSWORD environment variables
+    Optional: --auth-host / LOADTEST_AUTH_HOST (default: http://localhost:8002)
 
 Usage:
     python run_load_tests.py --service all -u 10 -r 2 -t 60 --username myuser --password mypass
@@ -19,6 +20,8 @@ import argparse
 import subprocess
 import sys
 import os
+
+DEFAULT_AUTH_HOST = "http://localhost:8002"
 
 # Service configuration
 SERVICES = {
@@ -67,6 +70,7 @@ def run_locust(
     html_report: str,
     username: str,
     password: str,
+    auth_host: str,
 ):
     """Run locust with the specified configuration"""
     
@@ -80,17 +84,18 @@ def run_locust(
     env = os.environ.copy()
     if username:
         env["LOADTEST_USERNAME"] = username
-        env["LOADTEST_OWNER_USERNAME"] = username
     if password:
         env["LOADTEST_PASSWORD"] = password
-        env["LOADTEST_OWNER_PASSWORD"] = password
+    resolved_auth_host = auth_host or env.get("LOADTEST_AUTH_HOST", DEFAULT_AUTH_HOST)
+    env["LOADTEST_AUTH_HOST"] = resolved_auth_host
     
-    cmd = ["locust", "-f", locustfile, "--host", host]
+    cmd = ["locust", "-f", locustfile, "--host", host, "--exit-code-on-error", "1"]
     
     if web:
         # Web UI mode
         print(f"\n🌐 Starting Locust Web UI for {service} service")
         print(f"   Target: {host}")
+        print(f"   Auth host: {resolved_auth_host}")
         print(f"   Username: {username or env.get('LOADTEST_USERNAME', 'loadtest')}")
         print(f"   Open http://localhost:8089 in your browser\n")
     else:
@@ -107,6 +112,7 @@ def run_locust(
         
         print(f"\n🚀 Running load test for {service} service")
         print(f"   Target: {host}")
+        print(f"   Auth host: {resolved_auth_host}")
         print(f"   Username: {username or env.get('LOADTEST_USERNAME', 'loadtest')}")
         print(f"   Users: {users}")
         print(f"   Spawn rate: {spawn_rate}/s")
@@ -119,13 +125,15 @@ def run_locust(
         cmd.extend(["--tags", ",".join(tags)])
     
     try:
-        subprocess.run(cmd, env=env)
+        result = subprocess.run(cmd, env=env, check=False)
+        return result.returncode
     except KeyboardInterrupt:
         print("\n\n⏹️  Load test stopped by user")
+        return 130
     except FileNotFoundError:
         print("\n❌ Error: locust is not installed.")
         print("   Install with: pip install -r requirements.txt")
-        sys.exit(1)
+        return 1
 
 
 def list_services():
@@ -158,6 +166,9 @@ Examples:
 
   # Test only read operations
   python run_load_tests.py -s health -u 50 -r 5 -t 60 --tags read
+
+  # Direct service test with explicit auth host
+  python run_load_tests.py -s metrics --host http://localhost:8003 --auth-host http://localhost:8002
 
   # List available services
   python run_load_tests.py --list
@@ -229,6 +240,12 @@ Examples:
         "--password",
         help="Password for authentication (or set LOADTEST_PASSWORD env var)"
     )
+
+    parser.add_argument(
+        "--auth-host",
+        default=os.environ.get("LOADTEST_AUTH_HOST", DEFAULT_AUTH_HOST),
+        help=f"Auth service base URL for login requests (default: {DEFAULT_AUTH_HOST})",
+    )
     
     args = parser.parse_args()
     
@@ -242,7 +259,7 @@ Examples:
 ╚═══════════════════════════════════════════════════════════════╝
     """)
     
-    run_locust(
+    rc = run_locust(
         service=args.service,
         users=args.users,
         spawn_rate=args.spawn_rate,
@@ -254,9 +271,10 @@ Examples:
         html_report=args.html,
         username=args.username,
         password=args.password,
+        auth_host=args.auth_host,
     )
+    sys.exit(rc)
 
 
 if __name__ == "__main__":
     main()
-

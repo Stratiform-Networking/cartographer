@@ -15,11 +15,13 @@ python run_load_tests.py -s all -u 10 -r 2 -t 60 --username YOUR_USERNAME --pass
 # Or using environment variables
 export LOADTEST_USERNAME=your_username
 export LOADTEST_PASSWORD=your_password
+export LOADTEST_AUTH_HOST=http://localhost:8002
 python run_load_tests.py -s all -u 10 -r 2 -t 60
 
 # Windows PowerShell:
 $env:LOADTEST_USERNAME="your_username"
 $env:LOADTEST_PASSWORD="your_password"
+$env:LOADTEST_AUTH_HOST="http://localhost:8002"
 python run_load_tests.py -s all -u 10 -r 2 -t 60
 
 # Or open the web UI for interactive testing
@@ -33,6 +35,10 @@ python run_load_tests.py -s all --web --username YOUR_USERNAME --password YOUR_P
 ### Option 1: Command Line Arguments (Quick Testing)
 ```bash
 python run_load_tests.py -s all --username myuser --password mypass
+
+# If testing a non-proxy service directly, point auth to auth-service
+python run_load_tests.py -s metrics --host http://localhost:8003 \
+  --auth-host http://localhost:8002 --username myuser --password mypass
 ```
 
 ### Option 2: Environment Variables (Recommended for CI/CD)
@@ -40,6 +46,7 @@ python run_load_tests.py -s all --username myuser --password mypass
 # Linux/Mac
 export LOADTEST_USERNAME=your_username
 export LOADTEST_PASSWORD=your_password
+export LOADTEST_AUTH_HOST=http://localhost:8002
 
 # Windows Command Prompt
 set LOADTEST_USERNAME=your_username
@@ -48,6 +55,7 @@ set LOADTEST_PASSWORD=your_password
 # Windows PowerShell
 $env:LOADTEST_USERNAME="your_username"
 $env:LOADTEST_PASSWORD="your_password"
+$env:LOADTEST_AUTH_HOST="http://localhost:8002"
 ```
 
 ### Option 3: Using Locust Directly
@@ -74,7 +82,7 @@ The `run_load_tests.py` script provides an easy interface:
 
 ```bash
 # Test individual service
-python run_load_tests.py -s health -u 20 -r 5 -t 120
+python run_load_tests.py -s health -u 20 -r 5 -t 120 --auth-host http://localhost:8002
 
 # Test all services through the main proxy
 python run_load_tests.py -s all -u 50 -r 10 -t 300
@@ -89,22 +97,22 @@ python run_load_tests.py -s all -u 30 -r 5 -t 180 --html report.html
 python run_load_tests.py -s health --tags read -u 100 -r 20 -t 60
 
 # Custom host
-python run_load_tests.py -s all --host http://192.168.1.100:8000 -u 20 -t 60
+python run_load_tests.py -s all --host http://192.168.1.100:8000 --auth-host http://192.168.1.100:8002 -u 20 -t 60
 ```
 
 ### Using Locust Directly
 
 ```bash
 # Single service
-locust -f locustfile_health.py --host=http://localhost:8001
+LOADTEST_AUTH_HOST=http://localhost:8002 locust -f locustfile_health.py --host=http://localhost:8001
 
 # Headless mode
-locust -f locustfile_metrics.py --host=http://localhost:8003 \
-    --headless -u 50 -r 5 -t 5m
+LOADTEST_AUTH_HOST=http://localhost:8002 locust -f locustfile_metrics.py --host=http://localhost:8003 \
+    --headless -u 50 -r 5 -t 5m --exit-code-on-error 1
 
 # With specific tags
-locust -f locustfile_auth.py --host=http://localhost:8002 \
-    --tags auth,read --headless -u 20 -r 2 -t 2m
+LOADTEST_AUTH_HOST=http://localhost:8002 locust -f locustfile_auth.py --host=http://localhost:8002 \
+    --tags auth,read --headless -u 20 -r 2 -t 2m --exit-code-on-error 1
 ```
 
 ## Test Categories (Tags)
@@ -203,8 +211,8 @@ Speed test endpoints take 30-60 seconds and consume bandwidth. They are excluded
 ## Authentication Details
 
 The load tests authenticate at startup using the provided credentials:
-- `LOADTEST_USERNAME` / `LOADTEST_PASSWORD` - Used for read operations
-- `LOADTEST_OWNER_USERNAME` / `LOADTEST_OWNER_PASSWORD` - Used for write operations (defaults to same as above)
+- `LOADTEST_USERNAME` / `LOADTEST_PASSWORD` - Used for all authenticated requests
+- `LOADTEST_AUTH_HOST` - Base URL for auth login (default: `http://localhost:8002`)
 
 If authentication fails:
 1. Check that the user exists in your Cartographer instance
@@ -281,4 +289,3 @@ Modify `wait_time` in User classes:
 
 ### User Weights
 Adjust `weight` attribute on User classes to change the ratio of different user types.
-

@@ -10,18 +10,25 @@ Authentication:
     - LOADTEST_PASSWORD: Password for authentication (default: admin)
 """
 
-import os
 import random
 import uuid
 from datetime import datetime, timedelta
 from locust import HttpUser, task, between, tag, events
 from faker import Faker
+from common.assertions import expect_status
+from common.auth import (
+    get_auth_host,
+    get_auth_password,
+    get_auth_username,
+    login_with_locust_client,
+)
 
 fake = Faker()
 
 # Authentication credentials from environment variables
-AUTH_USERNAME = os.environ.get("LOADTEST_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("LOADTEST_PASSWORD", "admin")
+AUTH_USERNAME = get_auth_username()
+AUTH_PASSWORD = get_auth_password()
+AUTH_HOST = get_auth_host()
 
 # Sample device IPs
 SAMPLE_DEVICE_IPS = [
@@ -42,22 +49,14 @@ class AuthenticatedNotificationUser(HttpUser):
     
     def on_start(self):
         """Authenticate before running tests"""
-        with self.client.post(
-            "/api/auth/login",
-            json={
-                "username": AUTH_USERNAME,
-                "password": AUTH_PASSWORD
-            },
-            catch_response=True
-        ) as response:
-            if response.status_code == 200:
-                data = response.json()
-                self.access_token = data.get("access_token")
-                user_data = data.get("user", {})
-                self.user_id = user_data.get("id", str(uuid.uuid4()))
-                response.success()
-            else:
-                response.success()  # Continue without auth
+        auth_result = login_with_locust_client(
+            self.client,
+            AUTH_USERNAME,
+            AUTH_PASSWORD,
+            auth_host=AUTH_HOST,
+        )
+        self.access_token = auth_result.access_token
+        self.user_id = auth_result.user_id or str(uuid.uuid4())
     
     def _auth_headers(self):
         """Get headers with authorization token and user ID"""
@@ -112,8 +111,7 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
             name="/api/notifications/global/preferences (update)",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 400]:
-                response.success()
+            expect_status(response, [200], "update_preferences")
     
     # ==================== History & Stats ====================
     
@@ -152,9 +150,7 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
             name="/api/notifications/discord/guilds",
             catch_response=True
         ) as response:
-            # 503 if Discord not configured
-            if response.status_code in [200, 503]:
-                response.success()
+            expect_status(response, [200, 503], "get_discord_guilds")
     
     @task(2)
     @tag("discord", "read")
@@ -166,8 +162,7 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
             name="/api/notifications/discord/invite-url",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 503]:
-                response.success()
+            expect_status(response, [200, 503], "get_discord_invite_url")
     
     # ==================== ML/Anomaly Detection ====================
     
@@ -188,9 +183,7 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
             name="/api/notifications/ml/baseline/[ip]",
             catch_response=True
         ) as response:
-            # 404 if no baseline exists yet
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "get_device_baseline")
     
     # ==================== Silenced Devices ====================
     
@@ -230,9 +223,7 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
             name="/api/notifications/scheduled/[id]",
             catch_response=True
         ) as response:
-            # 404 is expected for random IDs
-            if response.status_code in [200, 404]:
-                response.success()
+            expect_status(response, [200, 404], "get_scheduled_broadcast_by_id")
     
     # ==================== Version Updates ====================
     
@@ -252,8 +243,7 @@ class NotificationServiceUser(AuthenticatedNotificationUser):
             name="/api/notifications/version/check",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "check_for_updates")
     
     # ==================== Healthcheck ====================
     
@@ -291,8 +281,7 @@ class NotificationWriteUser(AuthenticatedNotificationUser):
             name="/api/notifications/process-health-check",
             catch_response=True
         ) as response:
-            if response.status_code in [200, 500]:
-                response.success()
+            expect_status(response, [200], "process_health_check")
     
     @task(1)
     @tag("silenced", "write")
@@ -336,9 +325,8 @@ class NotificationWriteUser(AuthenticatedNotificationUser):
             name="/api/notifications/scheduled (create)",
             catch_response=True
         )
-        
-        if create_response.status_code == 200:
-            create_response.success()
+
+        if expect_status(create_response, [200], "create_and_cancel_broadcast.create"):
             data = create_response.json()
             broadcast_id = data.get("id")
             
@@ -350,8 +338,7 @@ class NotificationWriteUser(AuthenticatedNotificationUser):
                     name="/api/notifications/scheduled/[id]/cancel",
                     catch_response=True
                 )
-                if cancel_response.status_code in [200, 400]:
-                    cancel_response.success()
+                expect_status(cancel_response, [200, 404], "create_and_cancel_broadcast.cancel")
                 
                 # Delete the broadcast
                 delete_response = self.client.delete(
@@ -360,11 +347,7 @@ class NotificationWriteUser(AuthenticatedNotificationUser):
                     name="/api/notifications/scheduled/[id] (delete)",
                     catch_response=True
                 )
-                if delete_response.status_code in [200, 400]:
-                    delete_response.success()
-        else:
-            if create_response.status_code in [400, 500]:
-                create_response.success()
+                expect_status(delete_response, [200, 404], "create_and_cancel_broadcast.delete")
 
 
 # ==================== Event Hooks ====================
@@ -374,5 +357,6 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*60}")
     print(f"  Notification Service Load Test")
     print(f"  Auth User: {AUTH_USERNAME}")
+    print(f"  Auth Host: {AUTH_HOST}")
     print(f"  Target: {environment.host}")
     print(f"{'='*60}\n")

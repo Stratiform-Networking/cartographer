@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "label": "nightly load test",
-  "message": "failed",
-  "color": "red"
+  "message": "1150+ users",
+  "color": "brightgreen"
 }
